@@ -454,10 +454,10 @@ export function BigPlan(props: Props) {
 }
 
 /** Focused text field shown inside a freshly created bar/row; commits on Enter or blur. */
-export function InlineName({ initial, onDone, placeholder = 'Name…' }: { initial: string; onDone: (name: string) => void; placeholder?: string }) {
+export function InlineName({ initial, onDone, placeholder = 'Name…' }: { initial: string; onDone: (name: string, viaEnter?: boolean) => void; placeholder?: string }) {
   const [v, setV] = useState(initial === 'New project' || initial === 'New task' ? '' : initial);
   const done = useRef(false);
-  const finish = () => { if (done.current) return; done.current = true; onDone(v.trim()); };
+  const finish = (viaEnter = false) => { if (done.current) return; done.current = true; onDone(v.trim(), viaEnter); };
   return (
     <input
       className="inline-name"
@@ -465,8 +465,8 @@ export function InlineName({ initial, onDone, placeholder = 'Name…' }: { initi
       value={v}
       placeholder={placeholder}
       onChange={(e) => setV(e.target.value)}
-      onBlur={finish}
-      onKeyDown={(e) => { if (e.key === 'Enter') finish(); if (e.key === 'Escape') { setV(''); finish(); } }}
+      onBlur={() => finish(false)}
+      onKeyDown={(e) => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') { setV(''); finish(false); } }}
       onPointerDown={(e) => e.stopPropagation()}
     />
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WeekPlan } from './WeekPlan';
 import { useData } from './store';
 import { addTask, patchTask, renameTask, reorderTask } from './taskOps';
@@ -38,9 +38,12 @@ export default function Widget() {
     setEditingId(id);
   };
 
-  // Each time the popover opens: jump to the current week, my tasks, and a fresh task ready to type into.
+  // Each time the popover opens — and the first time data arrives while it's open — a fresh task is
+  // ready to type into, on the current week.
+  const openedOnce = useRef(false);
   useEffect(() => {
     if (!data) return;
+    if (!openedOnce.current && document.visibilityState === 'visible') { openedOnce.current = true; startNewTask(); }
     return window.exponential?.onWidgetShown(() => {
       applyTheme();
       setToday(todayISO());
@@ -73,7 +76,16 @@ export default function Widget() {
           editingId={editingId ?? undefined}
           onToggleSelect={() => {}}
           onAdd={(date) => { let id = ''; update((d) => { const r = addTask(d, who, date); id = r.id; return r.data; }); setEditingId(id); }}
-          onRename={(id, title) => { setEditingId(null); update((d) => renameTask(d, id, title)); }}
+          onRename={(id, title, viaEnter) => {
+            setEditingId(null);
+            let nextId = '';
+            update((d) => {
+              const renamed = renameTask(d, id, title);
+              if (viaEnter && title) { const r = addTask(renamed, who, undefined); nextId = r.id; return r.data; }
+              return renamed;
+            });
+            if (nextId) setEditingId(nextId);
+          }}
           onAddNamed={(title) => update((d) => { const r = addTask(d, who, undefined); return renameTask(r.data, r.id, title); })}
           onUpdate={(id, patch) => update((d) => patchTask(d, id, patch))}
           onDelete={(id) => update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))}

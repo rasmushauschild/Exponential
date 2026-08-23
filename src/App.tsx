@@ -408,7 +408,18 @@ export default function App() {
                 update((d) => { const r = addTask(d, person, date); id = r.id; return r.data; });
                 setEditingId(id);
               }}
-              onRename={(id, title) => { setEditingId(null); update((d) => renameTask(d, id, title)); }}
+              onRename={(id, title, viaEnter) => {
+                setEditingId(null);
+                let nextId = '';
+                update((d) => {
+                  const t = d.tasks.find((x) => x.id === id);
+                  const renamed = renameTask(d, id, title);
+                  // Enter keeps the flow going: a fresh task right after, ready to type.
+                  if (viaEnter && title && t) { const r = addTask(renamed, t.personId, t.date); nextId = r.id; return r.data; }
+                  return renamed;
+                });
+                if (nextId) setEditingId(nextId);
+              }}
               onAddNamed={(title) => { if (isPending(person)) return; update((d) => { const r = addTask(d, person, undefined); return renameTask(r.data, r.id, title); }); }}
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}

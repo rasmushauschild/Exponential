@@ -22,7 +22,7 @@ interface Props {
   onToggleSelect: (id: string) => void;
   onAdd: (date?: ISODate) => void;
   onAddNamed: (title: string) => void; // from the placeholder row shown when the week is empty
-  onRename: (id: string, title: string) => void;
+  onRename: (id: string, title: string, viaEnter?: boolean) => void;
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
   onOpen: (t: Task) => void;
@@ -363,7 +363,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
           <StatusDot status={task.status} />
         </button>
         {editing
-          ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t) => onRename(task.id, t)} />
+          ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t, viaEnter) => onRename(task.id, t, viaEnter)} />
           : <button className="task-title">{task.title}</button>}
         {creator && (
           <span className="from-chip" title={`Added by ${creator.name}`}>
