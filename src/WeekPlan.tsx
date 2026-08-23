@@ -6,7 +6,7 @@ import { addDays, dayIndex, dayOfMonth, isoWeekNumber, weekdayShort } from './da
 import { InlineName } from './BigPlan';
 
 const EDGE = 8;
-const SWIPE_TRIGGER = 20; // px of sideways movement that flips the week — deliberately eager // accumulated px of horizontal scroll that flips the week
+const SWIPE_TRIGGER = 120; // accumulated px of horizontal scroll that flips the week
 
 interface Props {
   people: Person[];
@@ -89,16 +89,7 @@ export function WeekPlan(props: Props) {
       }
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    // macOS can also report a finished two-finger swipe directly (bypasses wheel accumulation entirely).
-    const offSwipe = window.exponential?.onSwipe?.((dir) => {
-      const d = dir === 'left' ? 1 : dir === 'right' ? -1 : 0;
-      if (!d) return;
-      locked = true; lockDir = d; acc = 0; last = performance.now();
-      onWeekChange(addDays(weekRef.current, d * 7));
-      setSwipe({ x: d * 28, animate: false });
-      requestAnimationFrame(() => requestAnimationFrame(() => setSwipe({ x: 0, animate: true })));
-    });
-    return () => { el.removeEventListener('wheel', onWheel); offSwipe?.(); };
+    return () => el.removeEventListener('wheel', onWheel);
   }, [onWeekChange]);
 
   // Dated tasks first by day, then the backlog (undated) at the bottom.

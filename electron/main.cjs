@@ -39,7 +39,6 @@ function createMainWindow() {
     },
   });
   loadRenderer(mainWin, null);
-  mainWin.on('swipe', (_e, direction) => mainWin?.webContents.send('swipe', direction)); // macOS trackpad page-swipe
   mainWin.on('closed', () => { mainWin = null; });
   return mainWin;
 }
@@ -68,7 +67,6 @@ function createWidget() {
     },
   });
   loadRenderer(widgetWin, 'widget');
-  widgetWin.on('swipe', (_e, direction) => widgetWin?.webContents.send('swipe', direction));
   widgetWin.on('blur', () => { if (widgetWin && !widgetWin.webContents.isDevToolsOpened()) widgetWin.hide(); });
   widgetWin.on('closed', () => { widgetWin = null; });
   return widgetWin;
