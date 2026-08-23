@@ -9,7 +9,7 @@ const DEADLINE_ROW_H = 30;
 const HEADER_H = 44; // month + day labels; tints and the band start below this
 const RETRO_H = 30; // strip along the bottom that shows week labels / opens the retro
 const GROUP_H = 26; // group label row above each section
-const GROUP_GAP = 8;
+const GROUP_GAP = 2;
 const MIN_PPD = 4;
 const MAX_PPD = 90;
 const EDGE = 10; // px from a bar's end that acts as a resize handle
@@ -76,7 +76,9 @@ export function BigPlan(props: Props) {
       const showHeader = groups.length > 0;
       const headerTop = y;
       if (showHeader) y += GROUP_H;
-      const lanes = inGroup.reduce((m, p) => Math.max(m, p.lane + 1), 0) + 1;
+      // Compact: no spare lane, except while a project is being dragged (so it can be dropped below) and in the last section.
+      const spare = drag || gid === undefined ? 1 : 0;
+      const lanes = Math.max(1, inGroup.reduce((m, p) => Math.max(m, p.lane + 1), 0) + spare);
       list.push({ groupId: gid, name: g?.name ?? 'No group', color: g?.color ?? NO_GROUP_COLOR, headerTop, laneTop: y, lanes });
       y += lanes * ROW_H + GROUP_GAP;
     }
