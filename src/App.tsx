@@ -29,6 +29,7 @@ export default function App() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
   const [detailW, setDetailW] = useState(() => prefs.detailW);
+  const [slotAnimating, setSlotAnimating] = useState(false); // clip the slot only while its width is changing
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => prefs.theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
@@ -177,6 +178,8 @@ export default function App() {
   const selTask = selection?.kind === 'task' ? data.tasks.find((t) => t.id === selection.id) : undefined;
   const selDeadline = selection?.kind === 'deadline' ? data.deadlines.find((d) => d.id === selection.id) : undefined;
   const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro' || selection?.kind === 'inbox';
+  const prevOpen = useRef(detailOpen);
+  if (prevOpen.current !== detailOpen) { prevOpen.current = detailOpen; if (!slotAnimating) queueMicrotask(() => setSlotAnimating(true)); }
   const unread = (data.notifications ?? []).filter((n) => n.to === data.me && !n.read).length;
 
   const calKey = `${person === data.me ? 'primary' : data.people.find((x) => x.id === person)?.email}|${week}`;
@@ -317,7 +320,11 @@ export default function App() {
         </div>
 
         {/* The slot animates its width so the planners squeeze smoothly; the panel inside keeps a fixed width. */}
-        <div className={`detail-slot${vResizing ? ' no-anim' : ''}`} style={{ width: detailOpen ? detailW + 14 : 0 }}>
+        <div
+          className={`detail-slot${vResizing ? ' no-anim' : ''}${slotAnimating || !detailOpen ? ' clip' : ''}`}
+          style={{ width: detailOpen ? detailW + 14 : 0 }}
+          onTransitionEnd={(e) => { if (e.propertyName === 'width') setSlotAnimating(false); }}
+        >
         {detailOpen && <div className={`vresizer${vResizing ? ' dragging' : ''}`} onPointerDown={onVResizeDown} />}
         {detailOpen && selection && (
           <DetailPanel

@@ -131,7 +131,8 @@ img { display: block; -webkit-user-drag: none; }
 .account-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 .main { flex: 1; min-width: 0; display: flex; }
-.detail-slot { flex: none; display: flex; overflow: hidden; transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.detail-slot { flex: none; display: flex; overflow: visible; transition: width 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.detail-slot.clip { overflow: hidden; }
 .detail-slot.no-anim { transition: none; }
 .vresizer { width: 14px; flex: none; cursor: col-resize; display: flex; align-items: center; justify-content: center; }
 .vresizer::after { content: ''; height: 44px; width: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0); transition: background 0.15s; }
