@@ -21,7 +21,7 @@ contextBridge.exposeInMainWorld('exponential', {
     signIn: () => ipcRenderer.invoke('google:signIn'),
     signOut: () => ipcRenderer.invoke('google:signOut'),
     events: (calendarId, from, to) => ipcRenderer.invoke('google:events', calendarId, from, to),
-    idToken: () => ipcRenderer.invoke('google:idToken'),
+    idToken: (force) => ipcRenderer.invoke('google:idToken', force),
     hasCalendar: () => ipcRenderer.invoke('google:hasCalendar'),
     grantCalendar: () => ipcRenderer.invoke('google:grantCalendar'),
   },

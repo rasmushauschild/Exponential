@@ -55,7 +55,7 @@ async function accessToken() {
     refresh_token: t.refresh_token,
     grant_type: 'refresh_token',
   });
-  const next = { ...t, access_token: fresh.access_token, scope: fresh.scope ?? t.scope, expires_at: Date.now() + fresh.expires_in * 1000 };
+  const next = { ...t, access_token: fresh.access_token, id_token: fresh.id_token ?? t.id_token, scope: fresh.scope ?? t.scope, expires_at: Date.now() + fresh.expires_in * 1000 };
   setTokens(next);
   return next.access_token;
 }
@@ -76,13 +76,17 @@ async function userInfo() {
 }
 
 /** A current Google ID token (refreshing if needed) — exchanged for a Supabase session in the renderer. */
-async function idToken() {
+async function idToken(force = false) {
   const cfg = getConfig();
   const t = getTokens();
   if (!cfg || !t) return null;
-  if (t.id_token && t.expires_at - 60_000 > Date.now()) return t.id_token;
+  // Trust the ID token's own exp claim, not the access token's bookkeeping.
+  const stillValid = () => {
+    try { return JSON.parse(Buffer.from(t.id_token.split('.')[1], 'base64url').toString()).exp * 1000 - 60_000 > Date.now(); } catch { return false; }
+  };
+  if (!force && t.id_token && stillValid()) return t.id_token;
   const fresh = await tokenRequest({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: t.refresh_token, grant_type: 'refresh_token' });
-  const next = { ...t, access_token: fresh.access_token, id_token: fresh.id_token ?? t.id_token, expires_at: Date.now() + fresh.expires_in * 1000 };
+  const next = { ...t, access_token: fresh.access_token, id_token: fresh.id_token ?? t.id_token, scope: fresh.scope ?? t.scope, expires_at: Date.now() + fresh.expires_in * 1000 };
   setTokens(next);
   return next.id_token ?? null;
 }

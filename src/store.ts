@@ -31,7 +31,7 @@ declare global {
         signIn: () => Promise<GoogleUser>;
         signOut: () => Promise<void>;
         events: (calendarId: string, from: ISODate, to: ISODate) => Promise<CalendarEvent[]>;
-        idToken: () => Promise<string | null>;
+        idToken: (force?: boolean) => Promise<string | null>;
         hasCalendar: () => Promise<boolean>;
         grantCalendar: () => Promise<boolean>;
       };

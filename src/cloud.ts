@@ -21,8 +21,14 @@ export async function ensureSession(): Promise<string | null> {
   if (data.session) return data.session.user.id;
   const token = await window.exponential?.google.idToken();
   if (!token) return null;
-  const res = await supabase.auth.signInWithIdToken({ provider: 'google', token });
-  if (res.error) throw res.error;
+  let res = await supabase.auth.signInWithIdToken({ provider: 'google', token });
+  if (res.error) {
+    // e.g. a stale cached ID token: force a refresh from Google and try once more
+    const fresh = await window.exponential?.google.idToken(true);
+    if (!fresh) throw res.error;
+    res = await supabase.auth.signInWithIdToken({ provider: 'google', token: fresh });
+    if (res.error) throw res.error;
+  }
   return res.data.user?.id ?? null;
 }
 
