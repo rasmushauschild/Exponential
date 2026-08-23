@@ -465,8 +465,13 @@ img { display: block; -webkit-user-drag: none; }
 
 .widget-window, .widget-window body { background: transparent; }
 .widget-window #root { background: transparent; }
-.widget { height: 100%; padding: 8px; }
-.widget-panel { height: 100%; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 18px 50px rgba(0, 0, 0, 0.28); border-radius: 26px; }
+.widget { height: 100%; padding: 16px; }
+.widget-panel {
+  height: 100%; border-radius: 26px;
+  /* hairline + a shadow that stays inside the 16px transparent margin */
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.18), 0 4px 14px rgba(0, 0, 0, 0.16);
+}
+[data-theme='dark'] .widget-panel { box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.14), 0 4px 14px rgba(0, 0, 0, 0.5); }
 .widget .panel-head { -webkit-app-region: no-drag; padding: 18px 22px 8px; }
 .widget .panel-title { font-size: 20px; }
 .widget .arrow { font-size: 12px; margin-left: 2px; }

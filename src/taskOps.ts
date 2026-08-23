@@ -9,10 +9,13 @@ export const notify = (d: Data, n: Omit<Notification, 'id' | 'at' | 'read'>): Da
 
 export const nameOf = (d: Data, id: string) => shortName(d.people.find((p) => p.id === id)?.name ?? 'Someone');
 
-/** New tasks go to the end of their day (or of the backlog). Returns the new id. */
-export function addTask(d: Data, personId: string, date?: ISODate): { data: Data; id: string } {
+/** New tasks go to the end of their day (or of the backlog) unless `at: 'start'`. Returns the new id. */
+export function addTask(d: Data, personId: string, date?: ISODate, at: 'start' | 'end' = 'end'): { data: Data; id: string } {
   const id = uid();
-  const order = d.tasks.filter((t) => t.personId === personId && t.date === date).reduce((m, t) => Math.max(m, (t.order ?? 0) + 1), 0);
+  const group = d.tasks.filter((t) => t.personId === personId && t.date === date);
+  const order = at === 'end'
+    ? group.reduce((m, t) => Math.max(m, (t.order ?? 0) + 1), 0)
+    : group.reduce((m, t) => Math.min(m, (t.order ?? 0) - 1), 0);
   const task: Task = { id, personId, title: 'New task', date, order, status: 'todo', createdBy: d.me };
   return { data: { ...d, tasks: [...d.tasks, task] }, id };
 }

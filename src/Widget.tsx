@@ -26,7 +26,8 @@ export default function Widget() {
   const startNewTask = () => {
     if (!data) return;
     let id = '';
-    update((d) => { const r = addTask(d, who, undefined); id = r.id; return r.data; });
+    // at the top of the backlog, so the week's tasks stay in view while you type
+    update((d) => { const r = addTask(d, who, undefined, 'start'); id = r.id; return r.data; });
     setEditingId(id);
   };
 

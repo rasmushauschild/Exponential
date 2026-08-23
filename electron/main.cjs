@@ -58,6 +58,7 @@ function createWidget() {
     fullscreenable: false,
     alwaysOnTop: true,
     skipTaskbar: true,
+    hasShadow: false, // the page draws its own shadow inside the transparent margin; the system one looked jagged
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
