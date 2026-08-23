@@ -147,6 +147,10 @@ img { display: block; -webkit-user-drag: none; }
 .panel-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; white-space: nowrap; }
 .panel-spacer { flex: 1; }
 .head-gap { width: 10px; }
+.people-scroll { display: flex; gap: 8px; overflow-x: auto; min-width: 0; flex: 0 1 auto; padding: 4px 2px; margin: -4px -2px; scrollbar-width: none; -webkit-app-region: no-drag; }
+.people-scroll::-webkit-scrollbar { display: none; }
+.people-scroll .pill { flex: none; }
+.panel-head .pill.toggle { margin-left: 6px; }
 
 .pill {
   padding: 7px 13px; border-radius: 999px; background: var(--soft); font-weight: 600; color: var(--text-2);

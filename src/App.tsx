@@ -28,7 +28,13 @@ export default function App() {
   const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | 'new-team' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [multi, setMulti] = useState<Set<string>>(new Set()); // shift/cmd-click selection across both panels
-  const toggleSelect = (id: string) => setMulti((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const toggleSelect = (id: string) => setMulti((m) => {
+    const n = new Set(m);
+    // the item open in the side panel looks selected, so it joins the multi-selection on the first modifier-click
+    if (n.size === 0 && selection && ['project', 'task', 'deadline'].includes(selection.kind) && selection.id !== id) n.add(selection.id);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
   const [resizing, setResizing] = useState(false);
   const [detailW, setDetailW] = useState(() => prefs.detailW);
   const [slotAnimating, setSlotAnimating] = useState(false); // clip the slot only while its width is changing

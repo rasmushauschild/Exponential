@@ -122,8 +122,6 @@ export function WeekPlan(props: Props) {
     <>
       <div className="panel-head">
         <div className="panel-title">Week {isoWeekNumber(week)}</div>
-        <div className="panel-spacer" />
-        {headExtra}
         <button
           className={`pill toggle${calendar.enabled ? ' active' : ''}`}
           onClick={onToggleCalendar}
@@ -131,13 +129,16 @@ export function WeekPlan(props: Props) {
         >
           <CalIcon /> Calendar
         </button>
-        <span className="head-gap" />
-        {people.map((p) => (
-          <button key={p.id} className={`pill person${p.id === selected ? ' active' : ''}`} onClick={() => onSelect(p.id)}>
-            <Avatar person={p} />
-            {p.id === me ? 'Me' : shortName(p.name)}
-          </button>
-        ))}
+        <div className="panel-spacer" />
+        {headExtra}
+        <div className="people-scroll">
+          {people.map((p) => (
+            <button key={p.id} className={`pill person${p.id === selected ? ' active' : ''}`} onClick={() => onSelect(p.id)}>
+              <Avatar person={p} />
+              {p.id === me ? 'Me' : shortName(p.name)}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="wk-body" ref={bodyRef}>
