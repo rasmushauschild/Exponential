@@ -76,8 +76,9 @@ export function BigPlan(props: Props) {
       const showHeader = groups.length > 0;
       const headerTop = y;
       if (showHeader) y += GROUP_H;
-      // Compact: no spare lane, except while a project is being dragged (so it can be dropped below) and in the last section.
-      const spare = drag || gid === undefined ? 1 : 0;
+      // Compact: no spare lane (only the last, ungrouped section keeps one). Dropping a project onto a
+      // group's label row appends it as a new row of that group, so the layout never jumps while dragging.
+      const spare = gid === undefined ? 1 : 0;
       const lanes = Math.max(1, inGroup.reduce((m, p) => Math.max(m, p.lane + 1), 0) + spare);
       list.push({ groupId: gid, name: g?.name ?? 'No group', color: g?.color ?? NO_GROUP_COLOR, headerTop, laneTop: y, lanes });
       y += lanes * ROW_H + GROUP_GAP;
@@ -161,6 +162,7 @@ export function BigPlan(props: Props) {
     const yc = clientY - rect.top + scrollY;
     for (const sec of sections) {
       if (yc >= sec.laneTop && yc < sec.laneTop + sec.lanes * ROW_H) return { day, lane: Math.floor((yc - sec.laneTop) / ROW_H), groupId: sec.groupId };
+      if (groups.length > 0 && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId }; // label row = append to this group
     }
     return { day, lane: -2, groupId: undefined as string | undefined };
   };
