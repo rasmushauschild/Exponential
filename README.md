@@ -85,7 +85,7 @@ Authentication → Sign In / Providers → Google add the OAuth client ID to *Au
 | Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |
 | Week | Pick a teammate and add tasks to *their* week — they show up dashed with an "added by" chip |
 | Details | Edit title, dates, colour/status; notes are rich text stored as Markdown — H1, H2, text, and **Todo** lines; drop or paste images straight in |
-| Details | Every to-do line in a project's (or task's) notes is claimable: hover it and **+ Add to my week** puts it in your backlog, linked to the project (or as a subtask); avatars show who has taken it |
+| Details | A project (or task) has its own task list — the same rows as the week view. Add tasks nobody owns yet; anyone can hover one and **+ Add to my week** to take it into their backlog; taken rows show who has it |
 | Details | **Send to Agent** copies the item (title, properties, notes) as one Markdown document to the clipboard |
 | Week | Drag a task's title up or down to reorder tasks that share a day |
 | Layout | Drag the gaps between panels; proportions are remembered on this machine |

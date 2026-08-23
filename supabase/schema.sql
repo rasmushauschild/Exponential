@@ -88,7 +88,7 @@ create index if not exists deadlines_team on public.deadlines(team_id);
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   team_id uuid not null references public.teams(id) on delete cascade,
-  person_id uuid not null references public.profiles(id) on delete cascade,
+  person_id uuid references public.profiles(id) on delete cascade, -- null = unassigned (project backlog)
   title text not null,
   date date,              -- null = backlog
   end_date date,
@@ -261,3 +261,5 @@ alter table public.tasks add column if not exists project_id uuid references pub
 alter table public.tasks add column if not exists parent_id uuid references public.tasks(id) on delete set null;
 create index if not exists tasks_project on public.tasks(project_id);
 create index if not exists tasks_parent on public.tasks(parent_id);
+-- Project/subtask backlogs hold tasks nobody has taken yet.
+alter table public.tasks alter column person_id drop not null;

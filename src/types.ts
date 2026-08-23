@@ -30,7 +30,7 @@ export interface Deadline {
 
 export interface Task {
   id: string;
-  personId: string;
+  personId?: string; // absent = unassigned, sitting in a project's (or parent task's) list
   title: string;
   date?: ISODate; // absent = backlog: shown in every week until scheduled
   end?: ISODate; // inclusive; same as date when absent

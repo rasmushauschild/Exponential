@@ -7,7 +7,7 @@ import logoUrl from '../build/icon.png';
 import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, shortName } from './types';
-import { addTask, nameOf, notify, patchTask, renameTask, reorderTask } from './taskOps';
+import { addTask, claimTask, nameOf, notify, patchTask, renameTask, reorderTask } from './taskOps';
 import { isPending, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
@@ -440,10 +440,12 @@ export default function App() {
             onClose={() => setSelection(null)}
             onOpen={setSelection}
             tasks={data.tasks}
-            onClaimTodo={(title, link) => update((d) => {
-              const r = addTask(d, d.me, undefined);
-              return { ...r.data, tasks: r.data.tasks.map((t) => (t.id === r.id ? { ...t, title, ...link, createdBy: undefined } : t)) };
-            })}
+            editingId={editingId ?? undefined}
+            onAddLinked={(link) => { let id = ''; update((d) => { const r = addTask(d, undefined, undefined, 'end', link); id = r.id; return r.data; }); setEditingId(id); }}
+            onRenameTask={(id, title) => { setEditingId(null); update((d) => renameTask(d, id, title)); }}
+            onDeleteTask={(id) => update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))}
+            onReorderTask={(id, delta) => update((d) => reorderTask(d, id, delta))}
+            onClaimTask={(id) => update((d) => claimTask(d, id))}
             onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
             onUpdateProject={updateProject}
             onToggleAssignee={(pid, who) => {

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Deadline, ISODate, Notification, Person, Project, Retro, RetroField, Status, Task } from './types';
 import { htmlToMarkdown } from './store';
-import { PROJECT_COLORS, STATUS_COLOR, STATUS_LABEL, shortName } from './types';
+import { PROJECT_COLORS, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
+import { TaskList } from './TaskList';
 import { addDays, formatRange, isoWeekNumber } from './dates';
 
 export type Selection =
@@ -32,8 +33,13 @@ interface Props {
   onOpen: (sel: Selection) => void;
   onMarkRead: (ids: string[]) => void;
   onDelete: () => void;
-  tasks: Task[]; // all tasks of the team, to show who has taken which to-do
-  onClaimTodo: (title: string, link: { projectId?: string; parentId?: string }) => void;
+  tasks: Task[]; // all tasks of the team
+  editingId?: string;
+  onAddLinked: (link: { projectId?: string; parentId?: string }) => void;
+  onRenameTask: (id: string, title: string) => void;
+  onDeleteTask: (id: string) => void;
+  onReorderTask: (id: string, delta: number) => void;
+  onClaimTask: (id: string) => void;
 }
 
 export function DetailPanel(p: Props) {
@@ -153,17 +159,26 @@ export function DetailPanel(p: Props) {
           )}
         </div>
 
-        <MarkdownEditor
-          key={`ed-${item.id}`}
-          value={item.notes ?? ''}
-          onChange={setNotes}
-          todos={deadline ? undefined : {
-            people,
-            me,
-            linked: p.tasks.filter((t) => (project ? t.projectId === project.id : t.parentId === task!.id)),
-            onClaim: (title) => p.onClaimTodo(title, project ? { projectId: project.id } : { parentId: task!.id }),
-          }}
-        />
+        {!deadline && (
+          <>
+            <div className="retro-label" style={{ marginBottom: 6 }}>{project ? 'Tasks' : 'Subtasks'}</div>
+            <TaskList
+              tasks={p.tasks.filter((t) => (project ? t.projectId === project.id : t.parentId === task!.id))}
+              people={people}
+              me={me}
+              editingId={p.editingId}
+              onAdd={() => p.onAddLinked(project ? { projectId: project.id } : { parentId: task!.id })}
+              onRename={p.onRenameTask}
+              onUpdate={(id, patch) => p.onUpdateTask(id, patch)}
+              onDelete={p.onDeleteTask}
+              onReorder={p.onReorderTask}
+              onClaim={p.onClaimTask}
+              onOpen={(t) => p.onOpen({ kind: 'task', id: t.id })}
+            />
+            <div className="retro-label" style={{ margin: '22px 0 6px' }}>Notes</div>
+          </>
+        )}
+        <MarkdownEditor key={`ed-${item.id}`} value={item.notes ?? ''} onChange={setNotes} />
       </div>
       <SendToAgent doc={agentDoc} />
     </aside>
@@ -404,14 +419,7 @@ function PersonSelect({ people, value, me, placeholder, onChange }: {
  * Notes are stored as Markdown. By default they're edited as rich text (a contenteditable that
  * renders the Markdown and converts edits back); a "Markdown" toggle shows the raw source.
  */
-export interface TodoContext {
-  people: Person[];
-  me: string;
-  linked: Task[]; // tasks already created from this note's to-dos
-  onClaim: (title: string) => void;
-}
-
-function MarkdownEditor({ value, onChange, todos }: { value: string; onChange: (md: string) => void; todos?: TodoContext }) {
+function MarkdownEditor({ value, onChange }: { value: string; onChange: (md: string) => void }) {
   const [source] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   const lastEmitted = useRef(value);
@@ -431,7 +439,7 @@ function MarkdownEditor({ value, onChange, todos }: { value: string; onChange: (
     <div className="editor">
       {source
         ? <SourceEditor value={pending.current ?? value} onEmit={emit} onToggle={() => {}} />
-        : <RichEditor value={value} lastEmitted={lastEmitted} onEmit={emit} todos={todos} />}
+        : <RichEditor value={value} lastEmitted={lastEmitted} onEmit={emit} />}
     </div>
   );
 }
@@ -440,33 +448,8 @@ function ToolbarButton({ label, title, onClick, active }: { label: string; title
   return <button className={active ? 'on' : ''} title={title} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>{label}</button>;
 }
 
-function RichEditor({ value, lastEmitted, onEmit, todos }: { value: string; lastEmitted: React.MutableRefObject<string>; onEmit: (md: string) => void; todos?: TodoContext }) {
+function RichEditor({ value, lastEmitted, onEmit }: { value: string; lastEmitted: React.MutableRefObject<string>; onEmit: (md: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const [todoRows, setTodoRows] = useState<{ top: number; title: string; checked: boolean }[]>([]);
-
-  // Where the to-do lines are, so "Add to my week" buttons can float beside them (outside the editable DOM).
-  const measure = () => {
-    const el = ref.current, wrap = wrapRef.current;
-    if (!el || !wrap || !todos) return;
-    const base = wrap.getBoundingClientRect().top;
-    const rows = Array.from(el.querySelectorAll<HTMLLIElement>('li')).filter((li) => li.querySelector(':scope > input[type=checkbox]')).map((li) => ({
-      top: li.getBoundingClientRect().top - base,
-      title: (li.textContent ?? '').trim(),
-      checked: li.querySelector<HTMLInputElement>(':scope > input[type=checkbox]')!.checked,
-    })).filter((r) => r.title);
-    setTodoRows((prev) => (JSON.stringify(prev) === JSON.stringify(rows) ? prev : rows));
-  };
-  useEffect(() => {
-    if (!todos) return;
-    measure();
-    const el = ref.current!;
-    const mo = new MutationObserver(measure);
-    mo.observe(el, { subtree: true, childList: true, characterData: true, attributes: true });
-    const ro = new ResizeObserver(measure);
-    ro.observe(el);
-    return () => { mo.disconnect(); ro.disconnect(); };
-  }, [todos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only re-render the DOM when the value changed from outside (undo, another item), never for our own edits.
   useEffect(() => {
@@ -502,17 +485,6 @@ function RichEditor({ value, lastEmitted, onEmit, todos }: { value: string; last
         <ToolbarButton label="Text" title="Plain paragraph" onClick={() => cmd('formatBlock', 'p')} />
         <ToolbarButton label="Todo" title="To-do — teammates can add it to their week" onClick={() => cmd('insertHTML', '<ul><li><input type="checkbox"> </li></ul>')} />
       </div>
-      <div className="rich-wrap" ref={wrapRef}>
-      {todos && todoRows.map((r, i) => {
-        const taken = todos.linked.filter((t) => t.title.trim().toLowerCase() === r.title.toLowerCase());
-        const mine = taken.some((t) => t.personId === todos.me);
-        return (
-          <div key={i} className="todo-actions" style={{ top: r.top }}>
-            {taken.map((t) => { const who = todos.people.find((x) => x.id === t.personId); return who ? <span key={t.id} className="todo-who" title={`${who.name} · ${STATUS_LABEL[t.status]}`}><Avatar person={who} size={18} /><span className="todo-status" style={{ background: STATUS_COLOR[t.status] }} /></span> : null; })}
-            {!mine && !r.checked && <button className="pill small todo-add" onClick={() => todos.onClaim(r.title)}>+ Add to my week</button>}
-          </div>
-        );
-      })}
       <div
         ref={ref}
         className="rich-body"
@@ -525,7 +497,6 @@ function RichEditor({ value, lastEmitted, onEmit, todos }: { value: string; last
         onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
         onDrop={(e) => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
       />
-      </div>
     </>
   );
 }
