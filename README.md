@@ -62,9 +62,14 @@ next step (see below).
 | Week | Click a task's status dot: to do / in progress / needs review / completed / cancelled |
 | Week | Drag a task's block to another day, or drag either end to stretch it over several days |
 | Week | Hover the empty area under the tasks and click a day to create a task and type its name |
-| Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |
 | Week | **Calendar** toggle shows Google Calendar events for the selected person |
+| Master plan | Hover a week near the bottom edge for its "Retro · Week N" pill; click it to open that week's retro |
+| Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |
+| Week | Pick a teammate and add tasks to *their* week — they show up dashed with an "added by" chip |
 | Details | Edit title, dates, colour/status; notes support headings, bullets, checkboxes and images (paste or drop) |
+| Details | Assign people to a project (avatars show on the bar); set a task's owner; when status is "Needs review", pick who reviews |
+| Inbox | Left sidebar: tasks added for you, review requests, owner hand-offs, changes to projects you're on |
+| Anywhere | ⌘Z / ⌘⇧Z (Ctrl on Windows) undo and redo — 100 steps |
 
 ## Not done yet
 

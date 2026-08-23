@@ -3,12 +3,12 @@ import { BigPlan, Star } from './BigPlan';
 import { Avatar, WeekPlan } from './WeekPlan';
 import { DetailPanel, type Selection } from './DetailPanel';
 import { useData, uid, type GoogleConfig } from './store';
-import type { CalendarEvent, Deadline, GoogleUser, ISODate, Project, Task } from './types';
+import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Notification, Project, Retro, Task } from './types';
 import { shortName } from './types';
 import { addDays, todayISO, weekStart } from './dates';
 
 export default function App() {
-  const { data, update } = useData();
+  const { data, update, undo, redo } = useData();
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
@@ -29,6 +29,61 @@ export default function App() {
     const t = setInterval(() => setToday(todayISO()), 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // ⌘Z / ⌘⇧Z (Ctrl on Windows). Text fields keep their own undo while focused.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
+      const el = document.activeElement as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
+
+  const notify = (d: Data, n: Omit<Notification, 'id' | 'at' | 'read'>): Data =>
+    n.to === n.from ? d : { ...d, notifications: [...(d.notifications ?? []), { ...n, id: uid(), at: new Date().toISOString(), read: false }] };
+
+  const nameOf = (d: Data, id: string) => shortName(d.people.find((p) => p.id === id)?.name ?? 'Someone');
+
+  /** Task edits that someone else should hear about: new owner, review request. */
+  const updateTask = (id: string, patch: Partial<Task>, coalesce?: string) =>
+    update((d) => {
+      const before = d.tasks.find((t) => t.id === id);
+      if (!before) return d;
+      const after = { ...before, ...patch };
+      let next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) };
+      if (patch.personId && patch.personId !== before.personId) {
+        next = notify(next, { to: after.personId, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} handed you “${after.title}”`, ref: { kind: 'task', id } });
+        next = notify(next, { to: before.personId, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} moved “${after.title}” to ${nameOf(d, after.personId)}`, ref: { kind: 'task', id } });
+      }
+      if (after.status === 'review' && after.reviewerId && (after.reviewerId !== before.reviewerId || before.status !== 'review')) {
+        next = notify(next, { to: after.reviewerId, from: d.me, kind: 'review-requested', text: `${nameOf(d, d.me)} asked you to review “${after.title}”`, ref: { kind: 'task', id } });
+      }
+      return next;
+    }, coalesce);
+
+  /** Project edits notify everyone assigned (except the editor). */
+  const updateProject = (id: string, patch: Partial<Project>, coalesce?: string) =>
+    update((d) => {
+      const before = d.projects.find((p) => p.id === id);
+      if (!before) return d;
+      const after = { ...before, ...patch };
+      let next: Data = { ...d, projects: d.projects.map((p) => (p.id === id ? after : p)) };
+      const what = patch.name !== undefined && patch.name !== before.name ? 'renamed' : patch.start || patch.end ? 'moved' : patch.notes !== undefined ? 'updated the notes of' : patch.assignees ? null : 'changed';
+      if (patch.assignees) {
+        for (const pid of patch.assignees.filter((x) => !before.assignees?.includes(x))) {
+          next = notify(next, { to: pid, from: d.me, kind: 'project-changed', text: `${nameOf(d, d.me)} added you to “${after.name}”`, ref: { kind: 'project', id } });
+        }
+      } else if (what && !coalesce) {
+        for (const pid of after.assignees ?? []) {
+          next = notify(next, { to: pid, from: d.me, kind: 'project-changed', text: `${nameOf(d, d.me)} ${what} “${after.name}”`, ref: { kind: 'project', id } });
+        }
+      }
+      return next;
+    }, coalesce);
 
   // Google: restore session on launch.
   useEffect(() => {
@@ -111,7 +166,8 @@ export default function App() {
   const selProject = selection?.kind === 'project' ? data.projects.find((p) => p.id === selection.id) : undefined;
   const selTask = selection?.kind === 'task' ? data.tasks.find((t) => t.id === selection.id) : undefined;
   const selDeadline = selection?.kind === 'deadline' ? data.deadlines.find((d) => d.id === selection.id) : undefined;
-  const detailOpen = !!(selProject || selTask || selDeadline);
+  const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro' || selection?.kind === 'inbox';
+  const unread = (data.notifications ?? []).filter((n) => n.to === data.me && !n.read).length;
 
   const calKey = `${person === data.me ? 'primary' : data.people.find((x) => x.id === person)?.email}|${week}`;
 
@@ -120,6 +176,10 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">Exponential</div>
         <button className="nav-item active"><Icon d="M4 5h16v4H4zM4 11h10v4H4zM4 17h7v2H4z" /> Plan</button>
+        <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
+          <Icon d="M4 6h16v12H4zM4 6l8 7 8-7" /> Inbox
+          {unread > 0 && <span className="badge">{unread}</span>}
+        </button>
         <button className="nav-item" title="Coming later"><Icon d="M12 3a9 9 0 110 18 9 9 0 010-18zm0 4v5l3 2" /> Team</button>
 
         <div className="sidebar-bottom">
@@ -152,6 +212,7 @@ export default function App() {
             <BigPlan
               projects={data.projects}
               deadlines={data.deadlines}
+              people={data.people}
               today={today}
               week={week}
               selectedId={selection?.id}
@@ -159,7 +220,8 @@ export default function App() {
               onWeekChange={setWeek}
               onOpenProject={(p) => setSelection({ kind: 'project', id: p.id })}
               onOpenDeadline={(d) => setSelection({ kind: 'deadline', id: d.id })}
-              onMoveProject={(id, patch) => update((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }))}
+              onMoveProject={(id, patch) => updateProject(id, patch)}
+              onOpenRetro={(monday) => setSelection({ kind: 'retro', id: monday })}
               onMoveDeadline={(id, date) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, date } : x)) }))}
               onCreateProject={(start, lane) => {
                 const id = uid();
@@ -190,15 +252,21 @@ export default function App() {
               onWeekChange={setWeek}
               onAdd={(date) => {
                 const id = uid();
-                update((d) => ({ ...d, tasks: [...d.tasks, { id, personId: person, title: 'New task', date, status: 'todo' } as Task] }));
+                update((d) => ({ ...d, tasks: [...d.tasks, { id, personId: person, title: 'New task', date, status: 'todo', createdBy: d.me } as Task] }));
                 setEditingId(id);
               }}
               onRename={(id, title) => {
                 setEditingId(null);
                 if (!title) update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }));
-                else update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, title } : t)) }));
+                else update((d) => {
+                  const t0 = d.tasks.find((t) => t.id === id)!;
+                  const next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, title } : t)) };
+                  return t0.personId !== d.me
+                    ? notify(next, { to: t0.personId, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${title}” to your week`, ref: { kind: 'task', id } })
+                    : next;
+                });
               }}
-              onUpdate={(id, patch) => update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))}
+              onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
               onOpen={(t) => setSelection({ kind: 'task', id: t.id })}
               calendar={{
@@ -218,17 +286,31 @@ export default function App() {
             project={selProject}
             task={selTask}
             deadline={selDeadline}
+            retro={selection.kind === 'retro' ? data.retros?.[selection.id] : undefined}
+            notifications={data.notifications ?? []}
             people={data.people}
+            me={data.me}
             onClose={() => setSelection(null)}
-            onUpdateProject={(id, patch) => update((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, ...patch } : p)) }))}
-            onUpdateTask={(id, patch) => update((d) => ({ ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, ...patch } : t)) }))}
-            onUpdateDeadline={(id, patch) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, ...patch } : x)) }))}
+            onOpen={setSelection}
+            onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
+            onUpdateProject={updateProject}
+            onToggleAssignee={(pid, who) => {
+              const cur = data.projects.find((x) => x.id === pid)?.assignees ?? [];
+              updateProject(pid, { assignees: cur.includes(who) ? cur.filter((i) => i !== who) : [...cur, who] });
+            }}
+            onUpdateTask={updateTask}
+            onUpdateDeadline={(id, patch, key) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, ...patch } : x)) }), key)}
+            onUpdateRetro={(wk, patch, key) => update((d) => {
+              const cur: Retro = d.retros?.[wk] ?? { week: wk, wentWell: '', improve: '', learnings: '', nextFocus: '' };
+              return { ...d, retros: { ...d.retros, [wk]: { ...cur, ...patch } } };
+            }, key)}
             onDelete={() => {
               const { kind, id } = selection;
               update((d) =>
                 kind === 'project' ? { ...d, projects: d.projects.filter((p) => p.id !== id) }
                 : kind === 'task' ? { ...d, tasks: d.tasks.filter((t) => t.id !== id) }
-                : { ...d, deadlines: d.deadlines.filter((x) => x.id !== id) },
+                : kind === 'deadline' ? { ...d, deadlines: d.deadlines.filter((x) => x.id !== id) }
+                : d,
               );
               setSelection(null);
             }}

@@ -18,6 +18,7 @@ export interface Project {
   lane: number;
   color?: string;
   notes?: string; // HTML
+  assignees?: string[];
 }
 
 export interface Deadline {
@@ -35,6 +36,30 @@ export interface Task {
   end?: ISODate; // inclusive; same as date when absent
   status: Status;
   notes?: string;
+  createdBy?: string; // person id when someone else added it
+  reviewerId?: string;
+}
+
+export type NotificationKind = 'task-added' | 'review-requested' | 'owner-changed' | 'project-changed';
+
+export interface Notification {
+  id: string;
+  to: string;
+  from: string;
+  kind: NotificationKind;
+  text: string;
+  ref: { kind: 'task' | 'project'; id: string };
+  at: string; // ISO timestamp
+  read: boolean;
+}
+
+export interface Retro {
+  week: ISODate; // Monday
+  wentWell: string;
+  improve: string;
+  learnings: string;
+  nextFocus: string;
+  notes?: string;
 }
 
 export interface Data {
@@ -44,6 +69,8 @@ export interface Data {
   tasks: Task[];
   me: string;
   showCalendar?: boolean;
+  notifications?: Notification[];
+  retros?: Record<ISODate, Retro>;
 }
 
 export interface CalendarEvent {

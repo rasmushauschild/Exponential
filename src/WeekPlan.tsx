@@ -27,6 +27,7 @@ interface Props {
   onToggleCalendar: () => void;
 }
 
+/** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
   const { people, me, selected, onSelect, week, today, tasks, selectedId, editingId, onAdd, onRename, onUpdate, onDelete, onOpen, onWeekChange, calendar, onToggleCalendar } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
@@ -57,18 +58,25 @@ export function WeekPlan(props: Props) {
   weekRef.current = week;
   useEffect(() => {
     const el = bodyRef.current!;
-    let acc = 0, locked = false, timer: number | undefined;
+    let acc = 0, locked = false, lockDir = 0, timer: number | undefined, last = 0;
     const rubber = (v: number) => Math.sign(v) * 60 * Math.log1p(Math.abs(v) / 60);
+    const reset = () => { acc = 0; locked = false; lockDir = 0; setSwipe({ x: 0, animate: true }); };
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
+      const now = performance.now();
+      // A new gesture: a pause, or a fresh push in the opposite direction to the one that flipped the week.
+      if (now - last > 120 || (locked && Math.sign(e.deltaX) === -lockDir && Math.abs(e.deltaX) > 8)) { acc = 0; locked = false; lockDir = 0; }
+      last = now;
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => { acc = 0; locked = false; setSwipe({ x: 0, animate: true }); }, 180);
+      timer = window.setTimeout(reset, 120);
       if (locked) return;
       acc += e.deltaX;
       if (Math.abs(acc) >= SWIPE_TRIGGER) {
         locked = true;
         const dir = Math.sign(acc);
+        lockDir = dir;
+        acc = 0;
         onWeekChange(addDays(weekRef.current, dir * 7));
         setSwipe({ x: dir * 40, animate: false });
         requestAnimationFrame(() => setSwipe({ x: 0, animate: true }));
@@ -128,7 +136,9 @@ export function WeekPlan(props: Props) {
                 key={t.id}
                 task={t}
                 week={week}
-                readonly={readonly}
+                readonly={readonly && editingId !== t.id}
+                people={people}
+                me={me}
                 selected={selectedId === t.id}
                 editing={editingId === t.id}
                 onUpdate={onUpdate}
@@ -139,11 +149,11 @@ export function WeekPlan(props: Props) {
             ))}
             {readonly && sorted.length === 0 && <div className="hint wk-empty">Nothing planned this week.</div>}
 
-            {!readonly && (
+            {(
               <div className="wk-row wk-free">
                 <div className="wk-list">
                   <button className="add-task" onClick={() => onAdd(todayIdx >= 0 && todayIdx <= 6 ? today : week)}>
-                    <span className="plus">+</span> Add task
+                    <span className="plus">+</span> {readonly ? `Add task for ${shortName(people.find((p) => p.id === selected)?.name ?? '')}` : 'Add task'}
                   </button>
                 </div>
                 <div
@@ -192,10 +202,12 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, selected, editing, onUpdate, onDelete, onOpen, onRename }: {
+function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onRename }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
+  people: Person[];
+  me: string;
   selected: boolean;
   editing: boolean;
   onUpdate: Props['onUpdate'];
@@ -262,8 +274,10 @@ function TaskRow({ task, week, readonly, selected, editing, onUpdate, onDelete, 
   const s = live ? live.s : s0;
   const en = live ? live.e : e0;
   const vs = Math.max(0, s), ve = Math.min(6, en);
+  const creator = task.createdBy && task.createdBy !== task.personId ? people.find((p) => p.id === task.createdBy) : undefined;
+  const reviewer = task.status === 'review' && task.reviewerId ? people.find((p) => p.id === task.reviewerId) : undefined;
   return (
-    <div className={`wk-row task ${task.status}${selected ? ' selected' : ''}`}>
+    <div className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}`}>
       <div className="wk-list">
         <button className="status-btn" title={STATUS_LABEL[task.status]} onClick={() => !readonly && setMenu((m) => !m)}
           style={{ cursor: readonly ? 'default' : 'pointer' }}>
@@ -272,6 +286,16 @@ function TaskRow({ task, week, readonly, selected, editing, onUpdate, onDelete, 
         {editing
           ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t) => onRename(task.id, t)} />
           : <button className="task-title" onClick={() => onOpen(task)}>{task.title}</button>}
+        {creator && (
+          <span className="from-chip" title={`Added by ${creator.name}`}>
+            <Avatar person={creator} size={14} /> {creator.id === me ? 'you' : shortName(creator.name).split(' ')[0]}
+          </span>
+        )}
+        {reviewer && (
+          <span className="from-chip review" title={`Review requested from ${reviewer.name}`}>
+            <Avatar person={reviewer} size={14} />
+          </span>
+        )}
         {menu && (
           <div className="status-menu" style={{ top: 32, left: 0 }}>
             {STATUS_ORDER.map((st) => (

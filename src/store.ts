@@ -58,6 +58,7 @@ function seed(): Data {
       { id: uid(), personId: 'p3', title: 'BMS firmware test', date: addDays(monday, 1), status: 'todo' },
       { id: uid(), personId: 'p3', title: 'Write test plan', date: addDays(monday, 3), status: 'cancelled' },
     ],
+    notifications: [],
   };
 }
 
@@ -94,23 +95,63 @@ async function persist(data: Data) {
   else localStorage.setItem(LS_KEY, JSON.stringify(data));
 }
 
+const HISTORY = 100;
+
+/**
+ * Data + undo/redo. `update(fn, coalesceKey)` records a history step; consecutive updates with the
+ * same key (e.g. typing into one notes field) collapse into one step.
+ */
 export function useData() {
   const [data, setData] = useState<Data | null>(null);
+  const dataRef = useRef<Data | null>(null);
   const timer = useRef<number | undefined>(undefined);
+  const past = useRef<Data[]>([]);
+  const future = useRef<Data[]>([]);
+  const lastKey = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    load().then(setData);
+    load().then((d) => { dataRef.current = d; setData(d); });
   }, []);
 
-  const update = useCallback((fn: (d: Data) => Data) => {
-    setData((prev) => {
-      if (!prev) return prev;
-      const next = fn(prev);
-      window.clearTimeout(timer.current);
-      timer.current = window.setTimeout(() => persist(next), 300);
-      return next;
-    });
+  const commit = (next: Data) => {
+    dataRef.current = next;
+    setData(next);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => persist(next), 300);
+  };
+
+  // Side effects stay outside React's updater functions (which run twice in Strict Mode).
+  const update = useCallback((fn: (d: Data) => Data, coalesceKey?: string) => {
+    const prev = dataRef.current;
+    if (!prev) return;
+    const next = fn(prev);
+    if (next === prev) return;
+    if (!coalesceKey || coalesceKey !== lastKey.current) {
+      past.current.push(prev);
+      if (past.current.length > HISTORY) past.current.shift();
+    }
+    lastKey.current = coalesceKey;
+    future.current = [];
+    commit(next);
   }, []);
 
-  return { data, update };
+  const undo = useCallback(() => {
+    const cur = dataRef.current;
+    const prev = past.current.pop();
+    if (!cur || !prev) return;
+    future.current.push(cur);
+    lastKey.current = undefined;
+    commit(prev);
+  }, []);
+
+  const redo = useCallback(() => {
+    const cur = dataRef.current;
+    const next = future.current.pop();
+    if (!cur || !next) return;
+    past.current.push(cur);
+    lastKey.current = undefined;
+    commit(next);
+  }, []);
+
+  return { data, update, undo, redo };
 }

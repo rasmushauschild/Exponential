@@ -1,11 +1,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Deadline, ISODate, Project } from './types';
+import type { Deadline, ISODate, Person, Project } from './types';
 import { PROJECT_COLORS } from './types';
-import { dayIndex, dayOfMonth, formatShort, fromDayIndex, isoWeekNumber, monthShort, weekdayShort } from './dates';
+import { dayIndex, dayOfMonth, formatShort, fromDayIndex, isoWeekNumber, monthShort, weekStart, weekdayShort } from './dates';
+import { Avatar } from './WeekPlan';
 
 const ROW_H = 38;
 const DEADLINE_ROW_H = 30;
 const HEADER_H = 46;
+const RETRO_H = 30; // strip along the bottom that shows week labels / opens the retro
 const MIN_PPD = 4;
 const MAX_PPD = 90;
 const EDGE = 10; // px from a bar's end that acts as a resize handle
@@ -13,6 +15,7 @@ const EDGE = 10; // px from a bar's end that acts as a resize handle
 interface Props {
   projects: Project[];
   deadlines: Deadline[];
+  people: Person[];
   today: ISODate;
   week: ISODate;
   selectedId?: string;
@@ -24,19 +27,7 @@ interface Props {
   onMoveDeadline: (id: string, date: ISODate) => void;
   onCreateProject: (start: ISODate, lane: number) => void;
   onRename: (id: string, name: string) => void;
-}
-
-function packLanes<T>(items: T[], range: (t: T) => [number, number]): Map<T, number> {
-  const sorted = [...items].sort((a, b) => range(a)[0] - range(b)[0]);
-  const laneEnds: number[] = [];
-  const out = new Map<T, number>();
-  for (const it of sorted) {
-    const [s, e] = range(it);
-    let lane = laneEnds.findIndex((end) => end < s);
-    if (lane === -1) { lane = laneEnds.length; laneEnds.push(e); } else laneEnds[lane] = e;
-    out.set(it, lane);
-  }
-  return out;
+  onOpenRetro: (monday: ISODate) => void;
 }
 
 export function projectColor(p: Project, index: number) {
@@ -47,7 +38,7 @@ type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: nu
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, deadlines, today, week, selectedId, editingId, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename } = props;
+  const { projects, deadlines, people, today, week, selectedId, editingId, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -60,12 +51,15 @@ export function BigPlan(props: Props) {
   const [dlDrag, setDlDrag] = useState<{ id: string; date: number } | null>(null);
   const [hoverCursor, setHoverCursor] = useState<string>('');
   const [ghost, setGhost] = useState<{ day: number; lane: number } | null>(null);
+  const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
+  const [height, setHeight] = useState(0);
 
   useLayoutEffect(() => {
     const el = ref.current!;
-    const ro = new ResizeObserver(() => setWidth(el.clientWidth));
+    const ro = new ResizeObserver(() => { setWidth(el.clientWidth); setHeight(el.clientHeight); });
     ro.observe(el);
     setWidth(el.clientWidth);
+    setHeight(el.clientHeight);
     return () => ro.disconnect();
   }, []);
 
@@ -79,11 +73,12 @@ export function BigPlan(props: Props) {
         const mx = e.clientX - el.getBoundingClientRect().left;
         const next = Math.min(MAX_PPD, Math.max(MIN_PPD, v.ppd * Math.exp(-e.deltaY * 0.01)));
         const dayUnderCursor = v.origin + mx / v.ppd;
-        setView({ ppd: next, origin: dayUnderCursor - mx / next });
+        viewRef.current = { ppd: next, origin: dayUnderCursor - mx / next };
       } else {
         const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-        setView({ ppd: v.ppd, origin: v.origin + delta / v.ppd });
+        viewRef.current = { ppd: v.ppd, origin: v.origin + delta / v.ppd };
       }
+      setView(viewRef.current);
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -101,9 +96,8 @@ export function BigPlan(props: Props) {
     window.addEventListener('pointerup', onUp);
   };
 
-  const dlLanes = packLanes(deadlines, (d) => [dayIndex(d.date), dayIndex(d.date) + Math.ceil(140 / ppd)]);
-  const dlLaneCount = deadlines.length ? Math.max(...dlLanes.values()) + 1 : 0;
-  const projectTop = HEADER_H + dlLaneCount * DEADLINE_ROW_H + 10;
+  const projectTop = HEADER_H + (deadlines.length ? DEADLINE_ROW_H : 0) + 10;
+  const inRetroStrip = (clientY: number) => clientY - ref.current!.getBoundingClientRect().top > height - RETRO_H;
 
   const slotAt = (clientX: number, clientY: number) => {
     const rect = ref.current!.getBoundingClientRect();
@@ -112,11 +106,12 @@ export function BigPlan(props: Props) {
     return { day, lane };
   };
 
-  const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline');
+  const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .retro-pill');
 
   // Empty space: a still click creates a week-long project at the ghost; a drag pans.
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 || !isEmptyTarget(e.target)) return;
+    e.preventDefault();
     const startX = e.clientX;
     const startOrigin = origin;
     let moved = false;
@@ -128,7 +123,7 @@ export function BigPlan(props: Props) {
       },
       (ev) => {
         setPanning(false);
-        if (moved) return;
+        if (moved || inRetroStrip(ev.clientY)) return;
         const { day, lane } = slotAt(ev.clientX, ev.clientY);
         if (lane >= 0) onCreateProject(fromDayIndex(day), lane);
       },
@@ -137,13 +132,15 @@ export function BigPlan(props: Props) {
 
   const onHover = (e: React.PointerEvent) => {
     if (drag || dlDrag || panning || bandDrag) return;
-    if (!isEmptyTarget(e.target)) { setGhost(null); return; }
     const { day, lane } = slotAt(e.clientX, e.clientY);
+    setHoverWeek(dayIndex(weekStart(fromDayIndex(day))));
+    if (!isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); return; }
     setGhost(lane >= 0 ? { day, lane } : null);
   };
 
   const onBandDown = (e: React.PointerEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     const startX = e.clientX;
     const startWeek = dayIndex(week);
     setBandDrag(true);
@@ -157,6 +154,7 @@ export function BigPlan(props: Props) {
   const onProjectDown = (e: React.PointerEvent, p: Project) => {
     if (e.button !== 0 || (e.target as HTMLElement).tagName === 'INPUT') return;
     e.stopPropagation();
+    e.preventDefault();
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const local = e.clientX - bar.left;
     const mode: Drag['mode'] = local < EDGE ? 'start' : bar.width - local < EDGE ? 'end' : 'move';
@@ -186,6 +184,7 @@ export function BigPlan(props: Props) {
   const onDeadlineDown = (e: React.PointerEvent, d: Deadline) => {
     if (e.button !== 0) return;
     e.stopPropagation();
+    e.preventDefault();
     const startX = e.clientX;
     const d0 = dayIndex(d.date);
     let latest = d0, moved = false;
@@ -227,6 +226,13 @@ export function BigPlan(props: Props) {
   }
   const days: number[] = [];
   if (ppd >= 16) for (let d = firstDay; d <= lastDay; d++) days.push(d);
+  // Every other week is tinted; parity is anchored to the calendar so zooming never swaps them.
+  const weeks: number[] = [];
+  for (let m = dayIndex(weekStart(fromDayIndex(firstDay))); m <= lastDay; m += 7) weeks.push(m);
+
+  // Deadlines share one row: each label may only use the space up to the next star.
+  const dlSorted = [...deadlines].sort((a, b) => a.date.localeCompare(b.date));
+  const dlLeft = (d: Deadline) => ((dlDrag?.id === d.id ? dlDrag.date : dayIndex(d.date)) - origin) * ppd;
 
   const weekNum = isoWeekNumber(week);
 
@@ -236,14 +242,31 @@ export function BigPlan(props: Props) {
       className={`timeline${panning ? ' panning' : ''}${drag || dlDrag ? ' dragging-item' : ''}`}
       onPointerDown={onPointerDown}
       onPointerMove={onHover}
-      onPointerLeave={() => setGhost(null)}
+      onPointerLeave={() => { setGhost(null); setHoverWeek(null); }}
     >
-      {months.map((m, i) => (
-        <div key={m.iso}>
-          {i % 2 === 1 && <div className="tl-month-tint" style={{ left: m.left, width: m.w }} />}
-          <div className="tl-month" style={{ left: Math.max(m.left, 0) + 10 }}>
-            {monthShort(m.iso)} {m.iso.slice(0, 4)}
+      {weeks.map((m) => {
+        const odd = Math.floor(m / 7) % 2 === 1;
+        const hovered = hoverWeek === m;
+        return (
+          <div key={m}>
+            {odd && <div className="tl-week-tint" style={{ left: (m - origin) * ppd, width: ppd * 7 }} />}
+            {hovered && (
+              <button
+                className="retro-pill"
+                style={{ left: (m - origin) * ppd + ppd * 3.5 }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => onOpenRetro(fromDayIndex(m))}
+                title="Open this week's retro"
+              >
+                Week {isoWeekNumber(fromDayIndex(m))}
+              </button>
+            )}
           </div>
+        );
+      })}
+      {months.map((m) => (
+        <div key={m.iso} className="tl-month" style={{ left: Math.min(Math.max(m.left, 0), m.left + m.w - 70) + 10, opacity: m.w < 40 ? 0 : 1 }}>
+          {monthShort(m.iso)} {m.iso.slice(0, 4)}
         </div>
       ))}
       {days.map((d) => {
@@ -257,7 +280,7 @@ export function BigPlan(props: Props) {
       })}
 
       <div
-        className={`week-band${bandDrag ? ' dragging' : ''}`}
+        className={`week-band${bandDrag ? ' dragging' : ''}${bandDrag || panning ? ' no-anim' : ''}`}
         style={{ left: x(week), width: ppd * 7 }}
         onPointerDown={onBandDown}
         title="Drag to choose the week shown below"
@@ -271,18 +294,23 @@ export function BigPlan(props: Props) {
         </div>
       )}
 
-      {deadlines.map((d) => {
+      {dlSorted.map((d, i) => {
         const live = dlDrag?.id === d.id ? dlDrag.date : dayIndex(d.date);
+        const left = dlLeft(d);
+        const next = dlSorted[i + 1];
+        const room = next ? dlLeft(next) - left - 26 : Infinity;
         return (
           <div
             key={d.id}
             className={`tl-deadline${selectedId === d.id ? ' selected' : ''}${dlDrag?.id === d.id ? ' live' : ''}`}
-            style={{ left: (live - origin) * ppd, top: HEADER_H + (dlLanes.get(d) ?? 0) * DEADLINE_ROW_H }}
+            style={{ left, top: HEADER_H, maxWidth: Math.max(22, room + 22) }}
             onPointerDown={(e) => onDeadlineDown(e, d)}
             title={`${d.name} · ${formatShort(d.date)}`}
           >
             <Star />
-            <span className="label">{d.name}{dlDrag?.id === d.id && <span className="tl-project-dates"> · {formatShort(fromDayIndex(live))}</span>}</span>
+            {room > 28 && (
+              <span className="label">{d.name}{dlDrag?.id === d.id && <span className="tl-project-dates"> · {formatShort(fromDayIndex(live))}</span>}</span>
+            )}
           </div>
         );
       })}
@@ -312,7 +340,12 @@ export function BigPlan(props: Props) {
             onPointerMove={onProjectHover}
             title={`${p.name} · ${formatShort(p.start)} – ${formatShort(p.end)}`}
           >
-            {editing ? <InlineName initial={p.name} onDone={(name) => onRename(p.id, name)} /> : p.name}
+            {editing ? <InlineName initial={p.name} onDone={(name) => onRename(p.id, name)} /> : <span className="tl-project-name">{p.name}</span>}
+            {!!p.assignees?.length && !editing && (
+              <span className="bar-avatars">
+                {p.assignees.map((id) => people.find((x) => x.id === id)).filter(Boolean).map((x) => <Avatar key={x!.id} person={x!} size={18} />)}
+              </span>
+            )}
             {live && (
               <span className="tl-project-dates">
                 {formatShort(fromDayIndex(s))} – {formatShort(fromDayIndex(en))}
