@@ -44,9 +44,14 @@ Credentials and tokens are stored in the app's user-data folder
 
 ## Where planning data lives
 
-`exponential-data.json` in the same user-data folder. The first launch seeds a
-few example projects, deadlines and tasks. Sharing this between teammates is the
-next step (see below).
+In Supabase (`supabase/schema.sql` is the whole database: tables, row-level security,
+realtime). The app signs in to Supabase with the Google ID token, loads one team at a time,
+writes every edit as row changes, and reloads on realtime events so everyone sees the same
+plan. The browser preview (`npx vite`) has no Google sign-in and falls back to a local
+workspace in localStorage with sample data.
+
+Setup once per Supabase project: run `supabase/schema.sql` in the SQL editor, and under
+Authentication → Sign In / Providers → Google add the OAuth client ID to *Authorized Client IDs*.
 
 ## Interactions
 
@@ -92,4 +97,4 @@ edit the retro questions, add and remove people, and promote or demote moderator
 
 ## Not done yet
 
-- Shared data between teammates (today each machine keeps its own file).
+- Offline cache (the app needs a connection to open a team).

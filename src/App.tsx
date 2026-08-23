@@ -8,18 +8,20 @@ import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, shortName } from './types';
 import { addTask, nameOf, notify, patchTask, renameTask, reorderTask } from './taskOps';
+import { isPending, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
-const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark' };
+const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: false };
 const prefs: typeof DEFAULT_PREFS = (() => {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
 })();
 const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, JSON.stringify(p));
 
 export default function App() {
-  const { data, teams, update, undo, redo, switchTeam, createTeam } = useData();
+  const { data, teams, update, undo, redo, switchTeam, createTeam, connectCloud, cloudMode } = useData();
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const [view, setView] = useState<'plan' | 'team'>('plan');
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
@@ -49,7 +51,8 @@ export default function App() {
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => prefs.theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
-  useEffect(() => { savePrefs({ weekH, detailW, theme }); }, [weekH, detailW, theme]);
+  const [calendarOn, setCalendarOn] = useState(() => prefs.calendar);
+  useEffect(() => { savePrefs({ weekH, detailW, theme, calendar: calendarOn }); }, [weekH, detailW, theme, calendarOn]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -132,19 +135,21 @@ export default function App() {
     g.status().then((u) => { if (u) setGoogleUser(u); }).finally(() => setAuthChecked(true));
   }, []);
 
-  // Once signed in, the "me" person takes the Google name and photo.
+  // Once signed in: open the Supabase session and load the team; keep the profile's name/photo fresh.
   useEffect(() => {
-    if (!googleUser || !data) return;
-    const me = data.people.find((p) => p.id === data.me);
-    if (me && me.name === googleUser.name && me.photo === googleUser.picture && me.email === googleUser.email) return;
-    update((d) => ({
-      ...d,
-      people: d.people.map((p) => (p.id === d.me ? { ...p, name: googleUser.name, photo: googleUser.picture, email: googleUser.email } : p)),
-    }));
-  }, [googleUser, data, update]);
+    if (!googleUser || !window.exponential) return;
+    let cancelled = false;
+    connectCloud()
+      .then(async (ok) => {
+        if (cancelled || !ok) return;
+        const { data: u } = await supabase.auth.getUser();
+        if (u.user) await supabase.from('profiles').update({ name: googleUser.name, photo: googleUser.picture ?? null }).eq('id', u.user.id);
+      })
+      .catch((err: Error) => { if (!cancelled) setCloudError(err.message); });
+    return () => { cancelled = true; };
+  }, [googleUser, connectCloud]);
 
   const person = selectedPerson ?? data?.me ?? '';
-  const calendarOn = !!data?.showCalendar;
 
   // Fetch the selected person's calendar for the visible week.
   useEffect(() => {
@@ -179,12 +184,14 @@ export default function App() {
   }, []);
 
   const signOut = useCallback(async () => {
+    await signOutCloud();
     await window.exponential?.google.signOut();
     setGoogleUser(null);
     setCalEvents({});
+    window.location.reload();
   }, []);
 
-  if (!data || !authChecked) return null;
+  if (!authChecked) return null;
 
   // Desktop app: sign in with Google before anything else (name, photo, email and calendar access).
   if (window.exponential && !googleUser) {
@@ -197,6 +204,18 @@ export default function App() {
       />
     );
   }
+
+  if (window.exponential && !cloudMode) {
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <img className="gate-logo" src={logoUrl} alt="" />
+          {cloudError ? <p className="error">{cloudError}</p> : <p className="hint">Loading your teams…</p>}
+        </div>
+      </div>
+    );
+  }
+  if (!data) return null;
 
   const onResizeDown = (e: React.PointerEvent) => {
     const rect = mainRef.current!.getBoundingClientRect();
@@ -271,7 +290,7 @@ export default function App() {
       </aside>
 
       <div className={`main${detailOpen ? ' with-detail' : ''}`}>
-        {view === 'team' && <TeamPage team={data} onUpdate={(fn) => update(fn)} />}
+        {view === 'team' && <TeamPage team={data} cloud={cloudMode} onUpdate={(fn) => update(fn)} />}
         <div className="planners" ref={mainRef} style={view === 'team' ? { display: 'none' } : undefined}>
           <section className="panel" style={{ flex: '1 1 0' }}>
             <div className="panel-head">
@@ -339,6 +358,7 @@ export default function App() {
               editingId={editingId ?? undefined}
               onWeekChange={setWeek}
               onAdd={(date) => {
+                if (isPending(person)) return; // they need to sign in once before they can own tasks
                 let id = '';
                 update((d) => { const r = addTask(d, person, date); id = r.id; return r.data; });
                 setEditingId(id);
@@ -354,7 +374,7 @@ export default function App() {
                 events: calEvents[calKey] ?? [],
                 note: !window.exponential ? 'Available in the desktop app' : !googleUser ? 'Sign in with Google to see events' : calNote,
               }}
-              onToggleCalendar={() => update((d) => ({ ...d, showCalendar: !d.showCalendar }))}
+              onToggleCalendar={() => setCalendarOn((c) => !c)}
             />
           </section>
         </div>

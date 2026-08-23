@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CalendarEvent, Data, GoogleUser, ISODate, Project, Workspace } from './types';
 import { addDays, todayISO, weekStart } from './dates';
+import { createTeam as cloudCreateTeam, ensureSession, listMyTeams, loadTeam, persistDiff, subscribeTeam, type TeamSummary } from './cloud';
 
 export interface GoogleConfig {
   clientId: string;
@@ -26,12 +27,13 @@ declare global {
         signIn: () => Promise<GoogleUser>;
         signOut: () => Promise<void>;
         events: (calendarId: string, from: ISODate, to: ISODate) => Promise<CalendarEvent[]>;
+        idToken: () => Promise<string | null>;
       };
     };
   }
 }
 
-export const uid = () => Math.random().toString(36).slice(2, 10);
+export const uid = () => crypto.randomUUID();
 
 function seed(): Data {
   const today = todayISO();
@@ -162,6 +164,14 @@ const HISTORY = 100;
  * Data + undo/redo. `update(fn, coalesceKey)` records a history step; consecutive updates with the
  * same key (e.g. typing into one notes field) collapse into one step.
  */
+const CURRENT_TEAM_KEY = 'exponential-current-team';
+
+/**
+ * Data for the UI. Two modes behind one API:
+ *  - local: a workspace in a JSON file / localStorage (browser preview, or before sign-in);
+ *  - cloud: one team at a time from Supabase, every `update()` diffed into row writes,
+ *    realtime changes reloaded. `connectCloud()` switches modes once Google sign-in is done.
+ */
 export function useData() {
   const [ws, setWs] = useState<Workspace | null>(null);
   const wsRef = useRef<Workspace | null>(null);
@@ -170,10 +180,16 @@ export function useData() {
   const future = useRef<Data[]>([]);
   const lastKey = useRef<string | undefined>(undefined);
 
+  const [cloud, setCloud] = useState<{ me: string; teams: TeamSummary[]; data: Data | null } | null>(null);
+  const cloudRef = useRef(cloud);
+  cloudRef.current = cloud;
+  const inflight = useRef(0);
+  const reloadWanted = useRef(false);
+
   useEffect(() => {
     load().then((w) => { wsRef.current = w; setWs(w); });
-    // Another window (main app or menu-bar widget) saved: adopt its data, keep our current team.
     return window.exponential?.onChange((raw) => {
+      if (cloudRef.current) return; // cloud mode syncs through realtime instead
       const incoming = toWorkspace(raw);
       const cur = wsRef.current?.current;
       const next = cur && incoming.teams.some((t) => t.id === cur) ? { ...incoming, current: cur } : incoming;
@@ -182,20 +198,69 @@ export function useData() {
     });
   }, []);
 
-  const commitWs = (next: Workspace) => {
+  /* ── cloud plumbing ── */
+  const reload = useCallback(async (teamId?: string) => {
+    const c = cloudRef.current;
+    if (!c) return;
+    const id = teamId ?? c.data?.id;
+    if (!id) return;
+    if (inflight.current > 0) { reloadWanted.current = true; return; } // don't clobber edits still being written
+    const [data, teams] = await Promise.all([loadTeam(id, c.me), listMyTeams()]);
+    const cur = cloudRef.current;
+    if (!cur || (cur.data && cur.data.id !== id)) return; // switched meanwhile
+    setCloud({ me: cur.me, teams, data });
+  }, []);
+
+  const connectCloud = useCallback(async () => {
+    const me = await ensureSession();
+    if (!me) return false;
+    let teams = await listMyTeams();
+    if (teams.length === 0) { await cloudCreateTeam('My team'); teams = await listMyTeams(); }
+    const saved = localStorage.getItem(CURRENT_TEAM_KEY);
+    const teamId = teams.some((t) => t.id === saved) ? saved! : teams[0].id;
+    const data = await loadTeam(teamId, me);
+    past.current = []; future.current = []; lastKey.current = undefined;
+    setCloud({ me, teams, data });
+    return true;
+  }, []);
+
+  // Realtime: one channel per open team.
+  const teamId = cloud?.data?.id;
+  const me = cloud?.me;
+  useEffect(() => {
+    if (!teamId || !me) return;
+    return subscribeTeam(teamId, me, () => reload(teamId));
+  }, [teamId, me, reload]);
+
+  const writeDiff = (prev: Data, next: Data) => {
+    inflight.current++;
+    persistDiff(prev, next).finally(() => {
+      inflight.current--;
+      if (inflight.current === 0 && reloadWanted.current) { reloadWanted.current = false; reload(); }
+    });
+  };
+
+  /* ── shared ── */
+  const currentData = (): Data | null => (cloudRef.current ? cloudRef.current.data : wsRef.current ? wsRef.current.teams.find((t) => t.id === wsRef.current!.current)! : null);
+
+  const commitLocal = (next: Workspace) => {
     wsRef.current = next;
     setWs(next);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => persist(next), 300);
   };
-  const current = (w: Workspace) => w.teams.find((t) => t.id === w.current)!;
   const replaceTeam = (w: Workspace, team: Data): Workspace => ({ ...w, teams: w.teams.map((t) => (t.id === team.id ? team : t)) });
+
+  const commit = (next: Data) => {
+    const c = cloudRef.current;
+    if (c) { const nc = { ...c, data: next, teams: c.teams.map((t) => (t.id === next.id ? { id: t.id, name: next.name, icon: next.icon } : t)) }; cloudRef.current = nc; setCloud(nc); }
+    else if (wsRef.current) commitLocal(replaceTeam(wsRef.current, next));
+  };
 
   // Side effects stay outside React's updater functions (which run twice in Strict Mode).
   const update = useCallback((fn: (d: Data) => Data, coalesceKey?: string) => {
-    const w = wsRef.current;
-    if (!w) return;
-    const prev = current(w);
+    const prev = currentData();
+    if (!prev) return;
     const next = fn(prev);
     if (next === prev) return;
     if (!coalesceKey || coalesceKey !== lastKey.current) {
@@ -204,43 +269,68 @@ export function useData() {
     }
     lastKey.current = coalesceKey;
     future.current = [];
-    commitWs(replaceTeam(w, next));
-  }, []);
+    commit(next);
+    if (cloudRef.current) writeDiff(prev, next);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const undo = useCallback(() => {
-    const w = wsRef.current;
+    const cur = currentData();
     const prev = past.current.pop();
-    if (!w || !prev || prev.id !== w.current) return;
-    future.current.push(current(w));
+    if (!cur || !prev || prev.id !== cur.id) return;
+    future.current.push(cur);
     lastKey.current = undefined;
-    commitWs(replaceTeam(w, prev));
-  }, []);
+    commit(prev);
+    if (cloudRef.current) writeDiff(cur, prev);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const redo = useCallback(() => {
-    const w = wsRef.current;
+    const cur = currentData();
     const next = future.current.pop();
-    if (!w || !next || next.id !== w.current) return;
-    past.current.push(current(w));
+    if (!cur || !next || next.id !== cur.id) return;
+    past.current.push(cur);
     lastKey.current = undefined;
-    commitWs(replaceTeam(w, next));
-  }, []);
+    commit(next);
+    if (cloudRef.current) writeDiff(cur, next);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** Switching teams resets the undo stack; history is per team. */
-  const switchTeam = useCallback((id: string) => {
+  const switchTeam = useCallback(async (id: string) => {
+    past.current = []; future.current = []; lastKey.current = undefined;
+    const c = cloudRef.current;
+    if (c) {
+      if (!c.teams.some((t) => t.id === id)) return;
+      localStorage.setItem(CURRENT_TEAM_KEY, id);
+      const data = await loadTeam(id, c.me);
+      setCloud({ ...cloudRef.current!, data });
+      return;
+    }
     const w = wsRef.current;
     if (!w || !w.teams.some((t) => t.id === id)) return;
-    past.current = []; future.current = []; lastKey.current = undefined;
-    commitWs({ ...w, current: id });
+    commitLocal({ ...w, current: id });
   }, []);
 
-  const createTeam = useCallback((name: string) => {
+  const createTeam = useCallback(async (name: string) => {
+    const c = cloudRef.current;
+    if (c) {
+      const id = await cloudCreateTeam(name);
+      const teams = await listMyTeams();
+      localStorage.setItem(CURRENT_TEAM_KEY, id);
+      const data = await loadTeam(id, c.me);
+      past.current = []; future.current = []; lastKey.current = undefined;
+      setCloud({ me: c.me, teams, data });
+      return;
+    }
     const w = wsRef.current;
     if (!w) return;
-    const me = current(w).people.find((p) => p.id === current(w).me)!;
-    const team: Data = { id: uid(), name, moderators: ['me'], me: 'me', people: [{ ...me, id: 'me' }], projects: [], deadlines: [], tasks: [], notifications: [] };
+    const me0 = current(w).people.find((p) => p.id === current(w).me)!;
+    const team: Data = { id: uid(), name, moderators: ['me'], me: 'me', people: [{ ...me0, id: 'me' }], projects: [], deadlines: [], tasks: [], notifications: [] };
     past.current = []; future.current = []; lastKey.current = undefined;
-    commitWs({ teams: [...w.teams, team], current: team.id });
+    commitLocal({ teams: [...w.teams, team], current: team.id });
   }, []);
 
-  return { data: ws ? current(ws) : null, teams: ws?.teams ?? [], update, undo, redo, switchTeam, createTeam };
+  const current = (w: Workspace) => w.teams.find((t) => t.id === w.current)!;
+
+  const data = cloud ? cloud.data : ws ? current(ws) : null;
+  const teams: TeamSummary[] = cloud ? cloud.teams : (ws?.teams ?? []).map((t) => ({ id: t.id, name: t.name, icon: t.icon }));
+  return { data, teams, update, undo, redo, switchTeam, createTeam, connectCloud, cloudMode: !!cloud };
 }

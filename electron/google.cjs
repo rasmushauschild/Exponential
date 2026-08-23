@@ -75,6 +75,18 @@ async function userInfo() {
   return { id: u.sub, email: u.email, name: u.name, givenName: u.given_name, familyName: u.family_name, picture: u.picture };
 }
 
+/** A current Google ID token (refreshing if needed) — exchanged for a Supabase session in the renderer. */
+async function idToken() {
+  const cfg = getConfig();
+  const t = getTokens();
+  if (!cfg || !t) return null;
+  if (t.id_token && t.expires_at - 60_000 > Date.now()) return t.id_token;
+  const fresh = await tokenRequest({ client_id: cfg.clientId, client_secret: cfg.clientSecret, refresh_token: t.refresh_token, grant_type: 'refresh_token' });
+  const next = { ...t, access_token: fresh.access_token, id_token: fresh.id_token ?? t.id_token, expires_at: Date.now() + fresh.expires_in * 1000 };
+  setTokens(next);
+  return next.id_token ?? null;
+}
+
 async function status() {
   if (!getTokens()) return null;
   try { return await userInfo(); } catch { return null; }
@@ -167,4 +179,4 @@ async function events(calendarId, from, to) {
     });
 }
 
-module.exports = { getConfig, setConfig, status, signIn, signOut, events };
+module.exports = { getConfig, setConfig, status, signIn, signOut, events, idToken };

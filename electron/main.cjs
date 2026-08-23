@@ -124,6 +124,7 @@ ipcMain.handle('google:setConfig', (_e, c) => google.setConfig(c));
 ipcMain.handle('google:status', () => google.status());
 ipcMain.handle('google:signIn', () => google.signIn());
 ipcMain.handle('google:signOut', () => google.signOut());
+ipcMain.handle('google:idToken', () => google.idToken());
 ipcMain.handle('google:events', (_e, calendarId, from, to) => google.events(calendarId, from, to));
 
 app.whenReady().then(() => {

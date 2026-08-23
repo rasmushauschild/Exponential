@@ -4,23 +4,29 @@ import type { Data, Person } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, type RetroField } from './types';
 import { Avatar } from './WeekPlan';
 import { uid } from './store';
+import { isPending, pendingId } from './cloud';
 
 interface Props {
   team: Data;
+  cloud: boolean; // members are invited by Google email and join when they sign in
   onUpdate: (fn: (d: Data) => Data) => void;
 }
 
 /** Members of the current team. Moderators can add, remove, and promote/demote. */
-export function TeamPage({ team, onUpdate }: Props) {
+export function TeamPage({ team, cloud, onUpdate }: Props) {
   const isMod = team.moderators.includes(team.me);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
 
   const add = () => {
-    const n = name.trim();
-    if (!n) return;
-    const person: Person = { id: uid(), name: n, email: email.trim() || undefined, color: PROJECT_COLORS[team.people.length % PROJECT_COLORS.length] };
+    const n = name.trim(), em = email.trim().toLowerCase();
+    if (cloud ? !em.includes('@') : !n) return;
+    if (cloud && team.people.some((p) => p.email?.toLowerCase() === em)) { setAdding(false); return; }
+    const color = PROJECT_COLORS[team.people.length % PROJECT_COLORS.length];
+    const person: Person = cloud
+      ? { id: pendingId(em), name: n || em, email: em, color }
+      : { id: uid(), name: n, email: em || undefined, color };
     onUpdate((d) => ({ ...d, people: [...d.people, person] }));
     setName(''); setEmail(''); setAdding(false);
   };
@@ -104,9 +110,15 @@ export function TeamPage({ team, onUpdate }: Props) {
         {adding && (
           <form className="member-row add" onSubmit={(e) => { e.preventDefault(); add(); }}>
             <span className="avatar initials" style={{ width: 36, height: 36, background: 'var(--soft-2)', color: 'var(--text-3)', fontSize: 18 }}>+</span>
-            <input autoFocus className="member-input" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="member-input" placeholder="Email (for Google Calendar)" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <button type="submit" className="btn primary" disabled={!name.trim()}>Add</button>
+            {cloud ? (
+              <input autoFocus className="member-input" placeholder="Google email — they join when they sign in" value={email} onChange={(e) => setEmail(e.target.value)} />
+            ) : (
+              <>
+                <input autoFocus className="member-input" placeholder="Full name" value={name} onChange={(e) => setName(e.target.value)} />
+                <input className="member-input" placeholder="Email (for Google Calendar)" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </>
+            )}
+            <button type="submit" className="btn primary" disabled={cloud ? !email.includes('@') : !name.trim()}>{cloud ? 'Invite' : 'Add'}</button>
             <button type="button" className="btn" onClick={() => { setAdding(false); setName(''); setEmail(''); }}>Cancel</button>
           </form>
         )}
@@ -119,7 +131,7 @@ export function TeamPage({ team, onUpdate }: Props) {
               <Avatar person={p} size={36} />
               <div className="member-info">
                 <div className="member-name">{p.name}{self && <span className="you-tag">you</span>}</div>
-                <div className="member-email">{p.email ?? (p.id === team.me ? 'Sign in with Google to add your email' : 'No email yet')}</div>
+                <div className="member-email">{isPending(p.id) ? `Invited · ${p.email} — waiting for them to sign in` : (p.email ?? 'No email yet')}</div>
               </div>
               <span className={`role${mod ? ' mod' : ''}`}>{mod ? 'Moderator' : 'Member'}</span>
               {isMod && (

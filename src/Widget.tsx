@@ -6,7 +6,8 @@ import { todayISO, weekStart } from './dates';
 
 /** Menu-bar popover: only the week panel, full featured, always synced with the main window. */
 export default function Widget() {
-  const { data, update } = useData();
+  const { data, update, connectCloud } = useData();
+  useEffect(() => { connectCloud().catch((e) => console.error('[widget] cloud', e)); }, [connectCloud]);
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [person, setPerson] = useState<string | null>(null);
