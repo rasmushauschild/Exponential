@@ -15,7 +15,7 @@
   "build": {
     "appId": "com.airy.exponential",
     "productName": "Exponential",
-    "files": ["dist/**", "electron/**", "build/icon.png", "package.json"],
+    "files": ["dist/**", "electron/**", "!electron/google.client.example.json", "build/icon.png", "package.json"],
     "directories": { "output": "release", "buildResources": "build" },
     "mac": {
       "target": ["dmg"],

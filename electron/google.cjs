@@ -17,7 +17,12 @@ const file = (name) => path.join(app.getPath('userData'), name);
 const readJSON = (name) => { try { return JSON.parse(fs.readFileSync(file(name), 'utf8')); } catch { return null; } };
 const writeJSON = (name, v) => fs.writeFileSync(file(name), JSON.stringify(v, null, 2));
 
+/** Client credentials: bundled with the app (electron/google.client.json), else env, else pasted in-app. */
 function getConfig() {
+  try {
+    const bundled = JSON.parse(fs.readFileSync(path.join(__dirname, 'google.client.json'), 'utf8'));
+    if (bundled.clientId) return { clientId: bundled.clientId, clientSecret: bundled.clientSecret ?? '', bundled: true };
+  } catch { /* no bundled file */ }
   const env = process.env.GOOGLE_CLIENT_ID && { clientId: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '' };
   return readJSON('google-config.json') ?? env ?? null;
 }

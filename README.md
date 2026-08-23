@@ -20,9 +20,9 @@ npm run dist:win   # → release/*.exe (run on Windows, or on a Mac with Wine)
 
 ## Google sign-in and Calendar (one-time setup)
 
-Exponential signs people in with Google to get their name and photo, and reads
-Google Calendar (read-only) for the **Calendar** toggle in the week panel.
-Google requires every app to have its own OAuth client, so:
+The desktop app asks you to sign in with Google on first launch. It uses the account for your
+name and photo, your email, and read-only Google Calendar access for the **Calendar** toggle.
+Google requires every app to have its own OAuth client, so — once, for the whole team:
 
 1. Go to <https://console.cloud.google.com/> and create a project (e.g. "Exponential").
 2. **APIs & Services → Library** → enable **Google Calendar API**.
@@ -31,11 +31,11 @@ Google requires every app to have its own OAuth client, so:
    `…/auth/calendar.readonly`.
 4. **APIs & Services → Credentials → Create credentials → OAuth client ID**,
    application type **Desktop app**. Copy the client ID and client secret.
-5. In Exponential click **Sign in** (bottom-left), paste both, and sign in.
-   Your browser opens, you approve, and the app picks it up.
+5. Put them in `electron/google.client.json` (copy `google.client.example.json`). The file is
+   git-ignored and gets bundled into the installers, so teammates just click **Continue with Google**.
+   Without the file, the sign-in screen asks for the two values instead.
 
-Everyone on the team uses the same client ID/secret; each person signs in with
-their own Google account. Teammates' calendars show up when they have shared
+Everyone on the team uses the same client; each person signs in with their own Google account. Teammates' calendars show up when they have shared
 their calendar with you (inside one Workspace this is usually on by default
 for free/busy or full details).
 

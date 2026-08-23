@@ -491,6 +491,20 @@ img { display: block; -webkit-user-drag: none; }
 .widget .panel-head .pill:not(.person) { padding-left: 10px; }
 .widget .panel-head { gap: 6px; }
 
+/* ─── Sign-in gate ──────────────────────────────────── */
+
+.gate { height: 100%; display: grid; place-items: center; padding: 24px; -webkit-app-region: drag; }
+.gate-card {
+  width: 440px; background: var(--panel); border-radius: var(--radius-xl); box-shadow: var(--shadow), 0 0 0 1px var(--line);
+  padding: 36px 36px 30px; text-align: center; -webkit-app-region: no-drag; animation: pop 0.25s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.gate-logo { width: 84px; height: 84px; margin: 0 auto 14px; }
+.gate-card h1 { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; margin: 0 0 10px; }
+.gate-card .muted { margin-bottom: 18px; }
+.gate-setup { text-align: left; background: var(--soft); border-radius: 18px; padding: 14px 16px 2px; margin-bottom: 18px; }
+.gate-setup .field input { background: var(--panel); }
+.gate-btn { width: 100%; justify-content: center; padding: 12px 16px; font-size: 15px; }
+
 /* ─── Sheets ────────────────────────────────────────── */
 
 .backdrop { position: fixed; inset: 0; background: var(--ov-18); display: grid; place-items: center; z-index: 100; animation: fade 0.15s ease-out; }

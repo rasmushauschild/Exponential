@@ -3,6 +3,7 @@ import { BigPlan } from './BigPlan';
 import { Avatar, WeekPlan } from './WeekPlan';
 import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
+import logoUrl from '../build/icon.png';
 import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, shortName } from './types';
@@ -63,6 +64,7 @@ export default function App() {
   const mainRef = useRef<HTMLDivElement>(null);
 
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
+  const [authChecked, setAuthChecked] = useState(!window.exponential); // browser preview has no Google
   const [googleConfig, setGoogleConfig] = useState<GoogleConfig | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [calEvents, setCalEvents] = useState<Record<string, CalendarEvent[]>>({});
@@ -127,7 +129,7 @@ export default function App() {
     const g = window.exponential?.google;
     if (!g) return;
     g.getConfig().then(setGoogleConfig);
-    g.status().then((u) => u && setGoogleUser(u));
+    g.status().then((u) => { if (u) setGoogleUser(u); }).finally(() => setAuthChecked(true));
   }, []);
 
   // Once signed in, the "me" person takes the Google name and photo.
@@ -182,7 +184,19 @@ export default function App() {
     setCalEvents({});
   }, []);
 
-  if (!data) return null;
+  if (!data || !authChecked) return null;
+
+  // Desktop app: sign in with Google before anything else (name, photo, email and calendar access).
+  if (window.exponential && !googleUser) {
+    return (
+      <SignInGate
+        config={googleConfig}
+        error={authError}
+        onSaveConfig={async (c) => { await window.exponential!.google.setConfig(c); setGoogleConfig(c); }}
+        onSignIn={signIn}
+      />
+    );
+  }
 
   const onResizeDown = (e: React.PointerEvent) => {
     const rect = mainRef.current!.getBoundingClientRect();
@@ -563,6 +577,52 @@ function NewDeadlineSheet({ defaultDate, onClose, onCreate }: { defaultDate: ISO
         </div>
       </form>
     </SheetShell>
+  );
+}
+
+function SignInGate({ config, error, onSaveConfig, onSignIn }: {
+  config: GoogleConfig | null;
+  error: string | null;
+  onSaveConfig: (c: GoogleConfig) => Promise<void>;
+  onSignIn: () => Promise<void> | void;
+}) {
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const [busy, setBusy] = useState(false);
+  const configured = !!config?.clientId;
+  const go = async () => {
+    setBusy(true);
+    try {
+      if (!configured) await onSaveConfig({ clientId: clientId.trim(), clientSecret: clientSecret.trim() });
+      await onSignIn();
+    } finally { setBusy(false); }
+  };
+  return (
+    <div className="gate">
+      <div className="gate-card">
+        <img className="gate-logo" src={logoUrl} alt="" />
+        <h1>Welcome to Exponential</h1>
+        <p className="muted">
+          Sign in with your Google account to get started. Exponential uses it for your name and photo,
+          your email (so teammates can share calendars with you), and read-only access to your Google Calendar
+          for the week view.
+        </p>
+        {!configured && (
+          <div className="gate-setup">
+            <p className="muted" style={{ marginBottom: 10 }}>
+              This copy has no Google client yet. Paste the OAuth client from Google Cloud once (type <b>Desktop app</b>, Calendar API enabled) — see the README.
+            </p>
+            <div className="field"><label>Client ID</label><input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="xxxx.apps.googleusercontent.com" /></div>
+            <div className="field"><label>Client secret</label><input value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="GOCSPX-…" /></div>
+          </div>
+        )}
+        {error && <p className="error">{error}</p>}
+        <button className="btn primary gate-btn" disabled={busy || (!configured && !clientId.trim())} onClick={go}>
+          <GoogleG /> {busy ? 'Waiting for your browser…' : 'Continue with Google'}
+        </button>
+        <p className="hint" style={{ marginTop: 14 }}>Your browser opens for Google's consent screen; come back here when it says you're signed in.</p>
+      </div>
+    </div>
   );
 }
 
