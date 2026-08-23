@@ -76,7 +76,7 @@ export interface Retro {
 export interface Data {
   id: string;
   name: string;
-  icon?: string; // emoji; falls back to the first letter of the name
+  icon?: string; // image data URL; falls back to the first letter of the name
   retroFields?: RetroField[]; // defaults to DEFAULT_RETRO_FIELDS
   moderators: string[]; // person ids allowed to manage members
   people: Person[];

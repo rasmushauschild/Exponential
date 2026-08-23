@@ -14,9 +14,12 @@ function createWindow() {
     height: 860,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#f2f2f4',
+    // Transparent + CSS-rounded so the outer corners can be as round as the panels (macOS only).
+    transparent: process.platform === 'darwin',
+    backgroundColor: process.platform === 'darwin' ? '#00000000' : '#f2f2f4',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 26, y: 24 },
+    trafficLightPosition: { x: 14, y: 22 },
+    vibrancy: undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,

@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { TeamMark } from './App';
 import type { Data, Person } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, type RetroField } from './types';
 import { Avatar } from './WeekPlan';
@@ -38,12 +39,26 @@ export function TeamPage({ team, onUpdate }: Props) {
 
   const fields = team.retroFields ?? DEFAULT_RETRO_FIELDS;
   const setFields = (next: RetroField[]) => onUpdate((d) => ({ ...d, retroFields: next }));
-  const ICONS = ['🚗', '⚡', '🔋', '🛠️', '🧪', '🚀', '🏁', '🧭', '🌱', '🎯', '🧠', '🏗️'];
+  const fileRef = useRef<HTMLInputElement>(null);
+  const pickIcon = (file: File) => {
+    // downscale to 256px so the data URL stays small in the saved file
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = c.height = 256;
+      const ctx = c.getContext('2d')!;
+      const sc = Math.max(256 / img.width, 256 / img.height);
+      ctx.drawImage(img, (256 - img.width * sc) / 2, (256 - img.height * sc) / 2, img.width * sc, img.height * sc);
+      const url = c.toDataURL('image/png');
+      onUpdate((d) => ({ ...d, icon: url }));
+    };
+    img.src = URL.createObjectURL(file);
+  };
 
   return (
     <section className="panel team-page">
       <div className="panel-head">
-        <span className="team-mark big">{team.icon ?? team.name.trim()[0]?.toUpperCase()}</span>
+        <TeamMark team={team} size={38} />
         {isMod ? (
           <input
             className="panel-title team-title-input"
@@ -63,11 +78,11 @@ export function TeamPage({ team, onUpdate }: Props) {
         {isMod && (
           <div className="settings-block">
             <div className="settings-title">Icon</div>
-            <div className="icon-grid">
-              <button className={`icon-opt${!team.icon ? ' on' : ''}`} onClick={() => onUpdate((d) => ({ ...d, icon: undefined }))} title="Use the first letter">{team.name.trim()[0]?.toUpperCase()}</button>
-              {ICONS.map((ic) => (
-                <button key={ic} className={`icon-opt${team.icon === ic ? ' on' : ''}`} onClick={() => onUpdate((d) => ({ ...d, icon: ic }))}>{ic}</button>
-              ))}
+            <div className="icon-row">
+              <TeamMark team={team} size={64} />
+              <button className="pill" onClick={() => fileRef.current?.click()}>{team.icon ? 'Change image' : 'Upload image'}</button>
+              {team.icon && <button className="pill" onClick={() => onUpdate((d) => ({ ...d, icon: undefined }))}>Use the letter</button>}
+              <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) pickIcon(f); e.target.value = ''; }} />
             </div>
 
             <div className="settings-title" style={{ marginTop: 22 }}>Retro questions</div>

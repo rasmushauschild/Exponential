@@ -28,6 +28,8 @@ interface Props {
   onCreateProject: (start: ISODate, lane: number) => void;
   onRename: (id: string, name: string) => void;
   onOpenRetro: (monday: ISODate) => void;
+  onCreateDeadline: (date: ISODate) => void;
+  onRenameDeadline: (id: string, name: string) => void;
 }
 
 export function projectColor(p: Project, index: number) {
@@ -38,7 +40,7 @@ type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: nu
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, deadlines, people, today, week, selectedId, editingId, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro } = props;
+  const { projects, deadlines, people, today, week, selectedId, editingId, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -110,7 +112,8 @@ export function BigPlan(props: Props) {
     window.addEventListener('pointerup', onUp);
   };
 
-  const projectTop = HEADER_H + (deadlines.length ? DEADLINE_ROW_H : 0) + 10;
+  const projectTop = HEADER_H + DEADLINE_ROW_H + 10; // the deadline row is always there (hover it to add one)
+  const inDeadlineRow = (clientY: number) => { const y = clientY - ref.current!.getBoundingClientRect().top; return y >= HEADER_H && y < HEADER_H + DEADLINE_ROW_H; };
   const inRetroStrip = (clientY: number) => clientY - ref.current!.getBoundingClientRect().top > height - RETRO_H;
 
   const slotAt = (clientX: number, clientY: number) => {
@@ -139,7 +142,8 @@ export function BigPlan(props: Props) {
         setPanning(false);
         if (moved || inRetroStrip(ev.clientY)) return;
         const { day, lane } = slotAt(ev.clientX, ev.clientY);
-        if (lane >= 0) onCreateProject(fromDayIndex(day), lane);
+        if (inDeadlineRow(ev.clientY)) onCreateDeadline(fromDayIndex(day));
+        else if (lane >= 0) onCreateProject(fromDayIndex(day), lane);
       },
     );
   };
@@ -149,6 +153,7 @@ export function BigPlan(props: Props) {
     const { day, lane } = slotAt(e.clientX, e.clientY);
     setHoverWeek(dayIndex(weekStart(fromDayIndex(day))));
     if (!isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); return; }
+    if (inDeadlineRow(e.clientY)) { setGhost({ day, lane: -1 }); return; } // lane -1 = deadline row
     setGhost(lane >= 0 ? { day, lane } : null);
   };
 
@@ -197,7 +202,7 @@ export function BigPlan(props: Props) {
   };
 
   const onDeadlineDown = (e: React.PointerEvent, d: Deadline) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || (e.target as HTMLElement).tagName === 'INPUT') return;
     e.stopPropagation();
     e.preventDefault();
     const startX = e.clientX;
@@ -308,9 +313,14 @@ export function BigPlan(props: Props) {
         )}
       </div>
 
-      {ghost && !drag && (
+      {ghost && !drag && ghost.lane >= 0 && (
         <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: projectTop + ghost.lane * ROW_H }}>
           New project
+        </div>
+      )}
+      {ghost && !drag && ghost.lane === -1 && (
+        <div className="tl-deadline ghost" style={{ left: (ghost.day - origin) * ppd + ppd / 2, top: HEADER_H }}>
+          <span className="dot" /><span className="label">New deadline</span>
         </div>
       )}
 
@@ -328,9 +338,11 @@ export function BigPlan(props: Props) {
             title={`${d.name} · ${formatShort(d.date)}`}
           >
             <span className="dot" />
-            {room > 28 && (
-              <span className="label">{d.name}{dlDrag?.id === d.id && <span className="tl-project-dates"> · {formatShort(fromDayIndex(live))}</span>}</span>
-            )}
+            {editingId === d.id
+              ? <InlineName initial="" placeholder="Deadline…" onDone={(name) => onRenameDeadline(d.id, name)} />
+              : room > 28 && (
+                <span className="label">{d.name}{dlDrag?.id === d.id && <span className="tl-project-dates"> · {formatShort(fromDayIndex(live))}</span>}</span>
+              )}
           </div>
         );
       })}

@@ -48,6 +48,9 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
+/* Transparent macOS window: the page itself is the rounded window body. */
+.mac-window, .mac-window body { background: transparent; }
+.mac-window #root { background: var(--bg); border-radius: 26px; overflow: hidden; }
 body {
   font-family: var(--font);
   color: var(--text);
@@ -66,7 +69,10 @@ img { display: block; -webkit-user-drag: none; }
 
 /* ─── Shell ─────────────────────────────────────────── */
 
-.shell { display: flex; height: 100%; padding: 14px 14px 14px 0; }
+.shell { display: flex; height: 100%; padding: 14px 14px 14px 0; -webkit-app-region: drag; }
+.panel, .detail, .resizer, .vresizer, .sidebar-inner { -webkit-app-region: no-drag; }
+.panel-head, .detail-top { -webkit-app-region: drag; }
+.panel-head button, .panel-head input, .detail-top button { -webkit-app-region: no-drag; }
 
 .sidebar {
   width: 72px; flex: none; position: relative; z-index: 200; -webkit-app-region: drag;
@@ -101,7 +107,8 @@ img { display: block; -webkit-user-drag: none; }
 .team-cog.on { color: var(--text); }
 .team-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--text); color: var(--bg); display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }
 .team-mark.plus { background: var(--soft-2); color: var(--text-3); font-size: 20px; font-weight: 600; }
-.team-mark.big { width: 38px; height: 38px; border-radius: 12px; font-size: 19px; margin-right: 4px; }
+.team-mark.img { object-fit: cover; background: var(--soft); }
+.icon-row { display: flex; align-items: center; gap: 10px; }
 .team-name { flex: 1; min-width: 0; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; }
 
 .nav-item {
@@ -115,7 +122,7 @@ img { display: block; -webkit-user-drag: none; }
 .theme-toggle { color: var(--text-2); }
 .theme-toggle svg { flex: none; }
 .account {
-  display: flex; align-items: center; gap: 10px; padding: 8px 8px; border-radius: 14px; width: 100%; text-align: left;
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 15px; border-radius: 14px; width: 100%; text-align: left;
   font-weight: 600; transition: background 0.15s;
 }
 .account:hover { background: var(--ov-5); }
@@ -215,6 +222,8 @@ img { display: block; -webkit-user-drag: none; }
 }
 .tl-deadline:hover, .tl-deadline.selected { background: var(--ov-5); }
 .tl-deadline .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text); flex: none; }
+.tl-deadline.ghost { opacity: 0.4; pointer-events: none; }
+.tl-deadline .inline-name { width: 140px; font-size: 12px; }
 .tl-deadline.live .dot { transform: scale(1.2); }
 .tl-deadline .label { opacity: 0.85; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
@@ -436,10 +445,6 @@ img { display: block; -webkit-user-drag: none; }
 .pill.small:disabled { opacity: 0.4; }
 .settings-block { padding: 6px 12px 4px; }
 .settings-title { font-size: 12px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
-.icon-grid { display: flex; flex-wrap: wrap; gap: 6px; }
-.icon-opt { width: 38px; height: 38px; border-radius: 12px; background: var(--soft); display: grid; place-items: center; font-size: 18px; font-weight: 800; transition: background 0.15s, transform 0.12s; }
-.icon-opt:hover { background: var(--soft-2); transform: scale(1.06); }
-.icon-opt.on { background: var(--text); color: var(--bg); }
 .retro-config { display: flex; flex-direction: column; gap: 6px; max-width: 720px; }
 .retro-config-row { display: flex; gap: 8px; align-items: center; }
 .retro-config-row .member-input { background: var(--soft); }

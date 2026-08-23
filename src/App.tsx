@@ -205,7 +205,7 @@ export default function App() {
           {teams.map((t) => (
             <div key={t.id} className={`team-row${t.id === data.id ? ' current' : ''}`} title={t.name}>
               <button className="team-main" onClick={() => { if (t.id !== data.id) { switchTeam(t.id); setSelection(null); setSelectedPerson(null); setView('plan'); } else setView('plan'); }}>
-                <span className="team-mark">{t.icon ?? t.name.trim()[0]?.toUpperCase()}</span>
+                <TeamMark team={t} />
                 <span className="team-name">{t.name}</span>
               </button>
               <button className={`team-cog${t.id === data.id && view === 'team' ? ' on' : ''}`} title="Team settings"
@@ -257,7 +257,7 @@ export default function App() {
               {!isThisWeek && <button className="pill" onClick={() => setWeek(weekStart(today))}>Back to this week</button>}
               <button className="pill" onClick={() => setSheet('project')}>+ Project</button>
               <button className="pill" onClick={() => setSheet('deadline')}>
-                <span className="dot-icon" /> Deadline
++<span className="dot-icon" />Deadline
               </button>
             </div>
             <BigPlan
@@ -274,6 +274,16 @@ export default function App() {
               onMoveProject={(id, patch) => updateProject(id, patch)}
               onOpenRetro={(monday) => setSelection({ kind: 'retro', id: monday })}
               onMoveDeadline={(id, date) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, date } : x)) }))}
+              onCreateDeadline={(date) => {
+                const id = uid();
+                update((d) => ({ ...d, deadlines: [...d.deadlines, { id, name: 'New deadline', date }] }));
+                setEditingId(id);
+              }}
+              onRenameDeadline={(id, name) => {
+                setEditingId(null);
+                if (!name) update((d) => ({ ...d, deadlines: d.deadlines.filter((x) => x.id !== id) }));
+                else update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, name } : x)) }));
+              }}
               onCreateProject={(start, lane) => {
                 const id = uid();
                 update((d) => ({ ...d, projects: [...d.projects, { id, name: 'New project', start, end: addDays(start, 6), lane }] }));
@@ -421,6 +431,13 @@ export default function App() {
       )}
     </div>
   );
+}
+
+export function TeamMark({ team, size = 30 }: { team: { name: string; icon?: string }; size?: number }) {
+  const style = { width: size, height: size, borderRadius: size / 3, fontSize: size / 2 };
+  return team.icon
+    ? <img className="team-mark img" src={team.icon} alt="" style={style} />
+    : <span className="team-mark" style={style}>{team.name.trim()[0]?.toUpperCase()}</span>;
 }
 
 function CogIcon() {

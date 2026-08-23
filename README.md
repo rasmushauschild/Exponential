@@ -56,7 +56,7 @@ next step (see below).
 | Master plan | Drag the blue week band to choose the week shown below |
 | Master plan | Drag a project to move it (left/right = dates, up/down = row); drag either end to stretch it |
 | Master plan | Click a project or deadline star to open its details on the right; drag a star to move a deadline |
-| Master plan | Hover empty space to see a ghost bar; click to create a one-week project and type its name |
+| Master plan | Hover empty space to see a ghost bar; click to create a one-week project and type its name. Hover the top (deadline) row and click to add a deadline the same way |
 | Divider | Drag the handle between the panels to rebalance them |
 | Week | Pick a teammate at the top right; only your own tasks are editable |
 | Week | Click a task's status dot: to do / in progress / needs review / completed / cancelled |
