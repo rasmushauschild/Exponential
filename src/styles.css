@@ -43,15 +43,15 @@ img { display: block; -webkit-user-drag: none; }
 .sidebar.mac { padding-top: 0; }
 .sidebar * { -webkit-app-region: no-drag; }
 .team-list {
-  background: var(--panel); border-radius: var(--radius-xl); box-shadow: var(--shadow); padding: 10px; margin-bottom: 18px;
+  padding: 0 0 0 0; margin-bottom: 18px;
   display: flex; flex-direction: column; gap: 2px;
 }
-.sidebar.mac .team-list { padding-top: 40px; } /* room for the window's traffic lights */
+.sidebar.mac .team-list { padding-top: 30px; } /* room for the window's traffic lights */
 .team-row.add { display: none; }
 .team-list:hover .team-row.add, .team-list:focus-within .team-row.add { display: flex; }
-.team-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 22px; text-align: left; transition: background 0.15s; }
-.team-row:hover { background: rgba(0, 0, 0, 0.03); }
-.team-row.current { background: rgba(0, 0, 0, 0.05); }
+.team-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 14px; text-align: left; transition: background 0.15s; }
+.team-row:hover { background: rgba(0, 0, 0, 0.035); }
+.team-row.current { background: rgba(0, 0, 0, 0.06); }
 .team-row.add { color: var(--text-3); }
 .team-row.add:hover { color: var(--text-2); }
 .team-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--text); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }

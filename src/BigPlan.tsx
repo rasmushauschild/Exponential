@@ -79,16 +79,18 @@ export function BigPlan(props: Props) {
     const el = ref.current!;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      touchView();
       const v = viewRef.current;
+      if (!(e.ctrlKey || e.metaKey) && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      touchView();
       if (e.ctrlKey || e.metaKey) {
         const mx = e.clientX - el.getBoundingClientRect().left;
         const next = Math.min(MAX_PPD, Math.max(MIN_PPD, v.ppd * Math.exp(-e.deltaY * 0.01)));
         const dayUnderCursor = v.origin + mx / v.ppd;
         viewRef.current = { ppd: next, origin: dayUnderCursor - mx / next };
       } else {
-        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-        viewRef.current = { ppd: v.ppd, origin: v.origin + delta / v.ppd };
+        // Only sideways scrolling pans the timeline; vertical wheel movement is ignored.
+        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+        viewRef.current = { ppd: v.ppd, origin: v.origin + e.deltaX / v.ppd };
       }
       setView(viewRef.current);
     };
