@@ -54,18 +54,30 @@ export interface Notification {
   read: boolean;
 }
 
+export interface RetroField {
+  key: string;
+  label: string;
+  hint: string;
+}
+
+export const DEFAULT_RETRO_FIELDS: RetroField[] = [
+  { key: 'wentWell', label: 'What went well', hint: 'Wins, things to keep doing…' },
+  { key: 'improve', label: 'What could be better', hint: 'Friction, misses, surprises…' },
+  { key: 'learnings', label: 'Learnings', hint: 'What we know now that we didn’t before…' },
+  { key: 'nextFocus', label: 'Focus for next week', hint: 'The one or two things that matter most…' },
+];
+
 export interface Retro {
   week: ISODate; // Monday
-  wentWell: string;
-  improve: string;
-  learnings: string;
-  nextFocus: string;
+  answers: Record<string, string>; // by RetroField.key
   notes?: string;
 }
 
 export interface Data {
   id: string;
   name: string;
+  icon?: string; // emoji; falls back to the first letter of the name
+  retroFields?: RetroField[]; // defaults to DEFAULT_RETRO_FIELDS
   moderators: string[]; // person ids allowed to manage members
   people: Person[];
   projects: Project[];

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Data, Person } from './types';
-import { PROJECT_COLORS } from './types';
+import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, type RetroField } from './types';
 import { Avatar } from './WeekPlan';
 import { uid } from './store';
 
@@ -36,9 +36,14 @@ export function TeamPage({ team, onUpdate }: Props) {
   const toggleMod = (id: string) =>
     onUpdate((d) => ({ ...d, moderators: d.moderators.includes(id) ? d.moderators.filter((m) => m !== id) : [...d.moderators, id] }));
 
+  const fields = team.retroFields ?? DEFAULT_RETRO_FIELDS;
+  const setFields = (next: RetroField[]) => onUpdate((d) => ({ ...d, retroFields: next }));
+  const ICONS = ['🚗', '⚡', '🔋', '🛠️', '🧪', '🚀', '🏁', '🧭', '🌱', '🎯', '🧠', '🏗️'];
+
   return (
     <section className="panel team-page">
       <div className="panel-head">
+        <span className="team-mark big">{team.icon ?? team.name.trim()[0]?.toUpperCase()}</span>
         {isMod ? (
           <input
             className="panel-title team-title-input"
@@ -55,6 +60,32 @@ export function TeamPage({ team, onUpdate }: Props) {
       </div>
 
       <div className="team-body">
+        {isMod && (
+          <div className="settings-block">
+            <div className="settings-title">Icon</div>
+            <div className="icon-grid">
+              <button className={`icon-opt${!team.icon ? ' on' : ''}`} onClick={() => onUpdate((d) => ({ ...d, icon: undefined }))} title="Use the first letter">{team.name.trim()[0]?.toUpperCase()}</button>
+              {ICONS.map((ic) => (
+                <button key={ic} className={`icon-opt${team.icon === ic ? ' on' : ''}`} onClick={() => onUpdate((d) => ({ ...d, icon: ic }))}>{ic}</button>
+              ))}
+            </div>
+
+            <div className="settings-title" style={{ marginTop: 22 }}>Retro questions</div>
+            <p className="hint" style={{ margin: '0 0 8px' }}>These are the prompts everyone answers in each week's retro.</p>
+            <div className="retro-config">
+              {fields.map((f, i) => (
+                <div key={f.key} className="retro-config-row">
+                  <input className="member-input" value={f.label} placeholder="Question" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                  <input className="member-input" value={f.hint} placeholder="Hint shown when empty" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, hint: e.target.value } : x)))} />
+                  <button className="icon-btn" title="Remove" disabled={fields.length <= 1} onClick={() => setFields(fields.filter((_, j) => j !== i))}>×</button>
+                </div>
+              ))}
+              <button className="add-task" onClick={() => setFields([...fields, { key: uid(), label: '', hint: '' }])}><span className="plus">+</span> Add question</button>
+            </div>
+
+            <div className="settings-title" style={{ marginTop: 22 }}>Members</div>
+          </div>
+        )}
         {adding && (
           <form className="member-row add" onSubmit={(e) => { e.preventDefault(); add(); }}>
             <span className="avatar initials" style={{ width: 36, height: 36, background: 'var(--soft-2)', color: 'var(--text-3)', fontSize: 18 }}>+</span>

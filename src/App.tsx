@@ -5,7 +5,7 @@ import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
 import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Notification, Project, Retro, Task } from './types';
-import { shortName } from './types';
+import { DEFAULT_RETRO_FIELDS, shortName } from './types';
 import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
@@ -198,45 +198,45 @@ export default function App() {
   return (
     <div className="shell">
       <aside className={`sidebar${window.exponential?.platform === 'darwin' ? ' mac' : ''}`}>
+       <div className="sidebar-inner">
         <div className="team-list">
           {teams.map((t) => (
-            <button
-              key={t.id}
-              className={`team-row${t.id === data.id ? ' current' : ''}`}
-              onClick={() => { if (t.id !== data.id) { switchTeam(t.id); setSelection(null); setSelectedPerson(null); } }}
-              title={t.name}
-            >
-              <span className="team-mark">{t.name.trim()[0]?.toUpperCase()}</span>
-              <span className="team-name">{t.name}</span>
-            </button>
+            <div key={t.id} className={`team-row${t.id === data.id ? ' current' : ''}`} title={t.name}>
+              <button className="team-main" onClick={() => { if (t.id !== data.id) { switchTeam(t.id); setSelection(null); setSelectedPerson(null); setView('plan'); } else setView('plan'); }}>
+                <span className="team-mark">{t.icon ?? t.name.trim()[0]?.toUpperCase()}</span>
+                <span className="team-name">{t.name}</span>
+              </button>
+              <button className={`team-cog${t.id === data.id && view === 'team' ? ' on' : ''}`} title="Team settings"
+                onClick={() => { if (t.id !== data.id) { switchTeam(t.id); setSelection(null); setSelectedPerson(null); } setView('team'); }}>
+                <CogIcon />
+              </button>
+            </div>
           ))}
           <button className="team-row add" onClick={() => setSheet('new-team')}>
             <span className="team-mark plus">+</span>
             <span className="team-name">New team</span>
           </button>
         </div>
-        <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><Icon d="M4 5h16v4H4zM4 11h10v4H4zM4 17h7v2H4z" /> Plan</button>
+        <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><Icon d="M4 5h16v4H4zM4 11h10v4H4zM4 17h7v2H4z" /> <span className="nav-text">Plan</span></button>
         <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
-          <Icon d="M4 6h16v12H4zM4 6l8 7 8-7" /> Inbox
+          <Icon d="M4 6h16v12H4zM4 6l8 7 8-7" /> <span className="nav-text">Inbox</span>
           {unread > 0 && <span className="badge">{unread}</span>}
-        </button>
-        <button className={`nav-item${view === 'team' ? ' active' : ''}`} onClick={() => setView('team')}>
-          <Icon d="M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21a8 8 0 0116 0" /> Team
         </button>
 
         <div className="sidebar-bottom">
           {googleUser ? (
             <button className="account" onClick={() => setSheet('settings')} title={googleUser.email}>
               <Avatar person={me} size={28} />
-              <span className="account-name">{shortName(googleUser.name)}</span>
+              <span className="account-name nav-text">{shortName(googleUser.name)}</span>
             </button>
           ) : (
             <button className="account" onClick={() => setSheet('settings')}>
               <GoogleG />
-              <span className="account-name">Sign in</span>
+              <span className="account-name nav-text">Sign in</span>
             </button>
           )}
         </div>
+       </div>
       </aside>
 
       <div className={`main${detailOpen ? ' with-detail' : ''}`}>
@@ -295,7 +295,11 @@ export default function App() {
               onWeekChange={setWeek}
               onAdd={(date) => {
                 const id = uid();
-                update((d) => ({ ...d, tasks: [...d.tasks, { id, personId: person, title: 'New task', date, status: 'todo', createdBy: d.me } as Task] }));
+                update((d) => {
+                  // new tasks go to the end of their day (or of the backlog)
+                  const order = d.tasks.filter((t) => t.personId === person && t.date === date).reduce((m, t) => Math.max(m, (t.order ?? 0) + 1), 0);
+                  return { ...d, tasks: [...d.tasks, { id, personId: person, title: 'New task', date, order, status: 'todo', createdBy: d.me } as Task] };
+                });
                 setEditingId(id);
               }}
               onRename={(id, title) => {
@@ -357,9 +361,10 @@ export default function App() {
             onUpdateTask={updateTask}
             onUpdateDeadline={(id, patch, key) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, ...patch } : x)) }), key)}
             onUpdateRetro={(wk, patch, key) => update((d) => {
-              const cur: Retro = d.retros?.[wk] ?? { week: wk, wentWell: '', improve: '', learnings: '', nextFocus: '' };
-              return { ...d, retros: { ...d.retros, [wk]: { ...cur, ...patch } } };
+              const cur: Retro = d.retros?.[wk] ?? { week: wk, answers: {} };
+              return { ...d, retros: { ...d.retros, [wk]: { ...cur, ...patch, answers: { ...cur.answers, ...(patch.answers ?? {}) } } } };
             }, key)}
+            retroFields={data.retroFields ?? DEFAULT_RETRO_FIELDS}
             onDelete={() => {
               const { kind, id } = selection;
               update((d) =>
@@ -404,6 +409,15 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+function CogIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.7 1.7 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-1.8-.3 1.7 1.7 0 00-1 1.5V21a2 2 0 11-4 0v-.1a1.7 1.7 0 00-1.1-1.5 1.7 1.7 0 00-1.8.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.7 1.7 0 00.3-1.8 1.7 1.7 0 00-1.5-1H3a2 2 0 110-4h.1a1.7 1.7 0 001.5-1.1 1.7 1.7 0 00-.3-1.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.8.3h.1a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.8-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.8v.1a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z" />
+    </svg>
   );
 }
 

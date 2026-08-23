@@ -66,7 +66,7 @@ next step (see below).
 | Master plan | Hover a week near the bottom edge for its "Retro · Week N" pill; click it to open that week's retro |
 | Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |
 | Week | Pick a teammate and add tasks to *their* week — they show up dashed with an "added by" chip |
-| Details | Edit title, dates, colour/status; notes are Markdown (headings, bullets, `- [ ]` todos, bold/italic, pasted images) with a Preview toggle |
+| Details | Edit title, dates, colour/status; notes are rich text stored as Markdown (headings, bullets, todos, bold/italic, pasted images) — the **Markdown** button shows the source |
 | Details | **Send to Agent** copies the item (title, properties, notes) as one Markdown document to the clipboard |
 | Week | Drag a task's title up or down to reorder tasks that share a day |
 | Layout | Drag the gaps between panels; proportions are remembered on this machine |
@@ -76,9 +76,10 @@ next step (see below).
 
 ## Teams
 
-The top-left button switches between teams (and creates new ones). Each team has its own
-people, master plan, weeks, retros and inbox. The **Team** page lists members; moderators
-can rename the team, add and remove people, and promote or demote moderators.
+The sidebar (collapsed to icons; hover to expand) lists your teams — click one to switch,
+hover it and click the cog for its settings. Each team has its own people, master plan,
+weeks, retros and inbox. On the settings page moderators can rename the team, pick its icon,
+edit the retro questions, add and remove people, and promote or demote moderators.
 
 ## Not done yet
 

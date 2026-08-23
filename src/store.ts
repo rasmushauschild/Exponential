@@ -77,14 +77,14 @@ export function htmlToMarkdown(html: string): string {
       case 'H1': return `\n# ${inner().trim()}\n`;
       case 'H2': return `\n## ${inner().trim()}\n`;
       case 'H3': return `\n### ${inner().trim()}\n`;
-      case 'P': case 'DIV': return `${inner()}\n`;
+      case 'P': case 'DIV': { const t = inner(); return t.trim() ? `${t}\n` : '\n'; }
       case 'BR': return '\n';
       case 'B': case 'STRONG': return `**${inner()}**`;
       case 'I': case 'EM': return `*${inner()}*`;
-      case 'UL': case 'OL': return `\n${Array.from(el.children).map((li, i) => `${'  '.repeat(depth)}${el.tagName === 'OL' ? `${i + 1}.` : '-'} ${walk(li, depth + 1).trim()}`).join('\n')}\n`;
+      case 'UL': case 'OL': return `\n${Array.from(el.children).map((li, i) => `${'  '.repeat(depth)}${el.tagName === 'OL' ? `${i + 1}.` : '-'} ${walk(li, depth + 1).trim().replace(/^\[( |x)\]\s+/, '[$1] ')}`).join('\n')}\n`;
       case 'LI': return inner();
       case 'IMG': return `\n![](${el.getAttribute('src')})\n`;
-      case 'INPUT': return (el as HTMLInputElement).checked ? '[x] ' : '[ ] ';
+      case 'INPUT': return el.hasAttribute('checked') || (el as HTMLInputElement).checked ? '[x] ' : '[ ] ';
       default: return inner();
     }
   };
@@ -100,7 +100,12 @@ function migrate(d: Data): Data {
     projects: d.projects.map((p) => (p.notes ? { ...p, notes: htmlToMarkdown(p.notes) } : p)),
     tasks: d.tasks.map((t) => (t.notes ? { ...t, notes: htmlToMarkdown(t.notes) } : t)),
     deadlines: d.deadlines.map((x) => (x.notes ? { ...x, notes: htmlToMarkdown(x.notes) } : x)),
-    retros: d.retros && Object.fromEntries(Object.entries(d.retros).map(([k, r]) => [k, r.notes ? { ...r, notes: htmlToMarkdown(r.notes) } : r])),
+    retros: d.retros && Object.fromEntries(Object.entries(d.retros).map(([k, r]) => {
+      // older retros kept each answer as its own field
+      const legacy = r as unknown as Record<string, string>;
+      const answers = r.answers ?? Object.fromEntries(['wentWell', 'improve', 'learnings', 'nextFocus'].filter((f) => legacy[f]).map((f) => [f, legacy[f]]));
+      return [k, { week: r.week, answers, notes: r.notes ? htmlToMarkdown(r.notes) : r.notes }];
+    })),
   };
   if (d.projects.every((p) => typeof p.lane === 'number')) return d;
   const laneEnds: string[] = [];

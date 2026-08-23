@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Deadline, ISODate, Notification, Person, Project, Retro, Status, Task } from './types';
+import type { Deadline, ISODate, Notification, Person, Project, Retro, RetroField, Status, Task } from './types';
+import { htmlToMarkdown } from './store';
 import { PROJECT_COLORS, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { addDays, formatRange, isoWeekNumber } from './dates';
@@ -27,6 +28,7 @@ interface Props {
   onUpdateTask: (id: string, patch: Partial<Task>, coalesce?: string) => void;
   onUpdateDeadline: (id: string, patch: Partial<Deadline>, coalesce?: string) => void;
   onUpdateRetro: (week: ISODate, patch: Partial<Retro>, coalesce?: string) => void;
+  retroFields: RetroField[];
   onOpen: (sel: Selection) => void;
   onMarkRead: (ids: string[]) => void;
   onDelete: () => void;
@@ -37,7 +39,7 @@ export function DetailPanel(p: Props) {
 
   const style = { width: p.width };
   if (selection.kind === 'inbox') return <Inbox {...p} />;
-  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
+  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} fields={p.retroFields} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
 
   const item = project ?? task ?? deadline;
   if (!item) return null;
@@ -158,14 +160,7 @@ export function DetailPanel(p: Props) {
 
 /* ─── Retro ─────────────────────────────────────────── */
 
-const RETRO_FIELDS: { key: keyof Pick<Retro, 'wentWell' | 'improve' | 'learnings' | 'nextFocus'>; label: string; hint: string }[] = [
-  { key: 'wentWell', label: 'What went well', hint: 'Wins, things to keep doing…' },
-  { key: 'improve', label: 'What could be better', hint: 'Friction, misses, surprises…' },
-  { key: 'learnings', label: 'Learnings', hint: 'What we know now that we didn’t before…' },
-  { key: 'nextFocus', label: 'Focus for next week', hint: 'The one or two things that matter most…' },
-];
-
-function RetroDoc({ week, retro, onUpdate, onClose, width }: { week: ISODate; retro?: Retro; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number }) {
+function RetroDoc({ week, retro, fields, onUpdate, onClose, width }: { week: ISODate; retro?: Retro; fields: RetroField[]; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number }) {
   return (
     <aside className="detail" style={{ width }}>
       <div className="detail-top">
@@ -176,13 +171,13 @@ function RetroDoc({ week, retro, onUpdate, onClose, width }: { week: ISODate; re
       <div className="detail-scroll">
         <h1 className="detail-title static">Week {isoWeekNumber(week)}</h1>
         <div className="retro-fields">
-          {RETRO_FIELDS.map((f) => (
+          {fields.map((f) => (
             <label key={f.key} className="retro-field">
               <span className="retro-label">{f.label}</span>
               <AutoTextarea
-                value={retro?.[f.key] ?? ''}
+                value={retro?.answers[f.key] ?? ''}
                 placeholder={f.hint}
-                onChange={(v) => onUpdate(week, { [f.key]: v }, `retro:${week}:${f.key}`)}
+                onChange={(v) => onUpdate(week, { answers: { [f.key]: v } }, `retro:${week}:${f.key}`)}
               />
             </label>
           ))}
@@ -191,7 +186,7 @@ function RetroDoc({ week, retro, onUpdate, onClose, width }: { week: ISODate; re
         <MarkdownEditor key={`retro-${week}`} value={retro?.notes ?? ''} onChange={(md) => onUpdate(week, { notes: md }, `retro:${week}:notes`)} />
       </div>
       <SendToAgent doc={() => [`# Retro — Week ${isoWeekNumber(week)} (${formatRange(week, addDays(week, 6))})`, '',
-        ...RETRO_FIELDS.flatMap((f) => [`## ${f.label}`, '', retro?.[f.key]?.trim() || '_(empty)_', '']),
+        ...fields.flatMap((f) => [`## ${f.label}`, '', retro?.answers[f.key]?.trim() || '_(empty)_', '']),
         ...(retro?.notes?.trim() ? ['## Notes', '', retro.notes.trim()] : [])].join('\n')} />
     </aside>
   );
@@ -394,99 +389,124 @@ function PersonSelect({ people, value, me, placeholder, onChange }: {
 }
 
 /**
- * Markdown notes. Edits the source in a textarea (lists auto-continue, images paste/drop as data URLs);
- * a Preview toggle renders it. Markdown keeps the notes readable for people and agents alike.
+ * Notes are stored as Markdown. By default they're edited as rich text (a contenteditable that
+ * renders the Markdown and converts edits back); a "Markdown" toggle shows the raw source.
  */
 function MarkdownEditor({ value, onChange }: { value: string; onChange: (md: string) => void }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState(false);
-  const [local, setLocal] = useState(value);
+  const [source, setSource] = useState(false);
   const timer = useRef<number | undefined>(undefined);
-  useEffect(() => setLocal(value), [value]);
+  const lastEmitted = useRef(value);
+  const pending = useRef<string | null>(null);
+  const flush = () => {
+    window.clearTimeout(timer.current);
+    if (pending.current !== null) { onChange(pending.current); pending.current = null; }
+  };
+  const emit = (md: string) => {
+    lastEmitted.current = md;
+    pending.current = md;
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(flush, 250);
+  };
+  useEffect(() => flush, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const toggle = (to: boolean) => { flush(); setSource(to); };
+  return (
+    <div className="editor">
+      {source
+        ? <SourceEditor value={pending.current ?? value} onEmit={emit} onToggle={() => toggle(false)} />
+        : <RichEditor value={value} lastEmitted={lastEmitted} onEmit={emit} onToggle={() => toggle(true)} />}
+    </div>
+  );
+}
 
+function ToolbarButton({ label, title, onClick, active }: { label: string; title: string; onClick: () => void; active?: boolean }) {
+  return <button className={active ? 'on' : ''} title={title} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>{label}</button>;
+}
+
+function RichEditor({ value, lastEmitted, onEmit, onToggle }: { value: string; lastEmitted: React.MutableRefObject<string>; onEmit: (md: string) => void; onToggle: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  // Only re-render the DOM when the value changed from outside (undo, another item), never for our own edits.
+  useEffect(() => {
+    if (ref.current && value !== lastEmitted.current) { ref.current.innerHTML = renderMarkdown(value, true); lastEmitted.current = value; }
+  }, [value, lastEmitted]);
+  useEffect(() => { if (ref.current) ref.current.innerHTML = renderMarkdown(value, true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sync = () => {
+    const el = ref.current;
+    if (!el) return;
+    // checkbox state lives on the DOM property; mirror it to the attribute so it survives serialisation
+    el.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach((c) => (c.checked ? c.setAttribute('checked', '') : c.removeAttribute('checked')));
+    onEmit(htmlToMarkdown(el.innerHTML));
+  };
+  const cmd = (name: string, arg?: string) => { ref.current?.focus(); document.execCommand(name, false, arg); sync(); };
+  const insertImage = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => cmd('insertHTML', `<img src="${reader.result}"><p><br></p>`);
+    reader.readAsDataURL(file);
+  };
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!(e.metaKey || e.ctrlKey)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); cmd('bold'); }
+    if (k === 'i') { e.preventDefault(); cmd('italic'); }
+  };
+
+  return (
+    <>
+      <div className="toolbar">
+        <ToolbarButton label="H1" title="Heading 1" onClick={() => cmd('formatBlock', 'h1')} />
+        <ToolbarButton label="H2" title="Heading 2" onClick={() => cmd('formatBlock', 'h2')} />
+        <ToolbarButton label="Text" title="Plain paragraph" onClick={() => cmd('formatBlock', 'p')} />
+        <span className="tb-sep" />
+        <ToolbarButton label="Bold" title="Bold (⌘B)" onClick={() => cmd('bold')} />
+        <ToolbarButton label="Italic" title="Italic (⌘I)" onClick={() => cmd('italic')} />
+        <span className="tb-sep" />
+        <ToolbarButton label="List" title="Bullet list" onClick={() => cmd('insertUnorderedList')} />
+        <ToolbarButton label="1. 2." title="Numbered list" onClick={() => cmd('insertOrderedList')} />
+        <ToolbarButton label="Todo" title="Checkbox item" onClick={() => cmd('insertHTML', '<ul><li><input type="checkbox"> </li></ul>')} />
+        <span className="tb-sep" />
+        <ToolbarButton label="Image" title="Insert image" onClick={() => fileRef.current?.click()} />
+        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) insertImage(f); e.target.value = ''; }} />
+        <span className="panel-spacer" />
+        <ToolbarButton label="Markdown" title="Edit the Markdown source" onClick={onToggle} />
+      </div>
+      <div
+        ref={ref}
+        className="rich-body"
+        contentEditable
+        suppressContentEditableWarning
+        data-placeholder="Write something…"
+        onInput={sync}
+        onClick={(e) => { if ((e.target as HTMLElement).tagName === 'INPUT') setTimeout(sync, 0); }}
+        onKeyDown={onKeyDown}
+        onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
+        onDrop={(e) => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
+      />
+    </>
+  );
+}
+
+function SourceEditor({ value, onEmit, onToggle }: { value: string; onEmit: (md: string) => void; onToggle: () => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     el.style.height = '0';
     el.style.height = `${Math.max(200, el.scrollHeight)}px`;
-  }, [local, preview]);
-
-  const commit = (v: string) => {
-    setLocal(v);
-    window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => onChange(v), 250);
-  };
-
-  /** Insert text at the caret (or wrap the selection), keeping focus. */
-  const insert = (before: string, after = '', block = false) => {
-    const el = ref.current;
-    if (!el) return;
-    const { selectionStart: s0, selectionEnd: e0 } = el;
-    const sel = local.slice(s0, e0);
-    let pre = local.slice(0, s0);
-    if (block && pre && !pre.endsWith('\n')) pre += '\n';
-    const next = pre + before + sel + after + local.slice(e0);
-    commit(next);
-    requestAnimationFrame(() => { el.focus(); const pos = pre.length + before.length + sel.length; el.setSelectionRange(pos, pos); });
-  };
-
-  const insertImage = (file: File) => {
-    const reader = new FileReader();
-    reader.onload = () => insert(`![${file.name}](${reader.result})\n`, '', true);
-    reader.readAsDataURL(file);
-  };
-
-  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); insert('**', '**'); return; }
-    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); insert('*', '*'); return; }
-    if (e.key !== 'Enter' || e.shiftKey) return;
-    const el = e.currentTarget;
-    const lineStart = local.lastIndexOf('\n', el.selectionStart - 1) + 1;
-    const line = local.slice(lineStart, el.selectionStart);
-    const m = line.match(/^(\s*)(?:([-*])|(\d+)\.)(\s+\[[ x]\])?\s/);
-    if (!m) return;
-    e.preventDefault();
-    const content = line.slice(m[0].length);
-    if (!content.trim()) { commit(local.slice(0, lineStart) + local.slice(el.selectionStart)); return; } // empty item ends the list
-    const bullet = m[3] ? `${Number(m[3]) + 1}.` : m[2];
-    insert(`\n${m[1]}${bullet}${m[4] ? ' [ ]' : ''} `);
-  };
-
+  }, [local]);
+  const commit = (v: string) => { setLocal(v); onEmit(v); };
   return (
-    <div className="editor">
+    <>
       <div className="toolbar">
-        <button onClick={() => insert('# ', '', true)} title="Heading 1">H1</button>
-        <button onClick={() => insert('## ', '', true)} title="Heading 2">H2</button>
-        <span className="tb-sep" />
-        <button onClick={() => insert('**', '**')} title="Bold (⌘B)"><b>B</b></button>
-        <button onClick={() => insert('*', '*')} title="Italic (⌘I)"><i>I</i></button>
-        <span className="tb-sep" />
-        <button onClick={() => insert('- ', '', true)} title="Bullet list">• List</button>
-        <button onClick={() => insert('1. ', '', true)} title="Numbered list">1.</button>
-        <button onClick={() => insert('- [ ] ', '', true)} title="Checkbox">☐</button>
-        <span className="tb-sep" />
-        <button onClick={() => fileRef.current?.click()} title="Insert image">Image</button>
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) insertImage(f); e.target.value = ''; }} />
+        <span className="hint">Markdown source</span>
         <span className="panel-spacer" />
-        <button className={preview ? 'on' : ''} onClick={() => setPreview((p) => !p)} title="Toggle preview">{preview ? 'Edit' : 'Preview'}</button>
+        <ToolbarButton label="Rich text" title="Back to rich text" onClick={onToggle} active />
       </div>
-      {preview ? (
-        <div className="md-preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(local) }} />
-      ) : (
-        <textarea
-          ref={ref}
-          className="md-source"
-          value={local}
-          placeholder="Write something…"
-          onChange={(e) => commit(e.target.value)}
-          onKeyDown={onKeyDown}
-          onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
-          onDrop={(e) => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
-          spellCheck
-        />
-      )}
-    </div>
+      <textarea ref={ref} className="md-source" value={local} placeholder="Write something…" onChange={(e) => commit(e.target.value)} spellCheck />
+    </>
   );
 }
 
@@ -499,7 +519,7 @@ const inline = (s: string) =>
     .replace(/`([^`]+)`/g, '<code>$1</code>');
 
 /** Small Markdown subset: headings, paragraphs, bullet/numbered lists, checkboxes, bold/italic/code, images. */
-export function renderMarkdown(md: string): string {
+export function renderMarkdown(md: string, editable = false): string {
   const out: string[] = [];
   let list: 'ul' | 'ol' | null = null;
   const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
@@ -511,14 +531,14 @@ export function renderMarkdown(md: string): string {
     else if (li) {
       const kind = li[2] ? 'ol' : 'ul';
       if (list !== kind) { close(); list = kind; out.push(`<${kind}>`); }
-      const box = li[3] !== undefined ? `<input type="checkbox" disabled ${li[3] === 'x' ? 'checked' : ''}> ` : '';
+      const box = li[3] !== undefined ? `<input type="checkbox"${editable ? '' : ' disabled'}${li[3] === 'x' ? ' checked' : ''}> ` : '';
       out.push(`<li>${box}${inline(li[4])}</li>`);
     }
     else if (!line.trim()) close();
     else { close(); out.push(`<p>${inline(line)}</p>`); }
   }
   close();
-  return out.join('');
+  return out.join('') || (editable ? '<p><br></p>' : '');
 }
 
 function SendToAgent({ doc }: { doc: () => string }) {
@@ -531,7 +551,7 @@ function SendToAgent({ doc }: { doc: () => string }) {
   };
   return (
     <div className="detail-foot">
-      <button className="btn primary" onClick={send}>
+      <button className="btn" onClick={send}>
         <SparkIcon /> {state === 'done' ? 'Copied as Markdown' : 'Send to Agent'}
       </button>
     </div>
