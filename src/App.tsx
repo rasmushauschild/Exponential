@@ -602,25 +602,16 @@ function SignInGate({ config, error, onSaveConfig, onSignIn }: {
       <div className="gate-card">
         <img className="gate-logo" src={logoUrl} alt="" />
         <h1>Welcome to Exponential</h1>
-        <p className="muted">
-          Sign in with your Google account to get started. Exponential uses it for your name and photo,
-          your email (so teammates can share calendars with you), and read-only access to your Google Calendar
-          for the week view.
-        </p>
         {!configured && (
           <div className="gate-setup">
-            <p className="muted" style={{ marginBottom: 10 }}>
-              This copy has no Google client yet. Paste the OAuth client from Google Cloud once (type <b>Desktop app</b>, Calendar API enabled) — see the README.
-            </p>
             <div className="field"><label>Client ID</label><input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="xxxx.apps.googleusercontent.com" /></div>
             <div className="field"><label>Client secret</label><input value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} placeholder="GOCSPX-…" /></div>
           </div>
         )}
         {error && <p className="error">{error}</p>}
-        <button className="btn primary gate-btn" disabled={busy || (!configured && !clientId.trim())} onClick={go}>
+        <button className="gate-btn" disabled={busy || (!configured && !clientId.trim())} onClick={go}>
           <GoogleG /> {busy ? 'Waiting for your browser…' : 'Continue with Google'}
         </button>
-        <p className="hint" style={{ marginTop: 14 }}>Your browser opens for Google's consent screen; come back here when it says you're signed in.</p>
       </div>
     </div>
   );
