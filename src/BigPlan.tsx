@@ -247,7 +247,8 @@ export function BigPlan(props: Props) {
 
   // Deadlines share one row: each label may only use the space up to the next star.
   const dlSorted = [...deadlines].sort((a, b) => a.date.localeCompare(b.date));
-  const dlLeft = (d: Deadline) => ((dlDrag?.id === d.id ? dlDrag.date : dayIndex(d.date)) - origin) * ppd;
+  // centred on the day, like the today line
+  const dlLeft = (d: Deadline) => ((dlDrag?.id === d.id ? dlDrag.date : dayIndex(d.date)) - origin) * ppd + ppd / 2;
 
   const weekNum = isoWeekNumber(week);
 
@@ -326,7 +327,7 @@ export function BigPlan(props: Props) {
             onPointerDown={(e) => onDeadlineDown(e, d)}
             title={`${d.name} · ${formatShort(d.date)}`}
           >
-            <Star />
+            <span className="dot" />
             {room > 28 && (
               <span className="label">{d.name}{dlDrag?.id === d.id && <span className="tl-project-dates"> · {formatShort(fromDayIndex(live))}</span>}</span>
             )}

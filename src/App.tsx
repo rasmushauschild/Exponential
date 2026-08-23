@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BigPlan, Star } from './BigPlan';
+import { BigPlan } from './BigPlan';
 import { Avatar, WeekPlan } from './WeekPlan';
 import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
@@ -257,7 +257,7 @@ export default function App() {
               {!isThisWeek && <button className="pill" onClick={() => setWeek(weekStart(today))}>Back to this week</button>}
               <button className="pill" onClick={() => setSheet('project')}>+ Project</button>
               <button className="pill" onClick={() => setSheet('deadline')}>
-                <span style={{ color: '#ff9f0a', display: 'inline-flex' }}><Star size={14} /></span> Deadline
+                <span className="dot-icon" /> Deadline
               </button>
             </div>
             <BigPlan

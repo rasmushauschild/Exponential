@@ -210,11 +210,12 @@ img { display: block; -webkit-user-drag: none; }
 
 
 .tl-deadline {
-  position: absolute; display: flex; align-items: center; gap: 6px; height: 26px; transform: translateX(-11px);
+  position: absolute; display: flex; align-items: center; gap: 7px; height: 26px; transform: translateX(-12px); padding-left: 7px;
   cursor: pointer; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--text); border-radius: 999px; padding-right: 8px;
 }
-.tl-deadline:hover, .tl-deadline.selected { background: rgba(255, 159, 10, 0.12); }
-.tl-deadline .star { width: 16px; height: 16px; flex: none; color: #ff9f0a; margin-left: 3px; }
+.tl-deadline:hover, .tl-deadline.selected { background: var(--ov-5); }
+.tl-deadline .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text); flex: none; }
+.tl-deadline.live .dot { transform: scale(1.2); }
 .tl-deadline .label { opacity: 0.85; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ─── Week ──────────────────────────────────────────── */
