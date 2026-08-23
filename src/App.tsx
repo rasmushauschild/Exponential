@@ -289,7 +289,7 @@ export default function App() {
               onSelect={setSelectedPerson}
               week={week}
               today={today}
-              tasks={data.tasks.filter((t) => t.personId === person && t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)}
+              tasks={data.tasks.filter((t) => t.personId === person && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
               selectedId={selection?.id}
               editingId={editingId ?? undefined}
               onWeekChange={setWeek}
@@ -305,7 +305,7 @@ export default function App() {
                   const t0 = d.tasks.find((t) => t.id === id)!;
                   const next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, title } : t)) };
                   return t0.personId !== d.me
-                    ? notify(next, { to: t0.personId, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${title}” to your week`, ref: { kind: 'task', id } })
+                    ? notify(next, { to: t0.personId, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${title}” to your ${t0.date ? 'week' : 'backlog'}`, ref: { kind: 'task', id } })
                     : next;
                 });
               }}
@@ -314,7 +314,7 @@ export default function App() {
               onOpen={(t) => setSelection({ kind: 'task', id: t.id })}
               onReorder={(id, delta) => update((d) => {
                 const t = d.tasks.find((x) => x.id === id)!;
-                const group = d.tasks.filter((x) => x.personId === t.personId && x.date === t.date)
+                const group = d.tasks.filter((x) => x.personId === t.personId && x.date === t.date) // undated tasks group together as the backlog
                   .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
                 const from = group.findIndex((x) => x.id === id);
                 const to = Math.min(group.length - 1, Math.max(0, from + delta));

@@ -61,7 +61,7 @@ next step (see below).
 | Week | Pick a teammate at the top right; only your own tasks are editable |
 | Week | Click a task's status dot: to do / in progress / needs review / completed / cancelled |
 | Week | Drag a task's block to another day, or drag either end to stretch it over several days |
-| Week | Hover the empty area under the tasks and click a day to create a task and type its name |
+| Week | "+ Add task" creates a **backlog** task with no date: it shows faded at the bottom of every week until you click a day on its row to schedule it (or click a day in the empty area to create a dated task directly) |
 | Week | **Calendar** toggle shows Google Calendar events for the selected person |
 | Master plan | Hover a week near the bottom edge for its "Retro · Week N" pill; click it to open that week's retro |
 | Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |

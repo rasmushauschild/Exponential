@@ -221,6 +221,10 @@ img { display: block; -webkit-user-drag: none; }
 .task-title { cursor: pointer; }
 .wk-row.task:hover, .wk-row.task.selected { background: rgba(0, 0, 0, 0.03); }
 .wk-row.done .task-title, .wk-row.cancelled .task-title { color: var(--text-3); }
+.wk-row.backlog .wk-list { opacity: 0.5; transition: opacity 0.15s; }
+.wk-row.backlog:hover .wk-list, .wk-row.backlog.selected .wk-list { opacity: 0.8; }
+.wk-row.backlog .wk-days { cursor: copy; }
+.wk-row.backlog .status-btn { opacity: 0.7; }
 .wk-row.cancelled .task-title { text-decoration: line-through; }
 
 .task-title {
@@ -319,6 +323,9 @@ img { display: block; -webkit-user-drag: none; }
 .date-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--soft); font-weight: 600; font-size: 13px; color: var(--text-2); transition: background 0.15s; }
 .date-pill:hover { background: var(--soft-2); color: var(--text); }
 .date-pill .dash { color: var(--text-3); padding: 0 2px; }
+.date-pill.empty { color: var(--text-3); font-weight: 500; cursor: pointer; position: relative; overflow: hidden; }
+.date-pill.empty input { position: absolute; inset: 0; width: 100% !important; opacity: 0 !important; cursor: pointer; }
+.icon-btn.small { width: 24px; height: 24px; font-size: 15px; color: var(--text-3); margin-left: 2px; }
 .date-pill input[type='date'] { font: inherit; color: inherit; background: transparent; padding: 0; width: auto; cursor: pointer; font-variant-numeric: tabular-nums; }
 .date-pill input[type='date']::-webkit-calendar-picker-indicator { display: none; }
 .date-pill input[type='date']::-webkit-datetime-edit { padding: 0; }

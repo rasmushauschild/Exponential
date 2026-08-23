@@ -32,7 +32,7 @@ export interface Task {
   id: string;
   personId: string;
   title: string;
-  date: ISODate;
+  date?: ISODate; // absent = backlog: shown in every week until scheduled
   end?: ISODate; // inclusive; same as date when absent
   status: Status;
   order?: number; // position among tasks on the same day

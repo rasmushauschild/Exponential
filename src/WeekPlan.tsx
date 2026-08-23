@@ -18,7 +18,7 @@ interface Props {
   tasks: Task[];
   selectedId?: string;
   editingId?: string;
-  onAdd: (date: ISODate) => void;
+  onAdd: (date?: ISODate) => void;
   onRename: (id: string, title: string) => void;
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
@@ -88,7 +88,9 @@ export function WeekPlan(props: Props) {
     return () => el.removeEventListener('wheel', onWheel);
   }, [onWeekChange]);
 
-  const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
+  // Dated tasks first by day, then the backlog (undated) at the bottom.
+  const dateKey = (t: Task) => t.date ?? '9999-99-99';
+  const sorted = [...tasks].sort((a, b) => (dateKey(a) < dateKey(b) ? -1 : dateKey(a) > dateKey(b) ? 1 : 0) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
 
   // While a row is lifted, same-day neighbours slide out of its way so the drop position is obvious.
   const lifted = lift ? sorted.find((t) => t.id === lift.id) : undefined;
@@ -173,7 +175,7 @@ export function WeekPlan(props: Props) {
             {(
               <div className="wk-row wk-free">
                 <div className="wk-list">
-                  <button className="add-task" onClick={() => onAdd(todayIdx >= 0 && todayIdx <= 6 ? today : week)}>
+                  <button className="add-task" onClick={() => onAdd()}>
                     <span className="plus">+</span> {readonly ? `Add task for ${shortName(people.find((p) => p.id === selected)?.name ?? '')}` : 'Add task'}
                   </button>
                 </div>
@@ -246,8 +248,10 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   const [hoverCursor, setHoverCursor] = useState('grab');
   const daysRef = useRef<HTMLDivElement>(null);
   const w0 = dayIndex(week);
-  const s0 = dayIndex(task.date) - w0;
-  const e0 = (task.end ? dayIndex(task.end) : dayIndex(task.date)) - w0;
+  const backlog = !task.date;
+  const [scheduleGhost, setScheduleGhost] = useState<number | null>(null);
+  const s0 = task.date ? dayIndex(task.date) - w0 : 0;
+  const e0 = task.date ? (task.end ? dayIndex(task.end) : dayIndex(task.date)) - w0 : 0;
 
   useEffect(() => {
     if (!menu) return;
@@ -333,7 +337,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   return (
     <div
       ref={rowRef}
-      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}`}
+      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
       style={offset ? { transform: `translateY(${offset}px)` } : undefined}
     >
       <div className="wk-list" onPointerDown={onRowDown} style={{ cursor: readonly ? 'default' : 'grab' }}>
@@ -370,8 +374,17 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
           />
         )}
       </div>
-      <div className="wk-days" ref={daysRef}>
-        {ve >= vs && (
+      <div
+        className={`wk-days${backlog && !readonly ? ' ghost-zone' : ''}`}
+        ref={daysRef}
+        onPointerMove={backlog && !readonly ? (e) => { const r = e.currentTarget.getBoundingClientRect(); setScheduleGhost(Math.min(6, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 7)))); } : undefined}
+        onPointerLeave={backlog ? () => setScheduleGhost(null) : undefined}
+        onClick={backlog && !readonly ? (e) => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.min(6, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 7))); onUpdate(task.id, { date: addDays(week, i) }); setScheduleGhost(null); } : undefined}
+      >
+        {backlog && scheduleGhost !== null && (
+          <div className="wk-block ghost" style={{ left: `${(scheduleGhost / 7) * 100}%`, width: `calc(100% / 7 - 6px)` }} />
+        )}
+        {!backlog && ve >= vs && (
           <div
             className={`wk-block${live ? ' live' : ''}${s < 0 ? ' cut-l' : ''}${en > 6 ? ' cut-r' : ''}`}
             style={{

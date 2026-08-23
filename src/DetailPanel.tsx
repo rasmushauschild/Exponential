@@ -66,7 +66,7 @@ export function DetailPanel(p: Props) {
       if (project.assignees?.length) lines.push(`- People: ${project.assignees.map(who).join(', ')}`);
     }
     if (task) {
-      lines.push(`- Status: ${STATUS_LABEL[task.status]}`, `- Owner: ${who(task.personId)}`, `- Date: ${task.date}${task.end ? ` → ${task.end}` : ''}`);
+      lines.push(`- Status: ${STATUS_LABEL[task.status]}`, `- Owner: ${who(task.personId)}`, `- Date: ${task.date ? `${task.date}${task.end ? ` → ${task.end}` : ''}` : 'backlog (no date yet)'}`);
       if (task.reviewerId) lines.push(`- Reviewer: ${who(task.reviewerId)}`);
     }
     if (deadline) lines.push(`- Date: ${deadline.date}`);
@@ -122,8 +122,18 @@ export function DetailPanel(p: Props) {
                   onChange={(id) => id && p.onUpdateTask(task.id, { personId: id })} />
               </Prop>
               <Prop label="Dates">
-                <DateRange start={task.date} end={task.end ?? task.date}
-                  onChange={(start, end) => p.onUpdateTask(task.id, { date: start, end: end === start ? undefined : end })} />
+                {task.date ? (
+                  <>
+                    <DateRange start={task.date} end={task.end ?? task.date}
+                      onChange={(start, end) => p.onUpdateTask(task.id, { date: start, end: end === start ? undefined : end })} />
+                    <button className="icon-btn small" title="Move to backlog" onClick={() => p.onUpdateTask(task.id, { date: undefined, end: undefined })}>×</button>
+                  </>
+                ) : (
+                  <label className="date-pill empty" title="Pick a date">
+                    Backlog · set date
+                    <input type="date" style={{ width: 0, opacity: 0 }} onChange={(e) => e.target.value && p.onUpdateTask(task.id, { date: e.target.value })} />
+                  </label>
+                )}
               </Prop>
               {task.createdBy && task.createdBy !== task.personId && (
                 <Prop label="Added by"><span className="prop-text">{shortName(people.find((x) => x.id === task.createdBy)?.name ?? '')}</span></Prop>
