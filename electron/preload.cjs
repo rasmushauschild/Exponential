@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('exponential', {
   openMain: (target) => ipcRenderer.send('widget:openMain', target),
   closeWidget: () => ipcRenderer.send('widget:close'),
   version: () => ipcRenderer.invoke('app:version'),
+  onSwipe: (cb) => { const h = (_e, d) => cb(d); ipcRenderer.on('swipe', h); return () => ipcRenderer.removeListener('swipe', h); },
   onUpdate: (cb) => { const h = (_e, s) => cb(s); ipcRenderer.on('update:state', h); return () => ipcRenderer.removeListener('update:state', h); },
   installUpdate: () => ipcRenderer.send('update:install'),
   checkForUpdate: () => ipcRenderer.send('update:check'),

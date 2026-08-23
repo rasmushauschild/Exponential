@@ -19,6 +19,7 @@ declare global {
       isWidget: boolean;
       onWidgetShown: (cb: () => void) => () => void;
       version: () => Promise<string>;
+      onSwipe?: (cb: (direction: 'left' | 'right' | 'up' | 'down') => void) => () => void;
       onUpdate: (cb: (s: { state: 'checking' | 'available' | 'none' | 'downloading' | 'ready' | 'error'; version?: string; percent?: number; message?: string }) => void) => () => void;
       installUpdate: () => void;
       checkForUpdate: () => void;
