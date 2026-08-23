@@ -52,6 +52,8 @@ export function BigPlan(props: Props) {
   const [hoverCursor, setHoverCursor] = useState<string>('');
   const [ghost, setGhost] = useState<{ day: number; lane: number } | null>(null);
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
+  const weekRef = useRef(week);
+  weekRef.current = week;
   const [height, setHeight] = useState(0);
 
   useLayoutEffect(() => {
@@ -147,7 +149,7 @@ export function BigPlan(props: Props) {
     track((ev) => {
       const shift = Math.round((ev.clientX - startX) / ppd / 7) * 7;
       const next = fromDayIndex(startWeek + shift);
-      if (next !== week) onWeekChange(next);
+      if (next !== weekRef.current) onWeekChange(next);
     }, () => setBandDrag(false));
   };
 

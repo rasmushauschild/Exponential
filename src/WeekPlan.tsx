@@ -58,16 +58,23 @@ export function WeekPlan(props: Props) {
   weekRef.current = week;
   useEffect(() => {
     const el = bodyRef.current!;
-    let acc = 0, locked = false, lockDir = 0, timer: number | undefined, last = 0;
+    let acc = 0, locked = false, lockDir = 0, timer: number | undefined, last = 0, prevAbs = 0;
     const rubber = (v: number) => Math.sign(v) * 60 * Math.log1p(Math.abs(v) / 60);
-    const reset = () => { acc = 0; locked = false; lockDir = 0; setSwipe({ x: 0, animate: true }); };
+    const reset = () => { acc = 0; locked = false; lockDir = 0; prevAbs = 0; setSwipe({ x: 0, animate: true }); };
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
       const now = performance.now();
-      // A new gesture: a pause, or a fresh push in the opposite direction to the one that flipped the week.
-      if (now - last > 120 || (locked && Math.sign(e.deltaX) === -lockDir && Math.abs(e.deltaX) > 8)) { acc = 0; locked = false; lockDir = 0; }
+      const abs = Math.abs(e.deltaX);
+      // Trackpad momentum keeps emitting decaying deltas after a flick. Treat it as a new gesture when:
+      // there was a pause, the direction reversed, the delta suddenly grows (a fresh push), or momentum has died out.
+      const fresh = now - last > 120
+        || (locked && Math.sign(e.deltaX) === -lockDir && abs > 6)
+        || (locked && abs > prevAbs * 1.8 && abs > 6)
+        || (locked && abs < 1.5);
+      if (fresh) { acc = 0; locked = false; lockDir = 0; }
       last = now;
+      prevAbs = abs;
       window.clearTimeout(timer);
       timer = window.setTimeout(reset, 120);
       if (locked) return;
@@ -297,17 +304,14 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
           </span>
         )}
         {menu && (
-          <div className="status-menu" style={{ top: 32, left: 0 }}>
-            {STATUS_ORDER.map((st) => (
-              <button key={st} className={st === task.status ? 'current' : ''} onClick={() => { onUpdate(task.id, { status: st }); setMenu(false); }}>
-                <StatusDot status={st} /> {STATUS_LABEL[st]}
-              </button>
-            ))}
-            <div className="sep" />
-            <button className="danger" onClick={() => { setMenu(false); onDelete(task.id); }}>
-              <span style={{ width: 14 }} /> Delete
-            </button>
-          </div>
+          <StatusMenu
+            value={task.status}
+            reviewerId={task.reviewerId}
+            people={people.filter((x) => x.id !== task.personId)}
+            onPick={(status, reviewerId) => { onUpdate(task.id, reviewerId !== undefined ? { status, reviewerId } : { status }); setMenu(false); }}
+            onDelete={() => { setMenu(false); onDelete(task.id); }}
+            style={{ top: 32, left: 0 }}
+          />
         )}
       </div>
       <div className="wk-days" ref={daysRef}>
@@ -326,6 +330,50 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
           />
         )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Status picker. Hovering "Needs review" slides out a list of people so a review can be requested
+ * in the same gesture; clicking "Needs review" itself just sets the status.
+ */
+export function StatusMenu({ value, reviewerId, people, onPick, onDelete, style }: {
+  value: Status;
+  reviewerId?: string;
+  people: Person[];
+  onPick: (status: Status, reviewerId?: string) => void;
+  onDelete?: () => void;
+  style?: React.CSSProperties;
+}) {
+  const [sub, setSub] = useState(false);
+  return (
+    <div className="status-menu" style={style} onPointerDown={(e) => e.stopPropagation()}>
+      {STATUS_ORDER.map((s) => (
+        <div key={s} className="status-item" onPointerEnter={() => setSub(s === 'review')}>
+          <button className={s === value ? 'current' : ''} onClick={() => onPick(s)}>
+            <StatusDot status={s} /> {STATUS_LABEL[s]}
+            {s === 'review' && <span className="chev">›</span>}
+          </button>
+          {s === 'review' && sub && (
+            <div className="submenu">
+              <div className="submenu-title">Request a review from</div>
+              {people.map((x) => (
+                <button key={x.id} className={x.id === reviewerId && value === 'review' ? 'current' : ''} onClick={() => onPick('review', x.id)}>
+                  <Avatar person={x} size={18} /> {shortName(x.name)}
+                </button>
+              ))}
+              {people.length === 0 && <div className="hint" style={{ padding: '6px 10px' }}>No one else to ask</div>}
+            </div>
+          )}
+        </div>
+      ))}
+      {onDelete && (
+        <>
+          <div className="sep" />
+          <button className="danger" onClick={onDelete}><span style={{ width: 14 }} /> Delete</button>
+        </>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Deadline, ISODate, Notification, Person, Project, Retro, Status, Task } from './types';
-import { PROJECT_COLORS, STATUS_LABEL, STATUS_ORDER, shortName } from './types';
-import { Avatar, StatusDot } from './WeekPlan';
+import { PROJECT_COLORS, STATUS_LABEL, shortName } from './types';
+import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { addDays, formatRange, isoWeekNumber } from './dates';
 
 export type Selection =
@@ -74,33 +74,22 @@ export function DetailPanel(p: Props) {
               <Prop label="Ends"><input type="date" value={project.end} min={project.start}
                 onChange={(e) => e.target.value && p.onUpdateProject(project.id, { end: e.target.value })} /></Prop>
               <Prop label="People">
-                <div className="people-pick">
-                  {people.map((x) => {
-                    const on = project.assignees?.includes(x.id);
-                    return (
-                      <button key={x.id} className={`pick${on ? ' on' : ''}`} title={x.name}
-                        onClick={() => p.onToggleAssignee(project.id, x.id)}>
-                        <Avatar person={x} size={22} />
-                        <span>{x.id === me ? 'Me' : shortName(x.name).split(' ')[0]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                <AssigneePicker people={people} me={me} assignees={project.assignees ?? []} onToggle={(id) => p.onToggleAssignee(project.id, id)} />
               </Prop>
               <Prop label="Colour">
-                <div className="swatches">
-                  {PROJECT_COLORS.map((c) => (
-                    <button key={c} className={`swatch${(project.color ?? '') === c ? ' on' : ''}`} style={{ ['--pc' as string]: c }}
-                      onClick={() => p.onUpdateProject(project.id, { color: c })} />
-                  ))}
-                </div>
+                <ColorPicker value={project.color} onChange={(c) => p.onUpdateProject(project.id, { color: c })} />
               </Prop>
             </>
           )}
           {task && (
             <>
               <Prop label="Status">
-                <StatusSelect value={task.status} onChange={(s) => p.onUpdateTask(task.id, { status: s })} />
+                <StatusSelect
+                  value={task.status}
+                  reviewerId={task.reviewerId}
+                  people={people.filter((x) => x.id !== task.personId)}
+                  onPick={(status, reviewerId) => p.onUpdateTask(task.id, reviewerId !== undefined ? { status, reviewerId } : { status })}
+                />
               </Prop>
               {task.status === 'review' && (
                 <Prop label="Review by">
@@ -267,18 +256,63 @@ function useClickAway(open: boolean, cls: string, close: () => void) {
   }, [open, cls, close]);
 }
 
-function StatusSelect({ value, onChange }: { value: Status; onChange: (s: Status) => void }) {
+function StatusSelect({ value, reviewerId, people, onPick }: {
+  value: Status; reviewerId?: string; people: Person[]; onPick: (s: Status, reviewerId?: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   useClickAway(open, '.status-select', () => setOpen(false));
   return (
     <div className="status-select">
       <button className="pill small" onClick={() => setOpen((o) => !o)}><StatusDot status={value} /> {STATUS_LABEL[value]}</button>
+      {open && <StatusMenu value={value} reviewerId={reviewerId} people={people} onPick={(s, r) => { onPick(s, r); setOpen(false); }} style={{ top: 34, left: 0 }} />}
+    </div>
+  );
+}
+
+/** Assigned people as chips, plus a "+" that opens a list of everyone not yet assigned. */
+function AssigneePicker({ people, me, assignees, onToggle }: { people: Person[]; me: string; assignees: string[]; onToggle: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  useClickAway(open, '.assignee-picker', () => setOpen(false));
+  const assigned = assignees.map((id) => people.find((x) => x.id === id)).filter(Boolean) as Person[];
+  const rest = people.filter((x) => !assignees.includes(x.id));
+  return (
+    <div className="assignee-picker status-select">
+      <div className="chips">
+        {assigned.map((x) => (
+          <span key={x.id} className="chip" title={x.name}>
+            <Avatar person={x} size={18} />
+            {x.id === me ? 'Me' : shortName(x.name)}
+            <button className="chip-x" title="Remove" onClick={() => onToggle(x.id)}>×</button>
+          </span>
+        ))}
+        <button className="chip add" title="Add person" onClick={() => setOpen((o) => !o)} disabled={rest.length === 0}>+</button>
+      </div>
       {open && (
         <div className="status-menu" style={{ top: 34, left: 0 }}>
-          {STATUS_ORDER.map((s) => (
-            <button key={s} className={s === value ? 'current' : ''} onClick={() => { onChange(s); setOpen(false); }}>
-              <StatusDot status={s} /> {STATUS_LABEL[s]}
+          {rest.map((x) => (
+            <button key={x.id} onClick={() => { onToggle(x.id); if (rest.length <= 1) setOpen(false); }}>
+              <Avatar person={x} size={18} /> {x.id === me ? 'Me' : shortName(x.name)}
             </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ColorPicker({ value, onChange }: { value?: string; onChange: (c: string) => void }) {
+  const [open, setOpen] = useState(false);
+  useClickAway(open, '.color-picker', () => setOpen(false));
+  const cur = value ?? PROJECT_COLORS[0];
+  return (
+    <div className="color-picker status-select">
+      <button className="chip" onClick={() => setOpen((o) => !o)} title="Change colour">
+        <span className="swatch small" style={{ ['--pc' as string]: cur }} /> <span className="chev">▾</span>
+      </button>
+      {open && (
+        <div className="status-menu swatch-menu" style={{ top: 34, left: 0 }}>
+          {PROJECT_COLORS.map((c) => (
+            <button key={c} className={`swatch${cur === c ? ' on' : ''}`} style={{ ['--pc' as string]: c }} onClick={() => { onChange(c); setOpen(false); }} />
           ))}
         </div>
       )}
