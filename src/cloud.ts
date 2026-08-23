@@ -124,9 +124,17 @@ function diff<T extends { id: string }>(prev: T[], next: T[]) {
   return { upsert, remove };
 }
 
+const errorListeners = new Set<(msg: string) => void>();
+/** Subscribe to failed writes (shown to the user; nothing is silently dropped). */
+export function onPersistError(cb: (msg: string) => void) { errorListeners.add(cb); return () => { errorListeners.delete(cb); }; }
+
 async function run(label: string, p: PromiseLike<{ error: unknown }>) {
   const { error } = await p;
-  if (error) console.error(`[cloud] ${label} failed`, error);
+  if (error) {
+    console.error(`[cloud] ${label} failed`, error);
+    const msg = (error as { message?: string })?.message ?? String(error);
+    errorListeners.forEach((cb) => cb(`Couldn't save ${label}: ${msg}`));
+  }
 }
 
 /** Persist whatever changed between two snapshots of the same team. Fire-and-forget; errors are logged. */

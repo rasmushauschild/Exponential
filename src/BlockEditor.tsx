@@ -324,7 +324,7 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
   }, [menu]);
   if (!task) return <div className="blk-text p hint">(task removed)</div>;
   const owner = task.personId ? people.find((p) => p.id === task.personId) : undefined;
-  const change = (v: string) => { setTitle(v); window.clearTimeout(timer.current); timer.current = window.setTimeout(() => onTitle(v), 200); };
+  const change = (v: string) => { setTitle(v); window.clearTimeout(timer.current); timer.current = window.setTimeout(() => onTitle(v), 400); };
   return (
     <div className={`blk-task wk-row task ${task.status}${owner ? '' : ' unassigned'}`}>
       <button className="status-btn" title={STATUS_LABEL[task.status]}

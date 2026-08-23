@@ -8,7 +8,7 @@ import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, shortName } from './types';
 import { addTask, claimTask, nameOf, notify, patchTask, renameTask, reorderTask } from './taskOps';
-import { isPending, signOutCloud, supabase } from './cloud';
+import { isPending, onPersistError, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
@@ -24,6 +24,8 @@ export default function App() {
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [updateInfo, setUpdateState] = useState<{ state: string; version?: string; percent?: number } | null>(null);
   const [appVersion, setAppVersion] = useState('');
+  const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => onPersistError((m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 8000); }), []);
   useEffect(() => {
     window.exponential?.version().then(setAppVersion);
     return window.exponential?.onUpdate((s) => setUpdateState(s.state === 'none' || s.state === 'checking' ? null : s));
@@ -475,6 +477,7 @@ export default function App() {
         </div>
       </div>
 
+      {saveError && <div className="toast error-toast">{saveError}</div>}
       {sheet === 'project' && (
         <NewProjectSheet
           defaultStart={week}
