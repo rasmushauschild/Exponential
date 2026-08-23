@@ -265,12 +265,17 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     const local = e.clientX - bar.left;
     const mode: BlockDrag['mode'] = local < EDGE ? 'start' : bar.width - local < EDGE ? 'end' : 'move';
     const colW = rect.width / 7;
-    const startX = e.clientX;
+    const startX = e.clientX, startY = e.clientY;
+    const rowH = rowRef.current?.offsetHeight ?? 36;
     let moved = false;
+    let axis: 'x' | 'y' | null = null; // decided by the first clear movement
     let latest: BlockDrag = { mode, s: s0, e: e0 };
     const move = (ev: PointerEvent) => {
-      if (Math.abs(ev.clientX - startX) > 3) moved = true;
-      const dd = Math.round((ev.clientX - startX) / colW);
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (!axis && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) axis = mode === 'move' && Math.abs(dy) > Math.abs(dx) ? 'y' : 'x';
+      if (axis === 'y') { moved = true; onLift(dy, rowH); return; }
+      if (Math.abs(dx) > 3) moved = true;
+      const dd = Math.round(dx / colW);
       if (mode === 'move') latest = { mode, s: s0 + dd, e: e0 + dd };
       else if (mode === 'start') latest = { mode, s: Math.min(s0 + dd, e0), e: e0 };
       else latest = { mode, s: s0, e: Math.max(e0 + dd, s0) };
@@ -280,6 +285,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       setLive(null);
+      if (axis === 'y') { onDrop(); return; }
       if (!moved) onOpen(task);
       else if (latest.s !== s0 || latest.e !== e0) {
         onUpdate(task.id, { date: addDays(week, latest.s), end: latest.e === latest.s ? undefined : addDays(week, latest.e) });

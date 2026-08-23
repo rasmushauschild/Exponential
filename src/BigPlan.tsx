@@ -54,18 +54,15 @@ export function BigPlan(props: Props) {
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
   const weekRef = useRef(week);
   weekRef.current = week;
-  const viewTouched = useRef(0); // last time the user panned/zoomed
-  const [bandAnim, setBandAnim] = useState(false);
-
-  // Ease the band only when the week changes on its own (swipe in the week panel, "Back to this week"),
-  // never while the timeline itself is moving under it.
-  useEffect(() => {
-    if (bandDrag || performance.now() - viewTouched.current < 80) return;
-    setBandAnim(true);
-    const t = setTimeout(() => setBandAnim(false), 380);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [week]);
+  // The band eases between weeks by default; while the timeline itself moves (pan/zoom) it must
+  // stay glued to the days, so `viewMoving` suppresses the transition until scrolling stops.
+  const [viewMoving, setViewMoving] = useState(false);
+  const movingTimer = useRef<number | undefined>(undefined);
+  const touchView = () => {
+    setViewMoving(true);
+    window.clearTimeout(movingTimer.current);
+    movingTimer.current = window.setTimeout(() => setViewMoving(false), 120);
+  };
   const [height, setHeight] = useState(0);
 
   useLayoutEffect(() => {
@@ -82,8 +79,7 @@ export function BigPlan(props: Props) {
     const el = ref.current!;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      viewTouched.current = performance.now();
-      setBandAnim(false);
+      touchView();
       const v = viewRef.current;
       if (e.ctrlKey || e.metaKey) {
         const mx = e.clientX - el.getBoundingClientRect().left;
@@ -135,7 +131,7 @@ export function BigPlan(props: Props) {
     track(
       (ev) => {
         if (Math.abs(ev.clientX - startX) > 3) moved = true;
-        if (moved) { viewTouched.current = performance.now(); setBandAnim(false); setPanning(true); setView({ ppd, origin: startOrigin - (ev.clientX - startX) / ppd }); }
+        if (moved) { touchView(); setPanning(true); setView({ ppd, origin: startOrigin - (ev.clientX - startX) / ppd }); }
       },
       (ev) => {
         setPanning(false);
@@ -297,7 +293,7 @@ export function BigPlan(props: Props) {
       })}
 
       <div
-        className={`week-band${bandDrag ? ' dragging' : ''}${bandAnim && !bandDrag ? ' anim' : ''}`}
+        className={`week-band${bandDrag ? ' dragging' : viewMoving || panning ? ' no-anim' : ''}`}
         style={{ left: x(week), width: ppd * 7 }}
         onPointerDown={onBandDown}
         title="Drag to choose the week shown below"

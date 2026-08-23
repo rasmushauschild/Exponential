@@ -36,19 +36,24 @@ img { display: block; -webkit-user-drag: none; }
 .shell { display: flex; height: 100%; padding: 14px 14px 14px 0; }
 
 .sidebar {
-  width: 200px; flex: none; display: flex; flex-direction: column;
-  padding: 44px 14px 8px 18px; -webkit-app-region: drag;
+  width: 212px; flex: none; display: flex; flex-direction: column;
+  padding: 14px 14px 8px 14px; -webkit-app-region: drag;
 }
+.sidebar.mac { padding-top: 40px; }
 .sidebar * { -webkit-app-region: no-drag; }
-.team-switch { position: relative; margin-bottom: 16px; }
-.team-btn { display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 8px; border-radius: 14px; text-align: left; transition: background 0.15s; }
-.team-btn:hover, .team-btn.open { background: rgba(0, 0, 0, 0.06); }
-.team-mark { width: 28px; height: 28px; border-radius: 9px; background: var(--text); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 14px; flex: none; }
-.team-mark.small { width: 20px; height: 20px; border-radius: 6px; font-size: 11px; }
-.team-name { flex: 1; min-width: 0; font-weight: 800; font-size: 16px; letter-spacing: -0.02em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.team-btn .chev { color: var(--text-3); font-size: 16px; line-height: 10px; margin-top: -6px; }
-.team-menu { left: 0; top: 44px; min-width: 220px; }
-.team-menu .check { margin-left: auto; color: var(--text-2); }
+.team-list {
+  background: var(--panel); border-radius: 22px; box-shadow: var(--shadow); padding: 8px; margin-bottom: 18px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.team-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 14px; text-align: left; transition: background 0.15s; }
+.team-row:hover { background: var(--soft); }
+.team-row.current { background: var(--text); color: #fff; }
+.team-row.current .team-mark { background: #fff; color: var(--text); }
+.team-row.add { color: var(--text-3); }
+.team-row.add:hover { color: var(--text-2); }
+.team-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--text); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }
+.team-mark.plus { background: var(--soft-2); color: var(--text-3); font-size: 20px; font-weight: 600; }
+.team-name { flex: 1; min-width: 0; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .status-menu button:disabled { opacity: 0.4; }
 
 .team-page { flex: 1; min-width: 0; }
@@ -136,9 +141,9 @@ img { display: block; -webkit-user-drag: none; }
 
 .week-band {
   position: absolute; top: 6px; bottom: 10px; border-radius: 18px; background: rgba(10, 132, 255, 0.07);
-  cursor: ew-resize; transition: background 0.15s;
+  cursor: ew-resize; transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1);
 }
-.week-band.anim { transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1); }
+.week-band.no-anim { transition: background 0.15s; }
 .week-band.dragging { transition: background 0.15s, left 0.16s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .week-band:hover, .week-band.dragging { background: rgba(10, 132, 255, 0.12); }
 .week-label {

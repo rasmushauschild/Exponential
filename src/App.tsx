@@ -19,7 +19,6 @@ const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, J
 export default function App() {
   const { data, teams, update, undo, redo, switchTeam, createTeam } = useData();
   const [view, setView] = useState<'plan' | 'team'>('plan');
-  const [teamMenu, setTeamMenu] = useState(false);
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
@@ -67,13 +66,6 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo]);
-
-  useEffect(() => {
-    if (!teamMenu) return;
-    const close = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.team-switch')) setTeamMenu(false); };
-    window.addEventListener('mousedown', close);
-    return () => window.removeEventListener('mousedown', close);
-  }, [teamMenu]);
 
   const notify = (d: Data, n: Omit<Notification, 'id' | 'at' | 'read'>): Data =>
     n.to === n.from ? d : { ...d, notifications: [...(d.notifications ?? []), { ...n, id: uid(), at: new Date().toISOString(), read: false }] };
@@ -205,26 +197,23 @@ export default function App() {
 
   return (
     <div className="shell">
-      <aside className="sidebar">
-        <div className="team-switch">
-          <button className={`team-btn${teamMenu ? ' open' : ''}`} onClick={() => setTeamMenu((o) => !o)}>
-            <span className="team-mark">{data.name.trim()[0]?.toUpperCase()}</span>
-            <span className="team-name">{data.name}</span>
-            <span className="chev">⌄</span>
+      <aside className={`sidebar${window.exponential?.platform === 'darwin' ? ' mac' : ''}`}>
+        <div className="team-list">
+          {teams.map((t) => (
+            <button
+              key={t.id}
+              className={`team-row${t.id === data.id ? ' current' : ''}`}
+              onClick={() => { if (t.id !== data.id) { switchTeam(t.id); setSelection(null); setSelectedPerson(null); } }}
+              title={t.name}
+            >
+              <span className="team-mark">{t.name.trim()[0]?.toUpperCase()}</span>
+              <span className="team-name">{t.name}</span>
+            </button>
+          ))}
+          <button className="team-row add" onClick={() => setSheet('new-team')}>
+            <span className="team-mark plus">+</span>
+            <span className="team-name">New team</span>
           </button>
-          {teamMenu && (
-            <div className="status-menu team-menu">
-              <div className="submenu-title">Your teams</div>
-              {teams.map((t) => (
-                <button key={t.id} className={t.id === data.id ? 'current' : ''} onClick={() => { switchTeam(t.id); setTeamMenu(false); setSelection(null); setSelectedPerson(null); }}>
-                  <span className="team-mark small">{t.name.trim()[0]?.toUpperCase()}</span> {t.name}
-                  {t.id === data.id && <span className="check">✓</span>}
-                </button>
-              ))}
-              <div className="sep" />
-              <button onClick={() => { setTeamMenu(false); setSheet('new-team'); }}><span style={{ width: 18, textAlign: 'center' }}>+</span> New team</button>
-            </div>
-          )}
         </div>
         <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><Icon d="M4 5h16v4H4zM4 11h10v4H4zM4 17h7v2H4z" /> Plan</button>
         <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
