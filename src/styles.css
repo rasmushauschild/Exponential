@@ -457,8 +457,8 @@ img { display: block; -webkit-user-drag: none; }
 .blk:hover .blk-x { opacity: 1; }
 .task-blk { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 0; grid-template-columns: none; }
 .task-blk-title { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-weight: 500; user-select: text; }
-.blk-task.done .blk-task-title, .blk-task.cancelled .task-blk-title { color: var(--text-3); }
-.blk-task.cancelled .task-blk-title { text-decoration: line-through; }
+.task-blk.done .task-blk-title, .task-blk.cancelled .task-blk-title { color: var(--text-3); }
+.task-blk.cancelled .task-blk-title { text-decoration: line-through; }
 .task-blk .claim { opacity: 0; transition: opacity 0.15s; flex: none; }
 .blk:hover .task-blk .claim { opacity: 1; }
 .task-blk .from-chip { cursor: pointer; flex: none; }
