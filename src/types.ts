@@ -39,6 +39,8 @@ export interface Task {
   notes?: string;
   createdBy?: string; // person id when someone else added it
   reviewerId?: string;
+  projectId?: string; // taken from a project's to-do list
+  parentId?: string; // subtask of another task
 }
 
 export type NotificationKind = 'task-added' | 'review-requested' | 'owner-changed' | 'project-changed';

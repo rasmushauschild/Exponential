@@ -439,6 +439,11 @@ export default function App() {
             me={data.me}
             onClose={() => setSelection(null)}
             onOpen={setSelection}
+            tasks={data.tasks}
+            onClaimTodo={(title, link) => update((d) => {
+              const r = addTask(d, d.me, undefined);
+              return { ...r.data, tasks: r.data.tasks.map((t) => (t.id === r.id ? { ...t, title, ...link, createdBy: undefined } : t)) };
+            })}
             onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
             onUpdateProject={updateProject}
             onToggleAssignee={(pid, who) => {

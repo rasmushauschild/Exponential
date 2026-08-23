@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Deadline, ISODate, Notification, Person, Project, Retro, RetroField, Status, Task } from './types';
 import { htmlToMarkdown } from './store';
-import { PROJECT_COLORS, STATUS_LABEL, shortName } from './types';
+import { PROJECT_COLORS, STATUS_COLOR, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { addDays, formatRange, isoWeekNumber } from './dates';
 
@@ -32,6 +32,8 @@ interface Props {
   onOpen: (sel: Selection) => void;
   onMarkRead: (ids: string[]) => void;
   onDelete: () => void;
+  tasks: Task[]; // all tasks of the team, to show who has taken which to-do
+  onClaimTodo: (title: string, link: { projectId?: string; parentId?: string }) => void;
 }
 
 export function DetailPanel(p: Props) {
@@ -151,7 +153,17 @@ export function DetailPanel(p: Props) {
           )}
         </div>
 
-        <MarkdownEditor key={`ed-${item.id}`} value={item.notes ?? ''} onChange={setNotes} />
+        <MarkdownEditor
+          key={`ed-${item.id}`}
+          value={item.notes ?? ''}
+          onChange={setNotes}
+          todos={deadline ? undefined : {
+            people,
+            me,
+            linked: p.tasks.filter((t) => (project ? t.projectId === project.id : t.parentId === task!.id)),
+            onClaim: (title) => p.onClaimTodo(title, project ? { projectId: project.id } : { parentId: task!.id }),
+          }}
+        />
       </div>
       <SendToAgent doc={agentDoc} />
     </aside>
@@ -392,8 +404,15 @@ function PersonSelect({ people, value, me, placeholder, onChange }: {
  * Notes are stored as Markdown. By default they're edited as rich text (a contenteditable that
  * renders the Markdown and converts edits back); a "Markdown" toggle shows the raw source.
  */
-function MarkdownEditor({ value, onChange }: { value: string; onChange: (md: string) => void }) {
-  const [source, setSource] = useState(false);
+export interface TodoContext {
+  people: Person[];
+  me: string;
+  linked: Task[]; // tasks already created from this note's to-dos
+  onClaim: (title: string) => void;
+}
+
+function MarkdownEditor({ value, onChange, todos }: { value: string; onChange: (md: string) => void; todos?: TodoContext }) {
+  const [source] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   const lastEmitted = useRef(value);
   const pending = useRef<string | null>(null);
@@ -408,12 +427,11 @@ function MarkdownEditor({ value, onChange }: { value: string; onChange: (md: str
     timer.current = window.setTimeout(flush, 250);
   };
   useEffect(() => flush, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const toggle = (to: boolean) => { flush(); setSource(to); };
   return (
     <div className="editor">
       {source
-        ? <SourceEditor value={pending.current ?? value} onEmit={emit} onToggle={() => toggle(false)} />
-        : <RichEditor value={value} lastEmitted={lastEmitted} onEmit={emit} onToggle={() => toggle(true)} />}
+        ? <SourceEditor value={pending.current ?? value} onEmit={emit} onToggle={() => {}} />
+        : <RichEditor value={value} lastEmitted={lastEmitted} onEmit={emit} todos={todos} />}
     </div>
   );
 }
@@ -422,9 +440,33 @@ function ToolbarButton({ label, title, onClick, active }: { label: string; title
   return <button className={active ? 'on' : ''} title={title} onMouseDown={(e) => e.preventDefault()} onClick={onClick}>{label}</button>;
 }
 
-function RichEditor({ value, lastEmitted, onEmit, onToggle }: { value: string; lastEmitted: React.MutableRefObject<string>; onEmit: (md: string) => void; onToggle: () => void }) {
+function RichEditor({ value, lastEmitted, onEmit, todos }: { value: string; lastEmitted: React.MutableRefObject<string>; onEmit: (md: string) => void; todos?: TodoContext }) {
   const ref = useRef<HTMLDivElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [todoRows, setTodoRows] = useState<{ top: number; title: string; checked: boolean }[]>([]);
+
+  // Where the to-do lines are, so "Add to my week" buttons can float beside them (outside the editable DOM).
+  const measure = () => {
+    const el = ref.current, wrap = wrapRef.current;
+    if (!el || !wrap || !todos) return;
+    const base = wrap.getBoundingClientRect().top;
+    const rows = Array.from(el.querySelectorAll<HTMLLIElement>('li')).filter((li) => li.querySelector(':scope > input[type=checkbox]')).map((li) => ({
+      top: li.getBoundingClientRect().top - base,
+      title: (li.textContent ?? '').trim(),
+      checked: li.querySelector<HTMLInputElement>(':scope > input[type=checkbox]')!.checked,
+    })).filter((r) => r.title);
+    setTodoRows((prev) => (JSON.stringify(prev) === JSON.stringify(rows) ? prev : rows));
+  };
+  useEffect(() => {
+    if (!todos) return;
+    measure();
+    const el = ref.current!;
+    const mo = new MutationObserver(measure);
+    mo.observe(el, { subtree: true, childList: true, characterData: true, attributes: true });
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => { mo.disconnect(); ro.disconnect(); };
+  }, [todos]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Only re-render the DOM when the value changed from outside (undo, another item), never for our own edits.
   useEffect(() => {
@@ -458,19 +500,19 @@ function RichEditor({ value, lastEmitted, onEmit, onToggle }: { value: string; l
         <ToolbarButton label="H1" title="Heading 1" onClick={() => cmd('formatBlock', 'h1')} />
         <ToolbarButton label="H2" title="Heading 2" onClick={() => cmd('formatBlock', 'h2')} />
         <ToolbarButton label="Text" title="Plain paragraph" onClick={() => cmd('formatBlock', 'p')} />
-        <span className="tb-sep" />
-        <ToolbarButton label="Bold" title="Bold (⌘B)" onClick={() => cmd('bold')} />
-        <ToolbarButton label="Italic" title="Italic (⌘I)" onClick={() => cmd('italic')} />
-        <span className="tb-sep" />
-        <ToolbarButton label="List" title="Bullet list" onClick={() => cmd('insertUnorderedList')} />
-        <ToolbarButton label="1. 2." title="Numbered list" onClick={() => cmd('insertOrderedList')} />
-        <ToolbarButton label="Todo" title="Checkbox item" onClick={() => cmd('insertHTML', '<ul><li><input type="checkbox"> </li></ul>')} />
-        <span className="tb-sep" />
-        <ToolbarButton label="Image" title="Insert image" onClick={() => fileRef.current?.click()} />
-        <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) insertImage(f); e.target.value = ''; }} />
-        <span className="panel-spacer" />
-        <ToolbarButton label="Markdown" title="Edit the Markdown source" onClick={onToggle} />
+        <ToolbarButton label="Todo" title="To-do — teammates can add it to their week" onClick={() => cmd('insertHTML', '<ul><li><input type="checkbox"> </li></ul>')} />
       </div>
+      <div className="rich-wrap" ref={wrapRef}>
+      {todos && todoRows.map((r, i) => {
+        const taken = todos.linked.filter((t) => t.title.trim().toLowerCase() === r.title.toLowerCase());
+        const mine = taken.some((t) => t.personId === todos.me);
+        return (
+          <div key={i} className="todo-actions" style={{ top: r.top }}>
+            {taken.map((t) => { const who = todos.people.find((x) => x.id === t.personId); return who ? <span key={t.id} className="todo-who" title={`${who.name} · ${STATUS_LABEL[t.status]}`}><Avatar person={who} size={18} /><span className="todo-status" style={{ background: STATUS_COLOR[t.status] }} /></span> : null; })}
+            {!mine && !r.checked && <button className="pill small todo-add" onClick={() => todos.onClaim(r.title)}>+ Add to my week</button>}
+          </div>
+        );
+      })}
       <div
         ref={ref}
         className="rich-body"
@@ -483,6 +525,7 @@ function RichEditor({ value, lastEmitted, onEmit, onToggle }: { value: string; l
         onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
         onDrop={(e) => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
       />
+      </div>
     </>
   );
 }

@@ -43,7 +43,7 @@ type TeamRow = { id: string; name: string; icon: string | null; retro_fields: Da
 type MemberRow = { team_id: string; email: string; user_id: string | null; role: 'moderator' | 'member'; color: string; profiles: ProfileRow | null };
 type ProjectRow = { id: string; team_id: string; name: string; start_date: string; end_date: string; lane: number; color: string | null; notes: string | null; assignees: string[] };
 type DeadlineRow = { id: string; team_id: string; name: string; date: string; notes: string | null };
-type TaskRow = { id: string; team_id: string; person_id: string; title: string; date: string | null; end_date: string | null; status: Task['status']; sort_order: number; notes: string | null; created_by: string | null; reviewer_id: string | null };
+type TaskRow = { id: string; team_id: string; person_id: string; title: string; date: string | null; end_date: string | null; status: Task['status']; sort_order: number; notes: string | null; created_by: string | null; reviewer_id: string | null; project_id: string | null; parent_id: string | null };
 type RetroRow = { team_id: string; week: string; answers: Record<string, string>; notes: string | null };
 type NotificationRow = { id: string; team_id: string; to_user: string; from_user: string | null; kind: Notification['kind']; text: string; ref_kind: 'task' | 'project'; ref_id: string; read: boolean; created_at: string };
 
@@ -51,13 +51,13 @@ const und = <T>(v: T | null): T | undefined => (v === null ? undefined : v);
 
 const toProject = (r: ProjectRow): Project => ({ id: r.id, name: r.name, start: r.start_date, end: r.end_date, lane: r.lane, color: und(r.color), notes: und(r.notes), assignees: r.assignees?.length ? r.assignees : undefined });
 const toDeadline = (r: DeadlineRow): Deadline => ({ id: r.id, name: r.name, date: r.date, notes: und(r.notes) });
-const toTask = (r: TaskRow): Task => ({ id: r.id, personId: r.person_id, title: r.title, date: und(r.date), end: und(r.end_date), status: r.status, order: r.sort_order, notes: und(r.notes), createdBy: und(r.created_by), reviewerId: und(r.reviewer_id) });
+const toTask = (r: TaskRow): Task => ({ id: r.id, personId: r.person_id, title: r.title, date: und(r.date), end: und(r.end_date), status: r.status, order: r.sort_order, notes: und(r.notes), createdBy: und(r.created_by), reviewerId: und(r.reviewer_id), projectId: und(r.project_id), parentId: und(r.parent_id) });
 const toRetro = (r: RetroRow): Retro => ({ week: r.week, answers: r.answers ?? {}, notes: und(r.notes) });
 const toNotification = (r: NotificationRow): Notification => ({ id: r.id, to: r.to_user, from: r.from_user ?? '', kind: r.kind, text: r.text, ref: { kind: r.ref_kind, id: r.ref_id }, at: r.created_at, read: r.read });
 
 const fromProject = (teamId: string, p: Project) => ({ id: p.id, team_id: teamId, name: p.name, start_date: p.start, end_date: p.end, lane: p.lane, color: p.color ?? null, notes: p.notes ?? null, assignees: (p.assignees ?? []).filter((a) => !isPending(a)) });
 const fromDeadline = (teamId: string, d: Deadline) => ({ id: d.id, team_id: teamId, name: d.name, date: d.date, notes: d.notes ?? null });
-const fromTask = (teamId: string, t: Task) => ({ id: t.id, team_id: teamId, person_id: t.personId, title: t.title, date: t.date ?? null, end_date: t.end ?? null, status: t.status, sort_order: t.order ?? 0, notes: t.notes ?? null, created_by: t.createdBy ?? null, reviewer_id: t.reviewerId ?? null });
+const fromTask = (teamId: string, t: Task) => ({ id: t.id, team_id: teamId, person_id: t.personId, title: t.title, date: t.date ?? null, end_date: t.end ?? null, status: t.status, sort_order: t.order ?? 0, notes: t.notes ?? null, created_by: t.createdBy ?? null, reviewer_id: t.reviewerId ?? null, project_id: t.projectId ?? null, parent_id: t.parentId ?? null });
 const fromRetro = (teamId: string, r: Retro) => ({ team_id: teamId, week: r.week, answers: r.answers, notes: r.notes ?? null });
 const fromNotification = (teamId: string, n: Notification) => ({ id: n.id, team_id: teamId, to_user: n.to, from_user: n.from || null, kind: n.kind, text: n.text, ref_kind: n.ref.kind, ref_id: n.ref.id, read: n.read });
 
