@@ -11,12 +11,24 @@ npm run dev
 
 This starts Vite and opens the Electron window with hot reload.
 
-## Build installers
+## Releases and auto-update
+
+The app updates itself from GitHub Releases (checked 8 s after launch and every 2 h; a
+"Restart to update" button appears in the sidebar when a new version is downloaded).
+
+To ship a new version: bump `version` in `package.json`, commit, then
 
 ```bash
-npm run dist:mac   # → release/*.dmg
-npm run dist:win   # → release/*.exe (run on Windows, or on a Mac with Wine)
+GH_TOKEN=$(gh auth token) npm run release
 ```
+
+This builds signed `.dmg` + `.zip` for Apple Silicon and Intel and publishes a GitHub release.
+Signing uses the "Developer ID Application" certificate in the keychain. Notarization runs when
+`APPLE_KEYCHAIN_PROFILE` (from `xcrun notarytool store-credentials`) or
+`APPLE_ID` + `APPLE_APP_SPECIFIC_PASSWORD` + `APPLE_TEAM_ID` are set; without it, first-time
+installs need right-click → Open.
+
+`npm run dist:win` builds the Windows installer (unsigned for now).
 
 ## Google sign-in and Calendar (one-time setup)
 

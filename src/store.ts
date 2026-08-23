@@ -18,6 +18,10 @@ declare global {
       closeWidget: () => void;
       isWidget: boolean;
       onWidgetShown: (cb: () => void) => () => void;
+      version: () => Promise<string>;
+      onUpdate: (cb: (s: { state: 'checking' | 'available' | 'none' | 'downloading' | 'ready' | 'error'; version?: string; percent?: number; message?: string }) => void) => () => void;
+      installUpdate: () => void;
+      checkForUpdate: () => void;
       onOpen: (cb: (target: { kind: string; id: string }) => void) => () => void;
       platform: string;
       google: {

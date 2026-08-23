@@ -122,6 +122,8 @@ img { display: block; -webkit-user-drag: none; }
 .nav-item:hover:not(.active) { background: var(--ov-35); }
 .sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
 .theme-toggle { color: var(--text-2); }
+.update-pill { color: var(--accent); font-weight: 600; }
+.update-pill.quiet { color: var(--text-3); font-weight: 500; cursor: default; }
 .theme-toggle svg { flex: none; }
 .account {
   display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 15px; border-radius: 14px; width: 100%; text-align: left;

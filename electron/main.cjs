@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Tray, nativeImage, screen } = require('elec
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
+const { autoUpdater } = require('electron-updater');
 
 const dataFile = () => path.join(app.getPath('userData'), 'exponential-data.json');
 const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
@@ -127,7 +128,28 @@ ipcMain.handle('google:signOut', () => google.signOut());
 ipcMain.handle('google:idToken', () => google.idToken());
 ipcMain.handle('google:events', (_e, calendarId, from, to) => google.events(calendarId, from, to));
 
+/** Auto-update from GitHub Releases: check shortly after launch and every two hours; install on request. */
+function setupUpdates() {
+  if (!app.isPackaged) return;
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+  const tell = (state, info) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('update:state', { state, ...info }); };
+  autoUpdater.on('checking-for-update', () => tell('checking'));
+  autoUpdater.on('update-available', (i) => tell('available', { version: i.version }));
+  autoUpdater.on('update-not-available', () => tell('none'));
+  autoUpdater.on('download-progress', (p) => tell('downloading', { percent: Math.round(p.percent) }));
+  autoUpdater.on('update-downloaded', (i) => tell('ready', { version: i.version }));
+  autoUpdater.on('error', (e) => { console.error('[updater]', e); tell('error', { message: String(e?.message ?? e) }); });
+  const check = () => autoUpdater.checkForUpdates().catch(() => {});
+  setTimeout(check, 8_000);
+  setInterval(check, 2 * 60 * 60 * 1000);
+}
+ipcMain.on('update:install', () => { if (app.isPackaged) autoUpdater.quitAndInstall(); });
+ipcMain.on('update:check', () => { if (app.isPackaged) autoUpdater.checkForUpdates().catch(() => {}); });
+ipcMain.handle('app:version', () => app.getVersion());
+
 app.whenReady().then(() => {
+  setupUpdates();
   // In development the dock shows Electron's own icon unless we set ours.
   if (process.platform === 'darwin' && app.dock) app.dock.setIcon(iconPath);
   createMainWindow();

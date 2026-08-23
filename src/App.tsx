@@ -22,6 +22,12 @@ const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, J
 export default function App() {
   const { data, teams, update, undo, redo, switchTeam, createTeam, deleteTeam, connectCloud, cloudMode } = useData();
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [updateInfo, setUpdateState] = useState<{ state: string; version?: string; percent?: number } | null>(null);
+  const [appVersion, setAppVersion] = useState('');
+  useEffect(() => {
+    window.exponential?.version().then(setAppVersion);
+    return window.exponential?.onUpdate((s) => setUpdateState(s.state === 'none' || s.state === 'checking' ? null : s));
+  }, []);
   const [view, setView] = useState<'plan' | 'team'>('plan');
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
@@ -285,6 +291,16 @@ export default function App() {
         </button>
 
         <div className="sidebar-bottom">
+          {updateInfo?.state === 'ready' && (
+            <button className="nav-item update-pill" onClick={() => window.exponential?.installUpdate()} title={`Version ${updateInfo.version} is ready — restart to update`}>
+              <UpdateIcon /> <span className="nav-text">Restart to update</span>
+            </button>
+          )}
+          {updateInfo?.state === 'downloading' && (
+            <div className="nav-item update-pill quiet" title={`Downloading version ${updateInfo.version ?? ''}`}>
+              <UpdateIcon /> <span className="nav-text">Updating… {updateInfo.percent ?? 0}%</span>
+            </div>
+          )}
           <button className="nav-item theme-toggle" onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             <span className="nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
@@ -477,6 +493,7 @@ export default function App() {
           onSaveConfig={async (c) => { await window.exponential?.google.setConfig(c); setGoogleConfig(c); }}
           onSignIn={signIn}
           onSignOut={signOut}
+          appVersionText={appVersion ? `Exponential ${appVersion}` : undefined}
         />
       )}
     </div>
@@ -521,6 +538,15 @@ function SunIcon() {
     <svg {...ICON}>
       <circle cx="12" cy="12" r="3.6" />
       <path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7L18 18M6 18l1.3-1.3M16.7 7.3L18 6" />
+    </svg>
+  );
+}
+
+function UpdateIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M12 16V5M7.5 9.5L12 5l4.5 4.5" />
+      <path d="M5 18.5h14" />
     </svg>
   );
 }
@@ -660,7 +686,8 @@ function SignInGate({ config, error, onSaveConfig, onSignIn }: {
   );
 }
 
-function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, onSignOut }: {
+function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, onSignOut, appVersionText }: {
+  appVersionText?: string;
   user: GoogleUser | null;
   config: GoogleConfig | null;
   error: string | null;
@@ -689,6 +716,7 @@ function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, o
       {user ? (
         <>
           <p className="muted">Signed in as <b>{user.name}</b> ({user.email}). Your name and photo come from Google, and the Calendar toggle in the week panel reads your calendar.</p>
+          {appVersionText && <p className="hint">{appVersionText}</p>}
           <div className="sheet-actions">
             <button className="btn" onClick={() => { onSignOut(); onClose(); }}>Sign out</button>
             <button className="btn primary" onClick={onClose}>Done</button>
