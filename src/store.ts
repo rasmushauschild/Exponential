@@ -189,6 +189,7 @@ export function useData() {
   cloudRef.current = cloud;
   const inflight = useRef(0);
   const reloadWanted = useRef(false);
+  const editSeq = useRef(0); // bumps on every local edit; a reload that started before an edit must not overwrite it
 
   useEffect(() => {
     load().then((w) => { wsRef.current = w; setWs(w); });
@@ -209,9 +210,11 @@ export function useData() {
     const id = teamId ?? c.data?.id;
     if (!id) return;
     if (inflight.current > 0) { reloadWanted.current = true; return; } // don't clobber edits still being written
+    const seqAtStart = editSeq.current;
     const [data, teams] = await Promise.all([loadTeam(id, c.me), listMyTeams()]);
     const cur = cloudRef.current;
     if (!cur || (cur.data && cur.data.id !== id)) return; // switched meanwhile
+    if (editSeq.current !== seqAtStart) { reloadWanted.current = true; return; } // stale: an edit happened while fetching
     setCloud({ me: cur.me, teams, data });
   }, []);
 
@@ -275,6 +278,7 @@ export function useData() {
   }, [teamId, me, reload]);
 
   const writeDiff = (prev: Data, next: Data) => {
+    editSeq.current++;
     inflight.current++;
     persistDiff(prev, next).finally(() => {
       inflight.current--;
@@ -311,6 +315,7 @@ export function useData() {
     }
     lastKey.current = coalesceKey;
     future.current = [];
+    editSeq.current++;
     commit(next);
     if (cloudRef.current) writeDiff(prev, next);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

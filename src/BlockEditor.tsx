@@ -74,16 +74,23 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
 
   // Adopt outside changes (undo, another person) but never our own echo.
   useEffect(() => {
-    if (value !== lastEmitted.current) { lastEmitted.current = value; setBlocks(withOrphans(parseBlocks(value), tasks)); }
+    if (value !== lastEmitted.current && pending.current === null) { lastEmitted.current = value; setBlocks(withOrphans(parseBlocks(value), tasks)); }
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tasks created elsewhere (e.g. in the week view) for this project get a block appended.
   useEffect(() => { setBlocks((b) => { const n = withOrphans(b, tasks); return n.length === b.length ? b : n; }); }, [tasks]);
 
+  // Emit Markdown on a short pause rather than every keystroke; flush when the editor goes away.
+  const pending = useRef<string | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const flush = () => { window.clearTimeout(timer.current); if (pending.current !== null) { onChange(pending.current); pending.current = null; } };
+  useEffect(() => flush, []); // eslint-disable-line react-hooks/exhaustive-deps
   const commit = (next: Block[]) => {
     setBlocks(next);
     const md = serializeBlocks(next, tasks);
     lastEmitted.current = md;
-    onChange(md);
+    pending.current = md;
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(flush, 350);
   };
   const setBlock = (i: number, patch: Partial<Block>) => commit(blocks.map((b, j) => (j === i ? ({ ...b, ...patch } as Block) : b)));
   const insertAt = (i: number, b: Block, caret: Caret = 'start') => { commit([...blocks.slice(0, i), b, ...blocks.slice(i)]); setFocus({ index: i, caret }); };
