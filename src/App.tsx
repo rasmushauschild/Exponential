@@ -10,7 +10,7 @@ import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
-const DEFAULT_PREFS = { weekH: 400, detailW: 415 };
+const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark' };
 const prefs: typeof DEFAULT_PREFS = (() => {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
 })();
@@ -29,7 +29,9 @@ export default function App() {
   const [resizing, setResizing] = useState(false);
   const [detailW, setDetailW] = useState(() => prefs.detailW);
 
-  useEffect(() => { savePrefs({ weekH, detailW }); }, [weekH, detailW]);
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => prefs.theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
+  useEffect(() => { savePrefs({ weekH, detailW, theme }); }, [weekH, detailW, theme]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -224,6 +226,12 @@ export default function App() {
         </button>
 
         <div className="sidebar-bottom">
+          <button className="nav-item theme-toggle" onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+            {theme === 'dark'
+              ? <Icon d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 100 8 4 4 0 000-8z" />
+              : <Icon d="M20 14.5A8 8 0 119.5 4a6.5 6.5 0 0010.5 10.5z" />}
+            <span className="nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          </button>
           {googleUser ? (
             <button className="account" onClick={() => setSheet('settings')} title={googleUser.email}>
               <Avatar person={me} size={28} />

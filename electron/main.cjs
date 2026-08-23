@@ -11,7 +11,7 @@ function createWindow() {
     height: 860,
     minWidth: 900,
     minHeight: 600,
-    backgroundColor: '#f3f3f5',
+    backgroundColor: '#f2f2f4',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 26, y: 24 },
     webPreferences: {
