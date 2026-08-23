@@ -28,7 +28,7 @@ export default function App() {
   useEffect(() => onPersistError((m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 8000); }), []);
   useEffect(() => {
     window.exponential?.version().then(setAppVersion);
-    return window.exponential?.onUpdate((s) => setUpdateState(s.state === 'checking' ? null : s));
+    return window.exponential?.onUpdate((s) => setUpdateState((prev) => (s.state === 'checking' ? prev : s)));
   }, []);
   const [view, setView] = useState<'plan' | 'team'>('plan');
   const [today, setToday] = useState(todayISO());
@@ -294,6 +294,19 @@ export default function App() {
         </button>
 
         <div className="sidebar-bottom">
+          {(!updateInfo || updateInfo.state === 'none' || updateInfo.state === 'error' || updateInfo.state === 'available') && (
+            <button
+              className="nav-item theme-toggle"
+              onClick={() => { setUpdateState({ state: 'checking-ui' }); window.exponential?.checkForUpdate(); window.setTimeout(() => setUpdateState((u) => (u?.state === 'checking-ui' ? { state: 'none' } : u)), 15000); }}
+              title={updateInfo?.state === 'error' ? `Update failed: ${(updateInfo as { message?: string }).message ?? ''}` : `Exponential ${appVersion} — check GitHub for a newer version`}
+            >
+              <UpdateIcon />
+              <span className="nav-text">{updateInfo?.state === 'none' ? 'Up to date' : updateInfo?.state === 'error' ? 'Update failed' : 'Check for updates'}</span>
+            </button>
+          )}
+          {updateInfo?.state === 'checking-ui' && (
+            <div className="nav-item update-pill quiet"><UpdateIcon /> <span className="nav-text">Checking…</span></div>
+          )}
           {updateInfo?.state === 'ready' && (
             <button className="nav-item update-pill" onClick={() => window.exponential?.installUpdate()} title={`Version ${updateInfo.version} is ready — restart to update`}>
               <UpdateIcon /> <span className="nav-text">Restart to update</span>
@@ -554,7 +567,6 @@ export default function App() {
           onSignOut={signOut}
           appVersionText={appVersion ? `Exponential ${appVersion}` : undefined}
           updateText={updateInfo ? (updateInfo.state === 'error' ? `update failed: ${(updateInfo as { message?: string }).message ?? 'unknown'}` : updateInfo.state === 'none' ? 'up to date' : updateInfo.state === 'ready' ? `v${updateInfo.version} ready` : updateInfo.state) : undefined}
-          onCheckUpdate={() => window.exponential?.checkForUpdate()}
         />
       )}
     </div>
@@ -775,10 +787,9 @@ function SignInGate({ config, error, onSaveConfig, onSignIn }: {
   );
 }
 
-function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, onSignOut, appVersionText, updateText, onCheckUpdate }: {
+function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, onSignOut, appVersionText, updateText }: {
   appVersionText?: string;
   updateText?: string;
-  onCheckUpdate: () => void;
   user: GoogleUser | null;
   config: GoogleConfig | null;
   error: string | null;
@@ -807,7 +818,7 @@ function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, o
       {user ? (
         <>
           <p className="muted">Signed in as <b>{user.name}</b> ({user.email}). Your name and photo come from Google, and the Calendar toggle in the week panel reads your calendar.</p>
-          {appVersionText && <p className="hint">{appVersionText}{updateText ? ` · ${updateText}` : ''} <button className="pill small" style={{ marginLeft: 8 }} onClick={onCheckUpdate}>Check for updates</button></p>}
+          {appVersionText && <p className="hint">{appVersionText}{updateText ? ` · ${updateText}` : ''}</p>}
           <div className="sheet-actions">
             <button className="btn" onClick={() => { onSignOut(); onClose(); }}>Sign out</button>
             <button className="btn primary" onClick={onClose}>Done</button>
