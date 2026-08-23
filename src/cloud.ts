@@ -77,6 +77,11 @@ export async function createTeam(name: string): Promise<string> {
   return data as string;
 }
 
+export async function deleteTeam(id: string) {
+  const { error } = await supabase.from('teams').delete().eq('id', id);
+  if (error) throw error;
+}
+
 export async function loadTeam(teamId: string, me: string): Promise<Data> {
   const [team, members, projects, deadlines, tasks, retros, notifications] = await Promise.all([
     supabase.from('teams').select('id, name, icon, retro_fields').eq('id', teamId).single(),

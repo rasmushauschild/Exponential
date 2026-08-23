@@ -469,6 +469,11 @@ img { display: block; -webkit-user-drag: none; }
 .retro-config-row { display: flex; gap: 8px; align-items: center; }
 .retro-config-row .member-input { background: var(--soft); }
 .retro-config .add-task { padding: 6px 4px; }
+.danger-zone { margin-top: 28px; padding-top: 18px; }
+.pill.danger { color: var(--today); }
+.btn.danger-btn { background: var(--today); color: #fff; box-shadow: none; }
+.btn.danger-btn:hover { filter: brightness(0.92); }
+.confirm-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--text-2); line-height: 1.4; }
 .team-title-input { background: transparent; border-radius: 10px; padding: 2px 8px; margin-left: -8px; user-select: text; width: auto; min-width: 120px; }
 .team-title-input:hover, .team-title-input:focus { background: var(--soft); }
 

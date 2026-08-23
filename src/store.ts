@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CalendarEvent, Data, GoogleUser, ISODate, Project, Workspace } from './types';
 import { addDays, todayISO, weekStart } from './dates';
-import { createTeam as cloudCreateTeam, ensureProfile, ensureSession, listMyTeams, loadTeam, persistDiff, subscribeTeam, supabase, type TeamSummary } from './cloud';
+import { createTeam as cloudCreateTeam, deleteTeam as cloudDeleteTeam, ensureProfile, ensureSession, listMyTeams, loadTeam, persistDiff, subscribeTeam, supabase, type TeamSummary } from './cloud';
 
 export interface GoogleConfig {
   clientId: string;
@@ -223,15 +223,44 @@ export function useData() {
       if (!me) return false;
       await ensureProfile();
     }
-    let teams = await listMyTeams();
-    if (teams.length === 0) { await cloudCreateTeam('My team'); teams = await listMyTeams(); }
+    const teams = await listMyTeams();
     const saved = localStorage.getItem(CURRENT_TEAM_KEY);
-    const teamId = teams.some((t) => t.id === saved) ? saved! : teams[0].id;
-    const data = await loadTeam(teamId, me);
+    const teamId = teams.length ? (teams.some((t) => t.id === saved) ? saved! : teams[0].id) : null;
+    const data = teamId ? await loadTeam(teamId, me) : null; // no teams yet: the app shows the create/wait screen
     past.current = []; future.current = []; lastKey.current = undefined;
     setCloud({ me, teams, data });
     return true;
   }, []);
+
+  // Invites land as team_members rows we can't subscribe to before we're a member, so re-check the
+  // team list when the window regains focus and every 30s (ensure_profile attaches pending invites).
+  useEffect(() => {
+    if (!cloud) return;
+    let busy = false;
+    const check = async () => {
+      if (busy || !cloudRef.current) return;
+      busy = true;
+      try {
+        await ensureProfile();
+        const teams = await listMyTeams();
+        const cur = cloudRef.current;
+        if (!cur) return;
+        const changed = JSON.stringify(teams) !== JSON.stringify(cur.teams);
+        const lostCurrent = cur.data && !teams.some((t) => t.id === cur.data!.id);
+        if (lostCurrent) {
+          const data = teams.length ? await loadTeam(teams[0].id, cur.me) : null;
+          setCloud({ me: cur.me, teams, data });
+        } else if (changed) {
+          const data = cur.data ?? (teams.length ? await loadTeam(teams[0].id, cur.me) : null);
+          setCloud({ me: cur.me, teams, data });
+        }
+      } catch (e) { console.warn('[cloud] team check', e); }
+      finally { busy = false; }
+    };
+    const iv = window.setInterval(check, 30_000);
+    window.addEventListener('focus', check);
+    return () => { window.clearInterval(iv); window.removeEventListener('focus', check); };
+  }, [!!cloud]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Realtime: one channel per open team.
   const teamId = cloud?.data?.id;
@@ -337,9 +366,25 @@ export function useData() {
     commitLocal({ teams: [...w.teams, team], current: team.id });
   }, []);
 
+  const deleteTeam = useCallback(async (id: string) => {
+    const c = cloudRef.current;
+    if (c) {
+      await cloudDeleteTeam(id);
+      const teams = await listMyTeams();
+      const data = teams.length ? await loadTeam(teams[0].id, c.me) : null;
+      past.current = []; future.current = []; lastKey.current = undefined;
+      setCloud({ me: c.me, teams, data });
+      return;
+    }
+    const w = wsRef.current;
+    if (!w || w.teams.length <= 1) return;
+    const teams = w.teams.filter((t) => t.id !== id);
+    commitLocal({ teams, current: w.current === id ? teams[0].id : w.current });
+  }, []);
+
   const current = (w: Workspace) => w.teams.find((t) => t.id === w.current)!;
 
   const data = cloud ? cloud.data : ws ? current(ws) : null;
   const teams: TeamSummary[] = cloud ? cloud.teams : (ws?.teams ?? []).map((t) => ({ id: t.id, name: t.name, icon: t.icon }));
-  return { data, teams, update, undo, redo, switchTeam, createTeam, connectCloud, cloudMode: !!cloud };
+  return { data, teams, update, undo, redo, switchTeam, createTeam, deleteTeam, connectCloud, cloudMode: !!cloud };
 }

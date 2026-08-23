@@ -9,11 +9,14 @@ import { isPending, pendingId } from './cloud';
 interface Props {
   team: Data;
   cloud: boolean; // members are invited by Google email and join when they sign in
+  canDelete: boolean;
   onUpdate: (fn: (d: Data) => Data) => void;
+  onDelete: () => void;
 }
 
 /** Members of the current team. Moderators can add, remove, and promote/demote. */
-export function TeamPage({ team, cloud, onUpdate }: Props) {
+export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const isMod = team.moderators.includes(team.me);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
@@ -146,6 +149,21 @@ export function TeamPage({ team, cloud, onUpdate }: Props) {
           );
         })}
         {!isMod && <p className="hint" style={{ padding: '14px 12px' }}>Ask a moderator to add or remove people.</p>}
+
+        {isMod && canDelete && (
+          <div className="settings-block danger-zone">
+            <div className="settings-title">Danger zone</div>
+            {confirmDelete ? (
+              <div className="confirm-row">
+                <span>Delete <b>{team.name}</b> with all its projects, tasks and retros for everyone? This can't be undone.</span>
+                <button className="btn danger-btn" onClick={onDelete}>Delete team</button>
+                <button className="btn" onClick={() => setConfirmDelete(false)}>Keep it</button>
+              </div>
+            ) : (
+              <button className="pill danger" onClick={() => setConfirmDelete(true)}>Delete team…</button>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );

@@ -20,7 +20,7 @@ const prefs: typeof DEFAULT_PREFS = (() => {
 const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, JSON.stringify(p));
 
 export default function App() {
-  const { data, teams, update, undo, redo, switchTeam, createTeam, connectCloud, cloudMode } = useData();
+  const { data, teams, update, undo, redo, switchTeam, createTeam, deleteTeam, connectCloud, cloudMode } = useData();
   const [cloudError, setCloudError] = useState<string | null>(null);
   const [view, setView] = useState<'plan' | 'team'>('plan');
   const [today, setToday] = useState(todayISO());
@@ -215,7 +215,22 @@ export default function App() {
       </div>
     );
   }
-  if (!data) return null;
+  if (!data) {
+    // Signed in but in no team yet: create one, or wait for an invite (the list re-checks on focus).
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <img className="gate-logo" src={logoUrl} alt="" />
+          <h1>You're not in a team yet</h1>
+          <p className="muted" style={{ maxWidth: 380 }}>Ask a teammate to invite <b>{googleUser?.email}</b> from their Team page — it shows up here by itself — or start a team of your own.</p>
+          <button className="gate-btn" onClick={() => setSheet('new-team')}>Create a team</button>
+        </div>
+        {sheet === 'new-team' && (
+          <NewTeamSheet onClose={() => setSheet(null)} onCreate={(name) => { createTeam(name); }} />
+        )}
+      </div>
+    );
+  }
 
   const onResizeDown = (e: React.PointerEvent) => {
     const rect = mainRef.current!.getBoundingClientRect();
@@ -290,7 +305,15 @@ export default function App() {
       </aside>
 
       <div className={`main${detailOpen ? ' with-detail' : ''}`}>
-        {view === 'team' && <TeamPage team={data} cloud={cloudMode} onUpdate={(fn) => update(fn)} />}
+        {view === 'team' && (
+          <TeamPage
+            team={data}
+            cloud={cloudMode}
+            canDelete={cloudMode || teams.length > 1}
+            onUpdate={(fn) => update(fn)}
+            onDelete={() => { setView('plan'); setSelection(null); setSelectedPerson(null); deleteTeam(data.id); }}
+          />
+        )}
         <div className="planners" ref={mainRef} style={view === 'team' ? { display: 'none' } : undefined}>
           <section className="panel" style={{ flex: '1 1 0' }}>
             <div className="panel-head">
