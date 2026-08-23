@@ -19,7 +19,9 @@ interface Props {
   today: ISODate;
   week: ISODate;
   selectedId?: string;
+  selectedIds?: Set<string>; // multi-selection (shift/cmd-click)
   editingId?: string;
+  onToggleSelect: (id: string) => void;
   onWeekChange: (monday: ISODate) => void;
   onOpenProject: (p: Project) => void;
   onOpenDeadline: (d: Deadline) => void;
@@ -40,7 +42,7 @@ type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: nu
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, deadlines, people, today, week, selectedId, editingId, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline } = props;
+  const { projects, deadlines, people, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -54,6 +56,10 @@ export function BigPlan(props: Props) {
   const [hoverCursor, setHoverCursor] = useState<string>('');
   const [ghost, setGhost] = useState<{ day: number; lane: number } | null>(null);
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
+  const [scrollY, setScrollY] = useState(0); // vertical offset of the lanes when they don't fit
+  const scrollRef = useRef(0);
+  scrollRef.current = scrollY;
+  const laneCount = projects.reduce((m, p) => Math.max(m, p.lane + 1), 0) + 1;
   const weekRef = useRef(week);
   weekRef.current = week;
   // The band eases between weeks by default; while the timeline itself moves (pan/zoom) it must
@@ -82,7 +88,7 @@ export function BigPlan(props: Props) {
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       const v = viewRef.current;
-      if (!(e.ctrlKey || e.metaKey) && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      if (!(e.ctrlKey || e.metaKey) && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) { setScrollY(clampRef.current(scrollRef.current + e.deltaY)); return; }
       touchView();
       if (e.ctrlKey || e.metaKey) {
         const mx = e.clientX - el.getBoundingClientRect().left;
@@ -90,8 +96,8 @@ export function BigPlan(props: Props) {
         const dayUnderCursor = v.origin + mx / v.ppd;
         viewRef.current = { ppd: next, origin: dayUnderCursor - mx / next };
       } else {
-        // Only sideways scrolling pans the timeline; vertical wheel movement is ignored.
-        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+        // Sideways scrolling pans the timeline; vertical scrolling moves the lanes when they overflow.
+        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) { setScrollY(clampRef.current(scrollRef.current + e.deltaY)); return; }
         viewRef.current = { ppd: v.ppd, origin: v.origin + e.deltaX / v.ppd };
       }
       setView(viewRef.current);
@@ -113,13 +119,18 @@ export function BigPlan(props: Props) {
   };
 
   const projectTop = HEADER_H + DEADLINE_ROW_H + 10; // the deadline row is always there (hover it to add one)
+  const contentH = projectTop + laneCount * ROW_H + RETRO_H;
+  const clampScroll = (y: number) => Math.max(0, Math.min(y, Math.max(0, contentH - height)));
+  const clampRef = useRef(clampScroll);
+  clampRef.current = clampScroll; // the wheel listener is bound once; it must see the current sizes
+  useEffect(() => { setScrollY((y) => clampScroll(y)); }, [height, laneCount]); // eslint-disable-line react-hooks/exhaustive-deps
   const inDeadlineRow = (clientY: number) => { const y = clientY - ref.current!.getBoundingClientRect().top; return y >= HEADER_H && y < HEADER_H + DEADLINE_ROW_H; };
   const inRetroStrip = (clientY: number) => clientY - ref.current!.getBoundingClientRect().top > height - RETRO_H;
 
   const slotAt = (clientX: number, clientY: number) => {
     const rect = ref.current!.getBoundingClientRect();
     const day = Math.floor(origin + (clientX - rect.left) / ppd);
-    const lane = Math.floor((clientY - rect.top - projectTop) / ROW_H);
+    const lane = Math.floor((clientY - rect.top + scrollY - projectTop) / ROW_H);
     return { day, lane };
   };
 
@@ -180,6 +191,7 @@ export function BigPlan(props: Props) {
     const mode: Drag['mode'] = local < EDGE ? 'start' : bar.width - local < EDGE ? 'end' : 'move';
     const s0 = dayIndex(p.start), e0 = dayIndex(p.end), lane0 = p.lane;
     const startX = e.clientX, startY = e.clientY;
+    const multi = e.metaKey || e.shiftKey || e.ctrlKey;
     const d: Drag = { id: p.id, mode, start: s0, end: e0, lane: lane0, moved: false };
     setDrag(d);
     let latest = d;
@@ -195,7 +207,7 @@ export function BigPlan(props: Props) {
       },
       () => {
         setDrag(null);
-        if (!latest.moved) onOpenProject(p);
+        if (!latest.moved) { if (multi) onToggleSelect(p.id); else onOpenProject(p); }
         else onMoveProject(p.id, { start: fromDayIndex(latest.start), end: fromDayIndex(latest.end), lane: latest.lane });
       },
     );
@@ -207,6 +219,7 @@ export function BigPlan(props: Props) {
     e.preventDefault();
     const startX = e.clientX;
     const d0 = dayIndex(d.date);
+    const multi = e.metaKey || e.shiftKey || e.ctrlKey;
     let latest = d0, moved = false;
     setDlDrag({ id: d.id, date: d0 });
     track(
@@ -217,7 +230,7 @@ export function BigPlan(props: Props) {
       },
       () => {
         setDlDrag(null);
-        if (!moved) onOpenDeadline(d);
+        if (!moved) { if (multi) onToggleSelect(d.id); else onOpenDeadline(d); }
         else if (latest !== d0) onMoveDeadline(d.id, fromDayIndex(latest));
       },
     );
@@ -313,11 +326,6 @@ export function BigPlan(props: Props) {
         )}
       </div>
 
-      {ghost && !drag && ghost.lane >= 0 && (
-        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: projectTop + ghost.lane * ROW_H }}>
-          New project
-        </div>
-      )}
       {ghost && !drag && ghost.lane === -1 && (
         <div className="tl-deadline ghost" style={{ left: (ghost.day - origin) * ppd + ppd / 2, top: HEADER_H }}>
           <span className="dot" /><span className="label">New deadline</span>
@@ -332,7 +340,7 @@ export function BigPlan(props: Props) {
         return (
           <div
             key={d.id}
-            className={`tl-deadline${selectedId === d.id ? ' selected' : ''}${dlDrag?.id === d.id ? ' live' : ''}`}
+            className={`tl-deadline${selectedId === d.id || selectedIds?.has(d.id) ? ' selected' : ''}${dlDrag?.id === d.id ? ' live' : ''}`}
             style={{ left, top: HEADER_H, maxWidth: Math.max(22, room + 22) }}
             onPointerDown={(e) => onDeadlineDown(e, d)}
             title={`${d.name} · ${formatShort(d.date)}`}
@@ -347,6 +355,12 @@ export function BigPlan(props: Props) {
         );
       })}
 
+      <div className="tl-lanes" style={{ top: projectTop - 6 }}>
+      {ghost && !drag && ghost.lane >= 0 && (
+        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: 6 + ghost.lane * ROW_H - scrollY }}>
+          New project
+        </div>
+      )}
       {projects.map((p, i) => {
         const live = drag?.id === p.id ? drag : null;
         const s = live ? live.start : dayIndex(p.start);
@@ -359,11 +373,11 @@ export function BigPlan(props: Props) {
         return (
           <div
             key={p.id}
-            className={`tl-project${selectedId === p.id ? ' selected' : ''}${live ? ' live' : ''}`}
+            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live ? ' live' : ''}`}
             style={{
               left,
               width: w,
-              top: projectTop + lane * ROW_H,
+              top: 6 + lane * ROW_H - scrollY,
               ['--pc' as string]: color,
               paddingLeft: Math.max(12, Math.min(w - 12, 12 - left)),
               cursor: live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
@@ -386,6 +400,7 @@ export function BigPlan(props: Props) {
           </div>
         );
       })}
+      </div>
 
       <div className="today-line" style={{ left: x(today) + ppd / 2 }} />
 

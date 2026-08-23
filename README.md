@@ -52,7 +52,8 @@ next step (see below).
 
 | Where | Action |
 | --- | --- |
-| Master plan | Pinch (or ⌘/Ctrl + scroll) to zoom, scroll or drag empty space to pan |
+| Master plan | Pinch (or ⌘/Ctrl + scroll) to zoom, scroll sideways or drag empty space to pan, scroll vertically when the rows overflow |
+| Anywhere | Shift/⌘-click projects, deadlines and tasks to select several; Backspace/Delete removes them, Escape clears the selection |
 | Master plan | Drag the blue week band to choose the week shown below |
 | Master plan | Drag a project to move it (left/right = dates, up/down = row); drag either end to stretch it |
 | Master plan | Click a project or deadline star to open its details on the right; drag a star to move a deadline |

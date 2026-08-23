@@ -70,6 +70,7 @@ export default function Widget() {
           today={today}
           tasks={data.tasks.filter((t) => t.personId === who && (!t.date || (t.date <= addDaysISO(week, 6) && (t.end ?? t.date) >= week)))}
           editingId={editingId ?? undefined}
+          onToggleSelect={() => {}}
           onAdd={(date) => { let id = ''; update((d) => { const r = addTask(d, who, date); id = r.id; return r.data; }); setEditingId(id); }}
           onRename={(id, title) => { setEditingId(null); update((d) => renameTask(d, id, title)); }}
           onUpdate={(id, patch) => update((d) => patchTask(d, id, patch))}

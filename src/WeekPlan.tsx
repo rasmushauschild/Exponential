@@ -17,7 +17,9 @@ interface Props {
   today: ISODate;
   tasks: Task[];
   selectedId?: string;
+  selectedIds?: Set<string>;
   editingId?: string;
+  onToggleSelect: (id: string) => void;
   onAdd: (date?: ISODate) => void;
   onRename: (id: string, title: string) => void;
   onUpdate: (id: string, patch: Partial<Task>) => void;
@@ -32,7 +34,7 @@ interface Props {
 
 /** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, editingId, onAdd, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const readonly = selected !== me;
   const todayIdx = dayIndex(today) - dayIndex(week);
@@ -160,11 +162,12 @@ export function WeekPlan(props: Props) {
                 readonly={readonly && editingId !== t.id}
                 people={people}
                 me={me}
-                selected={selectedId === t.id}
+                selected={selectedId === t.id || !!selectedIds?.has(t.id)}
                 editing={editingId === t.id}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 onOpen={onOpen}
+                onToggleSelect={onToggleSelect}
                 onRename={onRename}
                 offset={rowOffset(t)}
                 lifting={lift?.id === t.id}
@@ -227,7 +230,7 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onRename, offset, lifting, onLift, onDrop }: {
+function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onToggleSelect, onRename, offset, lifting, onLift, onDrop }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
@@ -238,6 +241,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   onUpdate: Props['onUpdate'];
   onDelete: Props['onDelete'];
   onOpen: Props['onOpen'];
+  onToggleSelect: Props['onToggleSelect'];
   onRename: Props['onRename'];
   offset: number;
   lifting: boolean;
@@ -275,6 +279,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     const colW = rect.width / 7;
     const startX = e.clientX, startY = e.clientY;
     const rowH = rowRef.current?.offsetHeight ?? 36;
+    const multi = e.metaKey || e.shiftKey || e.ctrlKey;
     let moved = false;
     let axis: 'x' | 'y' | null = null; // decided by the first clear movement
     let latest: BlockDrag = { mode, s: s0, e: e0 };
@@ -294,7 +299,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
       window.removeEventListener('pointerup', up);
       setLive(null);
       if (axis === 'y') { onDrop(); return; }
-      if (!moved) onOpen(task);
+      if (!moved) { if (multi) onToggleSelect(task.id); else onOpen(task); }
       else if (latest.s !== s0 || latest.e !== e0) {
         onUpdate(task.id, { date: addDays(week, latest.s), end: latest.e === latest.s ? undefined : addDays(week, latest.e) });
       }
@@ -309,6 +314,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     e.preventDefault();
     const startY = e.clientY;
     const rowH = rowRef.current?.offsetHeight ?? 36;
+    const multi = e.metaKey || e.shiftKey || e.ctrlKey;
     let moved = false;
     const move = (ev: PointerEvent) => {
       const dy = ev.clientY - startY;
@@ -318,7 +324,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      if (!moved) onOpen(task);
+      if (!moved) { if (multi) onToggleSelect(task.id); else onOpen(task); }
       else onDrop();
     };
     window.addEventListener('pointermove', move);

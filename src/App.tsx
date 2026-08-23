@@ -27,6 +27,8 @@ export default function App() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | 'new-team' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [multi, setMulti] = useState<Set<string>>(new Set()); // shift/cmd-click selection across both panels
+  const toggleSelect = (id: string) => setMulti((m) => { const n = new Set(m); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const [resizing, setResizing] = useState(false);
   const [detailW, setDetailW] = useState(() => prefs.detailW);
   const [slotAnimating, setSlotAnimating] = useState(false); // clip the slot only while its width is changing
@@ -65,18 +67,29 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
-  // ⌘Z / ⌘⇧Z (Ctrl on Windows). Text fields keep their own undo while focused.
+  // ⌘Z / ⌘⇧Z (Ctrl on Windows); Backspace/Delete removes the multi-selection; Escape clears it.
+  // Text fields keep their own keys while focused.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== 'z') return;
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      e.preventDefault();
-      if (e.shiftKey) redo(); else undo();
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+      if ((e.key === 'Backspace' || e.key === 'Delete') && multi.size) {
+        e.preventDefault();
+        update((d) => ({
+          ...d,
+          projects: d.projects.filter((p) => !multi.has(p.id)),
+          deadlines: d.deadlines.filter((x) => !multi.has(x.id)),
+          tasks: d.tasks.filter((t) => !multi.has(t.id)),
+        }));
+        if (selection && multi.has(selection.id)) setSelection(null);
+        setMulti(new Set());
+      }
+      if (e.key === 'Escape' && multi.size) setMulti(new Set());
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo]);
+  }, [undo, redo, multi, selection, update]);
 
   const updateTask = (id: string, patch: Partial<Task>, coalesce?: string) => update((d) => patchTask(d, id, patch), coalesce);
 
@@ -259,6 +272,8 @@ export default function App() {
               today={today}
               week={week}
               selectedId={selection?.id}
+              selectedIds={multi}
+              onToggleSelect={toggleSelect}
               editingId={editingId ?? undefined}
               onWeekChange={setWeek}
               onOpenProject={(p) => setSelection({ kind: 'project', id: p.id })}
@@ -301,6 +316,8 @@ export default function App() {
               today={today}
               tasks={data.tasks.filter((t) => t.personId === person && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
               selectedId={selection?.id}
+              selectedIds={multi}
+              onToggleSelect={toggleSelect}
               editingId={editingId ?? undefined}
               onWeekChange={setWeek}
               onAdd={(date) => {
