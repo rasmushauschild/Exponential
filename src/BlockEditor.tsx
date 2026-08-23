@@ -333,8 +333,8 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
   useEffect(() => {
     if (!menu) return;
     const close = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.status-menu')) setMenu(null); };
-    window.addEventListener('mousedown', close);
-    return () => window.removeEventListener('mousedown', close);
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
   }, [menu]);
   if (!task) return <div className="blk-text p hint">(task removed)</div>;
   const owner = task.personId ? people.find((p) => p.id === task.personId) : undefined;

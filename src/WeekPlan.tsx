@@ -261,8 +261,8 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     const close = (e: MouseEvent) => {
       if (!(e.target as HTMLElement).closest('.status-menu')) setMenu(null);
     };
-    window.addEventListener('mousedown', close);
-    return () => window.removeEventListener('mousedown', close);
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
   }, [menu]);
 
   const onBlockDown = (e: React.PointerEvent) => {
@@ -478,8 +478,8 @@ function PersonDropdown({ people, me, selected, onSelect }: { people: Person[]; 
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.status-menu')) setOpen(null); };
-    window.addEventListener('mousedown', close);
-    return () => window.removeEventListener('mousedown', close);
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
   }, [open]);
   const meP = people.find((p) => p.id === me);
   const rest = people.filter((p) => p.id !== me).sort((a, b) => a.name.localeCompare(b.name));

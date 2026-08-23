@@ -327,8 +327,8 @@ function useClickAway(open: boolean, cls: string, close: () => void) {
   useEffect(() => {
     if (!open) return;
     const h = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest(cls)) close(); };
-    window.addEventListener('mousedown', h);
-    return () => window.removeEventListener('mousedown', h);
+    window.addEventListener('pointerdown', h);
+    return () => window.removeEventListener('pointerdown', h);
   }, [open, cls, close]);
 }
 
