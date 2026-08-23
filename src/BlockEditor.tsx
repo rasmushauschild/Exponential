@@ -333,12 +333,12 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
   const owner = task.personId ? people.find((p) => p.id === task.personId) : undefined;
   const change = (v: string) => { setTitle(v); window.clearTimeout(timer.current); timer.current = window.setTimeout(() => onTitle(v), 400); };
   return (
-    <div className={`blk-task wk-row task ${task.status}${owner ? '' : ' unassigned'}`}>
+    <div className={`task-blk wk-row task ${task.status}${owner ? '' : ' unassigned'}`}>
       <button className="status-btn" title={STATUS_LABEL[task.status]}
         onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu((m) => (m ? null : r)); }}>
         <StatusDot status={task.status} />
       </button>
-      <input ref={ref} className="blk-task-title" value={title} placeholder="Task" onChange={(e) => change(e.target.value)} onKeyDown={(e) => onKey(e, task)} onBlur={() => { window.clearTimeout(timer.current); if (title !== task.title) onTitle(title); }} />
+      <input ref={ref} className="task-blk-title" value={title} placeholder="Task" onChange={(e) => change(e.target.value)} onKeyDown={(e) => onKey(e, task)} onBlur={() => { window.clearTimeout(timer.current); if (title !== task.title) onTitle(title); }} />
       {owner ? (
         <button className="from-chip" title={`${owner.name} · ${STATUS_LABEL[task.status]} — open`} onClick={onOpen}>
           <Avatar person={owner} size={14} /> {owner.id === me ? 'you' : shortName(owner.name).split(' ')[0]}
