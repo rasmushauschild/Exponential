@@ -17,7 +17,13 @@
     "productName": "Exponential",
     "files": ["dist/**", "electron/**", "build/icon.png", "package.json"],
     "directories": { "output": "release", "buildResources": "build" },
-    "mac": { "target": ["dmg"], "category": "public.app-category.productivity", "icon": "build/icon.icns" },
+    "mac": {
+      "target": ["dmg"],
+      "category": "public.app-category.productivity",
+      "icon": "build/icon.icns",
+      "extendInfo": { "CFBundleIconName": "exponential" },
+      "extraResources": [{ "from": "build/Assets.car", "to": "Assets.car" }]
+    },
     "win": { "target": ["nsis"], "icon": "build/icon.png" }
   },
   "devDependencies": {
