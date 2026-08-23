@@ -54,6 +54,18 @@ export function BigPlan(props: Props) {
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
   const weekRef = useRef(week);
   weekRef.current = week;
+  const viewTouched = useRef(0); // last time the user panned/zoomed
+  const [bandAnim, setBandAnim] = useState(false);
+
+  // Ease the band only when the week changes on its own (swipe in the week panel, "Back to this week"),
+  // never while the timeline itself is moving under it.
+  useEffect(() => {
+    if (bandDrag || performance.now() - viewTouched.current < 80) return;
+    setBandAnim(true);
+    const t = setTimeout(() => setBandAnim(false), 380);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [week]);
   const [height, setHeight] = useState(0);
 
   useLayoutEffect(() => {
@@ -70,6 +82,8 @@ export function BigPlan(props: Props) {
     const el = ref.current!;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      viewTouched.current = performance.now();
+      setBandAnim(false);
       const v = viewRef.current;
       if (e.ctrlKey || e.metaKey) {
         const mx = e.clientX - el.getBoundingClientRect().left;
@@ -108,7 +122,7 @@ export function BigPlan(props: Props) {
     return { day, lane };
   };
 
-  const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .retro-pill');
+  const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .week-label');
 
   // Empty space: a still click creates a week-long project at the ghost; a drag pans.
   const onPointerDown = (e: React.PointerEvent) => {
@@ -121,7 +135,7 @@ export function BigPlan(props: Props) {
     track(
       (ev) => {
         if (Math.abs(ev.clientX - startX) > 3) moved = true;
-        if (moved) { setPanning(true); setView({ ppd, origin: startOrigin - (ev.clientX - startX) / ppd }); }
+        if (moved) { viewTouched.current = performance.now(); setBandAnim(false); setPanning(true); setView({ ppd, origin: startOrigin - (ev.clientX - startX) / ppd }); }
       },
       (ev) => {
         setPanning(false);
@@ -252,10 +266,10 @@ export function BigPlan(props: Props) {
         return (
           <div key={m}>
             {odd && <div className="tl-week-tint" style={{ left: (m - origin) * ppd, width: ppd * 7 }} />}
-            {hovered && (
+            {hovered && m !== dayIndex(week) && ppd * 7 >= 70 && (
               <button
-                className="retro-pill"
-                style={{ left: (m - origin) * ppd + ppd * 3.5 }}
+                className="week-label"
+                style={{ left: (m - origin) * ppd, width: ppd * 7 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => onOpenRetro(fromDayIndex(m))}
                 title="Open this week's retro"
@@ -282,12 +296,16 @@ export function BigPlan(props: Props) {
       })}
 
       <div
-        className={`week-band${bandDrag ? ' dragging' : ''}${bandDrag || panning ? ' no-anim' : ''}`}
+        className={`week-band${bandDrag ? ' dragging' : ''}${bandAnim && !bandDrag ? ' anim' : ''}`}
         style={{ left: x(week), width: ppd * 7 }}
         onPointerDown={onBandDown}
         title="Drag to choose the week shown below"
       >
-        {ppd * 7 >= 70 && <div className="week-band-label">Week {weekNum}</div>}
+        {ppd * 7 >= 70 && (
+          <button className="week-label current" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpenRetro(week)} title="Open this week's retro">
+            Week {weekNum}
+          </button>
+        )}
       </div>
 
       {ghost && !drag && (

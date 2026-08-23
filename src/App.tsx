@@ -17,6 +17,18 @@ export default function App() {
   const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
+  const [detailW, setDetailW] = useState(400);
+  const [vResizing, setVResizing] = useState(false);
+
+  const onVResizeDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const startX = e.clientX, startW = detailW;
+    setVResizing(true);
+    const move = (ev: PointerEvent) => setDetailW(Math.min(Math.max(360, window.innerWidth - 760), Math.max(300, startW - (ev.clientX - startX))));
+    const up = () => { setVResizing(false); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
   const mainRef = useRef<HTMLDivElement>(null);
 
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
@@ -280,8 +292,10 @@ export default function App() {
           </section>
         </div>
 
+        {detailOpen && <div className={`vresizer${vResizing ? ' dragging' : ''}`} onPointerDown={onVResizeDown} />}
         {detailOpen && selection && (
           <DetailPanel
+            width={detailW}
             selection={selection}
             project={selProject}
             task={selTask}

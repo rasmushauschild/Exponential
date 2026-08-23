@@ -56,15 +56,18 @@ img { display: block; -webkit-user-drag: none; }
 .account:hover { background: rgba(0, 0, 0, 0.05); }
 .account-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.main { flex: 1; min-width: 0; display: flex; gap: 14px; }
+.main { flex: 1; min-width: 0; display: flex; }
+.vresizer { width: 14px; flex: none; cursor: col-resize; display: flex; align-items: center; justify-content: center; }
+.vresizer::after { content: ''; height: 44px; width: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0); transition: background 0.15s; }
+.vresizer:hover::after, .vresizer.dragging::after { background: rgba(0, 0, 0, 0.18); }
 .planners { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .panel {
   background: var(--panel); border-radius: var(--radius-xl); box-shadow: var(--shadow);
   display: flex; flex-direction: column; min-height: 120px; overflow: hidden; position: relative;
 }
-.panel-head { display: flex; align-items: center; gap: 8px; padding: 22px 26px 10px; flex: none; }
-.panel-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; }
+.panel-head { display: flex; align-items: center; gap: 8px; padding: 22px 26px 10px; flex: none; overflow: hidden; }
+.panel-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; white-space: nowrap; }
 .panel-spacer { flex: 1; }
 .head-gap { width: 10px; }
 
@@ -104,11 +107,17 @@ img { display: block; -webkit-user-drag: none; }
 
 .week-band {
   position: absolute; top: 6px; bottom: 10px; border-radius: 18px; background: rgba(10, 132, 255, 0.07);
-  cursor: ew-resize; transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1);
+  cursor: ew-resize; transition: background 0.15s;
 }
-.week-band.no-anim { transition: background 0.15s; }
+.week-band.anim { transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1); }
 .week-band:hover, .week-band.dragging { background: rgba(10, 132, 255, 0.12); }
-.week-band-label { position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 700; color: var(--accent); pointer-events: none; white-space: nowrap; }
+.week-label {
+  position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 700; color: var(--text-3);
+  white-space: nowrap; z-index: 6; padding: 3px 0; border-radius: 999px; transition: color 0.15s;
+}
+.week-label:hover { color: var(--text); }
+.week-label.current { color: var(--accent); }
+.week-label.current:hover { color: #0060c0; }
 
 .today-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--today); pointer-events: none; z-index: 5; }
 .today-line::before { content: 'Today'; position: absolute; top: 2px; left: 6px; font-size: 10px; font-weight: 700; color: var(--today); }
@@ -131,13 +140,6 @@ img { display: block; -webkit-user-drag: none; }
 .bar-avatars .avatar { box-shadow: 0 0 0 2px #fff; margin-left: -5px; }
 .bar-avatars .avatar:first-child { margin-left: 0; }
 
-.retro-pill {
-  position: absolute; bottom: 6px; transform: translateX(-50%); padding: 4px 11px; border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06); color: var(--text-2); font-size: 11px; font-weight: 700; white-space: nowrap; z-index: 6;
-  transition: background 0.15s, color 0.15s; animation: fade 0.15s ease-out;
-}
-.retro-pill:hover { background: var(--text); color: #fff; }
-.retro-pill::before { content: 'Retro · '; font-weight: 500; opacity: 0.7; }
 
 .tl-deadline {
   position: absolute; display: flex; align-items: center; gap: 6px; height: 26px; transform: translateX(-11px);
@@ -256,7 +258,7 @@ img { display: block; -webkit-user-drag: none; }
 /* ─── Detail panel ──────────────────────────────────── */
 
 .detail {
-  width: 400px; flex: none; background: var(--panel); border-radius: var(--radius-xl); box-shadow: var(--shadow);
+  flex: none; background: var(--panel); border-radius: var(--radius-xl); box-shadow: var(--shadow);
   display: flex; flex-direction: column; overflow: hidden; animation: slide-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 @keyframes slide-in { from { transform: translateX(40px); opacity: 0; } }

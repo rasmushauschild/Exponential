@@ -13,6 +13,7 @@ export type Selection =
 
 interface Props {
   selection: Selection;
+  width: number;
   project?: Project;
   task?: Task;
   deadline?: Deadline;
@@ -34,8 +35,9 @@ interface Props {
 export function DetailPanel(p: Props) {
   const { selection, project, task, deadline, retro, people, me, onClose, onDelete } = p;
 
+  const style = { width: p.width };
   if (selection.kind === 'inbox') return <Inbox {...p} />;
-  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} onUpdate={p.onUpdateRetro} onClose={onClose} />;
+  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
 
   const item = project ?? task ?? deadline;
   if (!item) return null;
@@ -56,7 +58,7 @@ export function DetailPanel(p: Props) {
   const others = people.filter((x) => x.id !== me);
 
   return (
-    <aside className="detail">
+    <aside className="detail" style={style}>
       <div className="detail-top">
         <span className="panel-spacer" />
         <button className="icon-btn" title="Delete" onClick={onDelete}><TrashIcon /></button>
@@ -131,9 +133,9 @@ const RETRO_FIELDS: { key: keyof Pick<Retro, 'wentWell' | 'improve' | 'learnings
   { key: 'nextFocus', label: 'Focus for next week', hint: 'The one or two things that matter most…' },
 ];
 
-function RetroDoc({ week, retro, onUpdate, onClose }: { week: ISODate; retro?: Retro; onUpdate: Props['onUpdateRetro']; onClose: () => void }) {
+function RetroDoc({ week, retro, onUpdate, onClose, width }: { week: ISODate; retro?: Retro; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number }) {
   return (
-    <aside className="detail">
+    <aside className="detail" style={{ width }}>
       <div className="detail-top">
         <span className="detail-kind">Retro · {formatRange(week, addDays(week, 6))}</span>
         <span className="panel-spacer" />
@@ -173,7 +175,7 @@ function AutoTextarea({ value, placeholder, onChange }: { value: string; placeho
 
 /* ─── Inbox ─────────────────────────────────────────── */
 
-function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead }: Props) {
+function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead, width }: Props) {
   const mine = notifications.filter((n) => n.to === me).sort((a, b) => b.at.localeCompare(a.at));
   const unreadKey = mine.filter((n) => !n.read).map((n) => n.id).join(',');
   useEffect(() => {
@@ -182,7 +184,7 @@ function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead }: Props
     return () => clearTimeout(t);
   }, [unreadKey, onMarkRead]);
   return (
-    <aside className="detail">
+    <aside className="detail" style={{ width }}>
       <div className="detail-top">
         <span className="panel-spacer" />
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
