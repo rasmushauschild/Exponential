@@ -11,14 +11,20 @@ export default function Widget() {
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [person, setPerson] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [theme] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('exponential-layout') ?? '{}').theme || ''; } catch { return ''; }
-  });
-
+  // Follow the theme chosen in the main window (same origin → same localStorage); re-check whenever it changes or we open.
+  const applyTheme = () => {
+    let saved = '';
+    try { saved = JSON.parse(localStorage.getItem('exponential-layout') ?? '{}').theme || ''; } catch { /* ignore */ }
+    document.documentElement.dataset.theme = saved || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  };
   useEffect(() => {
-    document.documentElement.dataset.theme = theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
     document.documentElement.classList.add('widget-window');
-  }, [theme]);
+    applyTheme();
+    window.addEventListener('storage', applyTheme);
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    mq?.addEventListener('change', applyTheme);
+    return () => { window.removeEventListener('storage', applyTheme); mq?.removeEventListener('change', applyTheme); };
+  }, []);
 
   const me = data?.me ?? '';
   const who = person ?? me;
@@ -35,6 +41,7 @@ export default function Widget() {
   useEffect(() => {
     if (!data) return;
     return window.exponential?.onWidgetShown(() => {
+      applyTheme();
       setToday(todayISO());
       setWeek(weekStart(todayISO()));
       setPerson(null);
