@@ -66,7 +66,10 @@ next step (see below).
 | Master plan | Hover a week near the bottom edge for its "Retro · Week N" pill; click it to open that week's retro |
 | Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |
 | Week | Pick a teammate and add tasks to *their* week — they show up dashed with an "added by" chip |
-| Details | Edit title, dates, colour/status; notes support headings, bullets, checkboxes and images (paste or drop) |
+| Details | Edit title, dates, colour/status; notes are Markdown (headings, bullets, `- [ ]` todos, bold/italic, pasted images) with a Preview toggle |
+| Details | **Send to Agent** copies the item (title, properties, notes) as one Markdown document to the clipboard |
+| Week | Drag a task's title up or down to reorder tasks that share a day |
+| Layout | Drag the gaps between panels; proportions are remembered on this machine |
 | Details | Assign people to a project (avatars show on the bar); set a task's owner; when status is "Needs review", pick who reviews |
 | Inbox | Left sidebar: tasks added for you, review requests, owner hand-offs, changes to projects you're on |
 | Anywhere | ⌘Z / ⌘⇧Z (Ctrl on Windows) undo and redo — 100 steps |

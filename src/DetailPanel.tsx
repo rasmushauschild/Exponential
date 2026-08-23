@@ -56,10 +56,28 @@ export function DetailPanel(p: Props) {
   };
 
   const others = people.filter((x) => x.id !== me);
+  const kind = project ? 'Project' : task ? 'Task' : 'Deadline';
+
+  const agentDoc = () => {
+    const who = (id?: string) => (id ? shortName(people.find((x) => x.id === id)?.name ?? '') : '');
+    const lines = [`# ${title}`, '', `- Type: ${kind}`];
+    if (project) {
+      lines.push(`- Starts: ${project.start}`, `- Ends: ${project.end}`);
+      if (project.assignees?.length) lines.push(`- People: ${project.assignees.map(who).join(', ')}`);
+    }
+    if (task) {
+      lines.push(`- Status: ${STATUS_LABEL[task.status]}`, `- Owner: ${who(task.personId)}`, `- Date: ${task.date}${task.end ? ` → ${task.end}` : ''}`);
+      if (task.reviewerId) lines.push(`- Reviewer: ${who(task.reviewerId)}`);
+    }
+    if (deadline) lines.push(`- Date: ${deadline.date}`);
+    if (item.notes?.trim()) lines.push('', '## Notes', '', item.notes.trim());
+    return lines.join('\n');
+  };
 
   return (
     <aside className="detail" style={style}>
       <div className="detail-top">
+        <span className="detail-kind">{kind}</span>
         <span className="panel-spacer" />
         <button className="icon-btn" title="Delete" onClick={onDelete}><TrashIcon /></button>
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
@@ -118,8 +136,9 @@ export function DetailPanel(p: Props) {
           )}
         </div>
 
-        <Editor key={`ed-${item.id}`} html={item.notes ?? ''} onChange={setNotes} />
+        <MarkdownEditor key={`ed-${item.id}`} value={item.notes ?? ''} onChange={setNotes} />
       </div>
+      <SendToAgent doc={agentDoc} />
     </aside>
   );
 }
@@ -137,7 +156,7 @@ function RetroDoc({ week, retro, onUpdate, onClose, width }: { week: ISODate; re
   return (
     <aside className="detail" style={{ width }}>
       <div className="detail-top">
-        <span className="detail-kind">Retro · {formatRange(week, addDays(week, 6))}</span>
+        <span className="detail-kind">Retro</span>
         <span className="panel-spacer" />
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
       </div>
@@ -156,8 +175,11 @@ function RetroDoc({ week, retro, onUpdate, onClose, width }: { week: ISODate; re
           ))}
         </div>
         <div className="retro-label" style={{ marginTop: 22 }}>Notes</div>
-        <Editor key={`retro-${week}`} html={retro?.notes ?? ''} onChange={(html) => onUpdate(week, { notes: html }, `retro:${week}:notes`)} />
+        <MarkdownEditor key={`retro-${week}`} value={retro?.notes ?? ''} onChange={(md) => onUpdate(week, { notes: md }, `retro:${week}:notes`)} />
       </div>
+      <SendToAgent doc={() => [`# Retro — Week ${isoWeekNumber(week)} (${formatRange(week, addDays(week, 6))})`, '',
+        ...RETRO_FIELDS.flatMap((f) => [`## ${f.label}`, '', retro?.[f.key]?.trim() || '_(empty)_', '']),
+        ...(retro?.notes?.trim() ? ['## Notes', '', retro.notes.trim()] : [])].join('\n')} />
     </aside>
   );
 }
@@ -186,6 +208,7 @@ function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead, width }
   return (
     <aside className="detail" style={{ width }}>
       <div className="detail-top">
+        <span className="detail-kind">Inbox</span>
         <span className="panel-spacer" />
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
       </div>
@@ -346,77 +369,153 @@ function PersonSelect({ people, value, me, placeholder, onChange }: {
   );
 }
 
-/** Minimal Notion-ish editor on contenteditable. Stores HTML; images are inlined as data URLs. */
-function Editor({ html, onChange }: { html: string; onChange: (html: string) => void }) {
-  const ref = useRef<HTMLDivElement>(null);
+/**
+ * Markdown notes. Edits the source in a textarea (lists auto-continue, images paste/drop as data URLs);
+ * a Preview toggle renders it. Markdown keeps the notes readable for people and agents alike.
+ */
+function MarkdownEditor({ value, onChange }: { value: string; onChange: (md: string) => void }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState(false);
+  const [local, setLocal] = useState(value);
   const timer = useRef<number | undefined>(undefined);
+  useEffect(() => setLocal(value), [value]);
 
   useEffect(() => {
-    if (ref.current && ref.current.innerHTML !== html) ref.current.innerHTML = html;
-  }, [html]);
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = '0';
+    el.style.height = `${Math.max(200, el.scrollHeight)}px`;
+  }, [local, preview]);
 
-  const emit = () => {
+  const commit = (v: string) => {
+    setLocal(v);
     window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => ref.current && onChange(ref.current.innerHTML), 250);
+    timer.current = window.setTimeout(() => onChange(v), 250);
   };
 
-  const cmd = (name: string, value?: string) => {
-    ref.current?.focus();
-    document.execCommand(name, false, value);
-    emit();
+  /** Insert text at the caret (or wrap the selection), keeping focus. */
+  const insert = (before: string, after = '', block = false) => {
+    const el = ref.current;
+    if (!el) return;
+    const { selectionStart: s0, selectionEnd: e0 } = el;
+    const sel = local.slice(s0, e0);
+    let pre = local.slice(0, s0);
+    if (block && pre && !pre.endsWith('\n')) pre += '\n';
+    const next = pre + before + sel + after + local.slice(e0);
+    commit(next);
+    requestAnimationFrame(() => { el.focus(); const pos = pre.length + before.length + sel.length; el.setSelectionRange(pos, pos); });
   };
 
   const insertImage = (file: File) => {
     const reader = new FileReader();
-    reader.onload = () => cmd('insertHTML', `<img src="${reader.result}" /><p><br></p>`);
+    reader.onload = () => insert(`![${file.name}](${reader.result})\n`, '', true);
     reader.readAsDataURL(file);
   };
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (!(e.metaKey || e.ctrlKey)) return;
-    const k = e.key.toLowerCase();
-    if (k === 'b') { e.preventDefault(); cmd('bold'); }
-    if (k === 'i') { e.preventDefault(); cmd('italic'); }
-    if (k === 'u') { e.preventDefault(); cmd('underline'); }
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); insert('**', '**'); return; }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') { e.preventDefault(); insert('*', '*'); return; }
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    const el = e.currentTarget;
+    const lineStart = local.lastIndexOf('\n', el.selectionStart - 1) + 1;
+    const line = local.slice(lineStart, el.selectionStart);
+    const m = line.match(/^(\s*)(?:([-*])|(\d+)\.)(\s+\[[ x]\])?\s/);
+    if (!m) return;
+    e.preventDefault();
+    const content = line.slice(m[0].length);
+    if (!content.trim()) { commit(local.slice(0, lineStart) + local.slice(el.selectionStart)); return; } // empty item ends the list
+    const bullet = m[3] ? `${Number(m[3]) + 1}.` : m[2];
+    insert(`\n${m[1]}${bullet}${m[4] ? ' [ ]' : ''} `);
   };
 
   return (
     <div className="editor">
       <div className="toolbar">
-        <button onClick={() => cmd('formatBlock', 'h1')} title="Heading 1">H1</button>
-        <button onClick={() => cmd('formatBlock', 'h2')} title="Heading 2">H2</button>
-        <button onClick={() => cmd('formatBlock', 'p')} title="Text">Aa</button>
+        <button onClick={() => insert('# ', '', true)} title="Heading 1">H1</button>
+        <button onClick={() => insert('## ', '', true)} title="Heading 2">H2</button>
         <span className="tb-sep" />
-        <button onClick={() => cmd('bold')} title="Bold (⌘B)"><b>B</b></button>
-        <button onClick={() => cmd('italic')} title="Italic (⌘I)"><i>I</i></button>
+        <button onClick={() => insert('**', '**')} title="Bold (⌘B)"><b>B</b></button>
+        <button onClick={() => insert('*', '*')} title="Italic (⌘I)"><i>I</i></button>
         <span className="tb-sep" />
-        <button onClick={() => cmd('insertUnorderedList')} title="Bullet list">• List</button>
-        <button onClick={() => cmd('insertOrderedList')} title="Numbered list">1.</button>
-        <button onClick={() => cmd('insertHTML', '<input type="checkbox"> ')} title="Checkbox">☐</button>
+        <button onClick={() => insert('- ', '', true)} title="Bullet list">• List</button>
+        <button onClick={() => insert('1. ', '', true)} title="Numbered list">1.</button>
+        <button onClick={() => insert('- [ ] ', '', true)} title="Checkbox">☐</button>
         <span className="tb-sep" />
         <button onClick={() => fileRef.current?.click()} title="Insert image">Image</button>
         <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) insertImage(f); e.target.value = ''; }} />
+        <span className="panel-spacer" />
+        <button className={preview ? 'on' : ''} onClick={() => setPreview((p) => !p)} title="Toggle preview">{preview ? 'Edit' : 'Preview'}</button>
       </div>
-      <div
-        ref={ref}
-        className="editor-body"
-        contentEditable
-        suppressContentEditableWarning
-        data-placeholder="Write notes, add headings, bullet points or drop in an image…"
-        onInput={emit}
-        onKeyDown={onKeyDown}
-        onPaste={(e) => {
-          const f = Array.from(e.clipboardData.files)[0];
-          if (f && f.type.startsWith('image/')) { e.preventDefault(); insertImage(f); }
-        }}
-        onDrop={(e) => {
-          const f = e.dataTransfer.files[0];
-          if (f && f.type.startsWith('image/')) { e.preventDefault(); insertImage(f); }
-        }}
-      />
+      {preview ? (
+        <div className="md-preview" dangerouslySetInnerHTML={{ __html: renderMarkdown(local) }} />
+      ) : (
+        <textarea
+          ref={ref}
+          className="md-source"
+          value={local}
+          placeholder={'Write in Markdown — # headings, - bullets, - [ ] todos, **bold**. Paste or drop images.'}
+          onChange={(e) => commit(e.target.value)}
+          onKeyDown={onKeyDown}
+          onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
+          onDrop={(e) => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
+          spellCheck
+        />
+      )}
     </div>
   );
+}
+
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const inline = (s: string) =>
+  esc(s)
+    .replace(/!\[([^\]]*)\]\((data:image\/[^)]+|https?:[^)]+)\)/g, '<img alt="$1" src="$2">')
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[^*])\*([^*]+)\*/g, '$1<i>$2</i>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>');
+
+/** Small Markdown subset: headings, paragraphs, bullet/numbered lists, checkboxes, bold/italic/code, images. */
+export function renderMarkdown(md: string): string {
+  const out: string[] = [];
+  let list: 'ul' | 'ol' | null = null;
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (const raw of md.split('\n')) {
+    const line = raw.replace(/\s+$/, '');
+    const h = line.match(/^(#{1,3})\s+(.*)/);
+    const li = line.match(/^\s*(?:([-*])|(\d+)\.)\s+(?:\[([ x])\]\s+)?(.*)/);
+    if (h) { close(); out.push(`<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`); }
+    else if (li) {
+      const kind = li[2] ? 'ol' : 'ul';
+      if (list !== kind) { close(); list = kind; out.push(`<${kind}>`); }
+      const box = li[3] !== undefined ? `<input type="checkbox" disabled ${li[3] === 'x' ? 'checked' : ''}> ` : '';
+      out.push(`<li>${box}${inline(li[4])}</li>`);
+    }
+    else if (!line.trim()) close();
+    else { close(); out.push(`<p>${inline(line)}</p>`); }
+  }
+  close();
+  return out.join('');
+}
+
+function SendToAgent({ doc }: { doc: () => string }) {
+  const [state, setState] = useState<'idle' | 'done'>('idle');
+  const send = async () => {
+    const md = doc();
+    try { await navigator.clipboard.writeText(md); } catch { /* clipboard may be unavailable in the preview */ }
+    setState('done');
+    setTimeout(() => setState('idle'), 1800);
+  };
+  return (
+    <div className="detail-foot">
+      <button className="btn primary" onClick={send}>
+        <SparkIcon /> {state === 'done' ? 'Copied as Markdown' : 'Send to Agent'}
+      </button>
+    </div>
+  );
+}
+
+function SparkIcon() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.7L19.5 9.5l-5.7 1.8L12 17l-1.8-5.7L4.5 9.5l5.7-1.8zM5 16l.9 2.6L8.5 19.5l-2.6.9L5 23l-.9-2.6L1.5 19.5l2.6-.9z" /></svg>;
 }
 
 function CloseIcon() {

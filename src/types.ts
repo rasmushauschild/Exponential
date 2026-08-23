@@ -17,7 +17,7 @@ export interface Project {
   end: ISODate;
   lane: number;
   color?: string;
-  notes?: string; // HTML
+  notes?: string; // Markdown
   assignees?: string[];
 }
 
@@ -35,6 +35,7 @@ export interface Task {
   date: ISODate;
   end?: ISODate; // inclusive; same as date when absent
   status: Status;
+  order?: number; // position among tasks on the same day
   notes?: string;
   createdBy?: string; // person id when someone else added it
   reviewerId?: string;

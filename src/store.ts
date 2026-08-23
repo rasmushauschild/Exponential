@@ -62,8 +62,40 @@ function seed(): Data {
   };
 }
 
-/** Older saves had no lane field; pack them so nothing overlaps. */
+/** Notes used to be stored as HTML from a contenteditable; convert the common tags to Markdown. */
+export function htmlToMarkdown(html: string): string {
+  if (!html || !/<[a-z][\s\S]*>/i.test(html)) return html;
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  const walk = (node: Node, depth = 0): string => {
+    if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+    const el = node as HTMLElement;
+    const inner = () => Array.from(el.childNodes).map((n) => walk(n, depth)).join('');
+    switch (el.tagName) {
+      case 'H1': return `\n# ${inner().trim()}\n`;
+      case 'H2': return `\n## ${inner().trim()}\n`;
+      case 'H3': return `\n### ${inner().trim()}\n`;
+      case 'P': case 'DIV': return `${inner()}\n`;
+      case 'BR': return '\n';
+      case 'B': case 'STRONG': return `**${inner()}**`;
+      case 'I': case 'EM': return `*${inner()}*`;
+      case 'UL': case 'OL': return `\n${Array.from(el.children).map((li, i) => `${'  '.repeat(depth)}${el.tagName === 'OL' ? `${i + 1}.` : '-'} ${walk(li, depth + 1).trim()}`).join('\n')}\n`;
+      case 'LI': return inner();
+      case 'IMG': return `\n![](${el.getAttribute('src')})\n`;
+      case 'INPUT': return (el as HTMLInputElement).checked ? '[x] ' : '[ ] ';
+      default: return inner();
+    }
+  };
+  return walk(doc.body).replace(/\n{3,}/g, '\n\n').trim();
+}
+
 function migrate(d: Data): Data {
+  d = {
+    ...d,
+    projects: d.projects.map((p) => (p.notes ? { ...p, notes: htmlToMarkdown(p.notes) } : p)),
+    tasks: d.tasks.map((t) => (t.notes ? { ...t, notes: htmlToMarkdown(t.notes) } : t)),
+    deadlines: d.deadlines.map((x) => (x.notes ? { ...x, notes: htmlToMarkdown(x.notes) } : x)),
+    retros: d.retros && Object.fromEntries(Object.entries(d.retros).map(([k, r]) => [k, r.notes ? { ...r, notes: htmlToMarkdown(r.notes) } : r])),
+  };
   if (d.projects.every((p) => typeof p.lane === 'number')) return d;
   const laneEnds: string[] = [];
   const projects = [...d.projects]

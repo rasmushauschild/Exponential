@@ -5,7 +5,7 @@ import { addDays, dayIndex, dayOfMonth, isoWeekNumber, weekdayShort } from './da
 import { InlineName } from './BigPlan';
 
 const EDGE = 8;
-const SWIPE_TRIGGER = 150; // accumulated px of horizontal scroll that flips the week
+const SWIPE_TRIGGER = 120; // accumulated px of horizontal scroll that flips the week
 
 interface Props {
   people: Person[];
@@ -22,6 +22,7 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
   onOpen: (t: Task) => void;
+  onReorder: (id: string, delta: number) => void;
   onWeekChange: (monday: ISODate) => void;
   calendar: { enabled: boolean; available: boolean; events: CalendarEvent[]; note?: string };
   onToggleCalendar: () => void;
@@ -29,7 +30,7 @@ interface Props {
 
 /** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, editingId, onAdd, onRename, onUpdate, onDelete, onOpen, onWeekChange, calendar, onToggleCalendar } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, editingId, onAdd, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const readonly = selected !== me;
   const todayIdx = dayIndex(today) - dayIndex(week);
@@ -53,39 +54,36 @@ export function WeekPlan(props: Props) {
     return () => ro.disconnect();
   }, [todayIdx, week]);
 
-  // Horizontal trackpad swipe: rubber-band, then flip to the previous/next week once past the trigger.
+  // Horizontal trackpad swipe: rubber-band, flip exactly once per gesture, then ignore the rest of
+  // that gesture (including its momentum tail). A new gesture is a pause, a reversal, or a fresh
+  // ramp-up after the deltas have decayed to almost nothing.
   const weekRef = useRef(week);
   weekRef.current = week;
   useEffect(() => {
     const el = bodyRef.current!;
     let acc = 0, locked = false, lockDir = 0, timer: number | undefined, last = 0, prevAbs = 0;
-    const rubber = (v: number) => Math.sign(v) * 60 * Math.log1p(Math.abs(v) / 60);
+    const rubber = (v: number) => Math.sign(v) * 40 * Math.log1p(Math.abs(v) / 40);
     const reset = () => { acc = 0; locked = false; lockDir = 0; prevAbs = 0; setSwipe({ x: 0, animate: true }); };
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
       const now = performance.now();
       const abs = Math.abs(e.deltaX);
-      // Trackpad momentum keeps emitting decaying deltas after a flick. Treat it as a new gesture when:
-      // there was a pause, the direction reversed, the delta suddenly grows (a fresh push), or momentum has died out.
-      const fresh = now - last > 120
+      const newGesture = now - last > 150
         || (locked && Math.sign(e.deltaX) === -lockDir && abs > 6)
-        || (locked && abs > prevAbs * 1.8 && abs > 6)
-        || (locked && abs < 1.5);
-      if (fresh) { acc = 0; locked = false; lockDir = 0; }
+        || (locked && prevAbs < 4 && abs > prevAbs * 2.5 && abs > 6);
+      if (newGesture) { acc = 0; locked = false; lockDir = 0; }
       last = now;
       prevAbs = abs;
       window.clearTimeout(timer);
-      timer = window.setTimeout(reset, 120);
+      timer = window.setTimeout(reset, 150);
       if (locked) return;
       acc += e.deltaX;
       if (Math.abs(acc) >= SWIPE_TRIGGER) {
         locked = true;
-        const dir = Math.sign(acc);
-        lockDir = dir;
-        acc = 0;
-        onWeekChange(addDays(weekRef.current, dir * 7));
-        setSwipe({ x: dir * 40, animate: false });
+        lockDir = Math.sign(acc);
+        onWeekChange(addDays(weekRef.current, lockDir * 7));
+        setSwipe({ x: lockDir * 36, animate: false });
         requestAnimationFrame(() => setSwipe({ x: 0, animate: true }));
         return;
       }
@@ -95,7 +93,7 @@ export function WeekPlan(props: Props) {
     return () => { el.removeEventListener('wheel', onWheel); window.clearTimeout(timer); };
   }, [onWeekChange]);
 
-  const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title));
+  const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
   const events = calendar.enabled ? calendar.events.filter((e) => days.includes(e.date)) : [];
 
   const dayAt = (el: HTMLElement, clientX: number) => {
@@ -152,6 +150,7 @@ export function WeekPlan(props: Props) {
                 onDelete={onDelete}
                 onOpen={onOpen}
                 onRename={onRename}
+                onReorder={onReorder}
               />
             ))}
             {readonly && sorted.length === 0 && <div className="hint wk-empty">Nothing planned this week.</div>}
@@ -209,7 +208,7 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onRename }: {
+function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onRename, onReorder }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
@@ -221,8 +220,11 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   onDelete: Props['onDelete'];
   onOpen: Props['onOpen'];
   onRename: Props['onRename'];
+  onReorder: Props['onReorder'];
 }) {
-  const [menu, setMenu] = useState(false);
+  const [menu, setMenu] = useState<false | 'down' | 'up'>(false);
+  const [lift, setLift] = useState<number | null>(null); // px while reordering vertically
+  const rowRef = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState<BlockDrag | null>(null);
   const [hoverCursor, setHoverCursor] = useState('grab');
   const daysRef = useRef<HTMLDivElement>(null);
@@ -271,6 +273,29 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     window.addEventListener('pointerup', up);
   };
 
+  // Vertical drag on the title reorders within the same day; a still click opens the task.
+  const onTitleDown = (e: React.PointerEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const startY = e.clientY;
+    const rowH = rowRef.current?.offsetHeight ?? 36;
+    let moved = false, steps = 0;
+    const move = (ev: PointerEvent) => {
+      const dy = ev.clientY - startY;
+      if (Math.abs(dy) > 4) moved = true;
+      if (moved && !readonly) { setLift(dy); steps = Math.round(dy / rowH); }
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      setLift(null);
+      if (!moved) onOpen(task);
+      else if (steps !== 0) onReorder(task.id, steps);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
   const onBlockHover = (e: React.PointerEvent) => {
     if (readonly) return;
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -284,15 +309,24 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   const creator = task.createdBy && task.createdBy !== task.personId ? people.find((p) => p.id === task.createdBy) : undefined;
   const reviewer = task.status === 'review' && task.reviewerId ? people.find((p) => p.id === task.reviewerId) : undefined;
   return (
-    <div className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}`}>
+    <div
+      ref={rowRef}
+      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}${lift !== null ? ' lifting' : ''}`}
+      style={lift !== null ? { transform: `translateY(${lift}px)` } : undefined}
+    >
       <div className="wk-list">
-        <button className="status-btn" title={STATUS_LABEL[task.status]} onClick={() => !readonly && setMenu((m) => !m)}
+        <button className="status-btn" title={STATUS_LABEL[task.status]}
+          onClick={(e) => {
+            if (readonly) return;
+            const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            setMenu((m) => (m ? false : r.bottom + 250 > window.innerHeight ? 'up' : 'down'));
+          }}
           style={{ cursor: readonly ? 'default' : 'pointer' }}>
           <StatusDot status={task.status} />
         </button>
         {editing
           ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t) => onRename(task.id, t)} />
-          : <button className="task-title" onClick={() => onOpen(task)}>{task.title}</button>}
+          : <button className="task-title" onPointerDown={onTitleDown}>{task.title}</button>}
         {creator && (
           <span className="from-chip" title={`Added by ${creator.name}`}>
             <Avatar person={creator} size={14} /> {creator.id === me ? 'you' : shortName(creator.name).split(' ')[0]}
@@ -310,7 +344,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
             people={people.filter((x) => x.id !== task.personId)}
             onPick={(status, reviewerId) => { onUpdate(task.id, reviewerId !== undefined ? { status, reviewerId } : { status }); setMenu(false); }}
             onDelete={() => { setMenu(false); onDelete(task.id); }}
-            style={{ top: 32, left: 0 }}
+            style={menu === 'up' ? { bottom: 32, left: 0 } : { top: 32, left: 0 }}
           />
         )}
       </div>

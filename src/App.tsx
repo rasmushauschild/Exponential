@@ -7,17 +7,27 @@ import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Notification, 
 import { shortName } from './types';
 import { addDays, todayISO, weekStart } from './dates';
 
+/** Layout proportions, remembered per machine (not part of the shared plan data). */
+const PREFS_KEY = 'exponential-layout';
+const DEFAULT_PREFS = { split: 0.62, detailW: 340 };
+const prefs: typeof DEFAULT_PREFS = (() => {
+  try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
+})();
+const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+
 export default function App() {
   const { data, update, undo, redo } = useData();
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
-  const [split, setSplit] = useState(0.5);
+  const [split, setSplit] = useState(() => prefs.split);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
-  const [detailW, setDetailW] = useState(400);
+  const [detailW, setDetailW] = useState(() => prefs.detailW);
+
+  useEffect(() => { savePrefs({ split, detailW }); }, [split, detailW]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -281,6 +291,17 @@ export default function App() {
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
               onOpen={(t) => setSelection({ kind: 'task', id: t.id })}
+              onReorder={(id, delta) => update((d) => {
+                const t = d.tasks.find((x) => x.id === id)!;
+                const group = d.tasks.filter((x) => x.personId === t.personId && x.date === t.date)
+                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
+                const from = group.findIndex((x) => x.id === id);
+                const to = Math.min(group.length - 1, Math.max(0, from + delta));
+                if (from === to) return d;
+                group.splice(to, 0, group.splice(from, 1)[0]);
+                const order = new Map(group.map((x, i) => [x.id, i]));
+                return { ...d, tasks: d.tasks.map((x) => (order.has(x.id) ? { ...x, order: order.get(x.id) } : x)) };
+              })}
               calendar={{
                 enabled: calendarOn,
                 available: !!googleUser,
