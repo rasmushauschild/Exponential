@@ -338,6 +338,8 @@ export default function App() {
           </section>
         </div>
 
+        {/* The slot animates its width so the planners squeeze smoothly; the panel inside keeps a fixed width. */}
+        <div className={`detail-slot${vResizing ? ' no-anim' : ''}`} style={{ width: detailOpen ? detailW + 14 : 0 }}>
         {detailOpen && <div className={`vresizer${vResizing ? ' dragging' : ''}`} onPointerDown={onVResizeDown} />}
         {detailOpen && selection && (
           <DetailPanel
@@ -377,6 +379,7 @@ export default function App() {
             }}
           />
         )}
+        </div>
       </div>
 
       {sheet === 'project' && (
