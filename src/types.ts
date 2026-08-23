@@ -64,6 +64,9 @@ export interface Retro {
 }
 
 export interface Data {
+  id: string;
+  name: string;
+  moderators: string[]; // person ids allowed to manage members
   people: Person[];
   projects: Project[];
   deadlines: Deadline[];
@@ -72,6 +75,11 @@ export interface Data {
   showCalendar?: boolean;
   notifications?: Notification[];
   retros?: Record<ISODate, Retro>;
+}
+
+export interface Workspace {
+  teams: Data[];
+  current: string; // team id
 }
 
 export interface CalendarEvent {

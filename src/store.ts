@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CalendarEvent, Data, GoogleUser, ISODate, Project } from './types';
+import type { CalendarEvent, Data, GoogleUser, ISODate, Project, Workspace } from './types';
 import { addDays, todayISO, weekStart } from './dates';
 
 export interface GoogleConfig {
@@ -10,8 +10,8 @@ export interface GoogleConfig {
 declare global {
   interface Window {
     exponential?: {
-      load: () => Promise<Data | null>;
-      save: (data: Data) => Promise<void>;
+      load: () => Promise<unknown>;
+      save: (data: unknown) => Promise<void>;
       platform: string;
       google: {
         getConfig: () => Promise<GoogleConfig | null>;
@@ -31,6 +31,9 @@ function seed(): Data {
   const today = todayISO();
   const monday = weekStart(today);
   return {
+    id: uid(),
+    name: 'Airy Automotive',
+    moderators: ['me'],
     me: 'me',
     people: [
       { id: 'me', name: 'Rasmus Hauschild', color: '#3b82f6' },
@@ -91,6 +94,9 @@ export function htmlToMarkdown(html: string): string {
 function migrate(d: Data): Data {
   d = {
     ...d,
+    id: d.id ?? uid(),
+    name: d.name ?? 'My team',
+    moderators: d.moderators ?? [d.me],
     projects: d.projects.map((p) => (p.notes ? { ...p, notes: htmlToMarkdown(p.notes) } : p)),
     tasks: d.tasks.map((t) => (t.notes ? { ...t, notes: htmlToMarkdown(t.notes) } : t)),
     deadlines: d.deadlines.map((x) => (x.notes ? { ...x, notes: htmlToMarkdown(x.notes) } : x)),
@@ -111,20 +117,32 @@ function migrate(d: Data): Data {
 
 const LS_KEY = 'exponential-data';
 
-async function load(): Promise<Data> {
-  if (window.exponential) {
-    const d = await window.exponential.load();
-    if (d) return migrate(d);
-  } else {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) return migrate(JSON.parse(raw));
+/** A saved file is either a workspace or (older) a single team's data. */
+function toWorkspace(raw: unknown): Workspace {
+  const r = raw as Partial<Workspace> & Partial<Data>;
+  if (Array.isArray(r.teams)) {
+    const teams = r.teams.map(migrate);
+    return { teams, current: teams.some((t) => t.id === r.current) ? r.current! : teams[0].id };
   }
-  return seed();
+  const one = migrate(r as Data);
+  return { teams: [one], current: one.id };
 }
 
-async function persist(data: Data) {
-  if (window.exponential) await window.exponential.save(data);
-  else localStorage.setItem(LS_KEY, JSON.stringify(data));
+async function load(): Promise<Workspace> {
+  if (window.exponential) {
+    const d = await window.exponential.load();
+    if (d) return toWorkspace(d);
+  } else {
+    const raw = localStorage.getItem(LS_KEY);
+    if (raw) return toWorkspace(JSON.parse(raw));
+  }
+  const first = seed();
+  return { teams: [first], current: first.id };
+}
+
+async function persist(ws: Workspace) {
+  if (window.exponential) await window.exponential.save(ws);
+  else localStorage.setItem(LS_KEY, JSON.stringify(ws));
 }
 
 const HISTORY = 100;
@@ -134,28 +152,31 @@ const HISTORY = 100;
  * same key (e.g. typing into one notes field) collapse into one step.
  */
 export function useData() {
-  const [data, setData] = useState<Data | null>(null);
-  const dataRef = useRef<Data | null>(null);
+  const [ws, setWs] = useState<Workspace | null>(null);
+  const wsRef = useRef<Workspace | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const past = useRef<Data[]>([]);
   const future = useRef<Data[]>([]);
   const lastKey = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    load().then((d) => { dataRef.current = d; setData(d); });
+    load().then((w) => { wsRef.current = w; setWs(w); });
   }, []);
 
-  const commit = (next: Data) => {
-    dataRef.current = next;
-    setData(next);
+  const commitWs = (next: Workspace) => {
+    wsRef.current = next;
+    setWs(next);
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => persist(next), 300);
   };
+  const current = (w: Workspace) => w.teams.find((t) => t.id === w.current)!;
+  const replaceTeam = (w: Workspace, team: Data): Workspace => ({ ...w, teams: w.teams.map((t) => (t.id === team.id ? team : t)) });
 
   // Side effects stay outside React's updater functions (which run twice in Strict Mode).
   const update = useCallback((fn: (d: Data) => Data, coalesceKey?: string) => {
-    const prev = dataRef.current;
-    if (!prev) return;
+    const w = wsRef.current;
+    if (!w) return;
+    const prev = current(w);
     const next = fn(prev);
     if (next === prev) return;
     if (!coalesceKey || coalesceKey !== lastKey.current) {
@@ -164,26 +185,43 @@ export function useData() {
     }
     lastKey.current = coalesceKey;
     future.current = [];
-    commit(next);
+    commitWs(replaceTeam(w, next));
   }, []);
 
   const undo = useCallback(() => {
-    const cur = dataRef.current;
+    const w = wsRef.current;
     const prev = past.current.pop();
-    if (!cur || !prev) return;
-    future.current.push(cur);
+    if (!w || !prev || prev.id !== w.current) return;
+    future.current.push(current(w));
     lastKey.current = undefined;
-    commit(prev);
+    commitWs(replaceTeam(w, prev));
   }, []);
 
   const redo = useCallback(() => {
-    const cur = dataRef.current;
+    const w = wsRef.current;
     const next = future.current.pop();
-    if (!cur || !next) return;
-    past.current.push(cur);
+    if (!w || !next || next.id !== w.current) return;
+    past.current.push(current(w));
     lastKey.current = undefined;
-    commit(next);
+    commitWs(replaceTeam(w, next));
   }, []);
 
-  return { data, update, undo, redo };
+  /** Switching teams resets the undo stack; history is per team. */
+  const switchTeam = useCallback((id: string) => {
+    const w = wsRef.current;
+    if (!w || !w.teams.some((t) => t.id === id)) return;
+    past.current = []; future.current = []; lastKey.current = undefined;
+    commitWs({ ...w, current: id });
+  }, []);
+
+  const createTeam = useCallback((name: string) => {
+    const w = wsRef.current;
+    if (!w) return;
+    const me = current(w).people.find((p) => p.id === current(w).me)!;
+    const team: Data = { id: uid(), name, moderators: ['me'], me: 'me', people: [{ ...me, id: 'me' }], projects: [], deadlines: [], tasks: [], notifications: [] };
+    past.current = []; future.current = []; lastKey.current = undefined;
+    commitWs({ teams: [...w.teams, team], current: team.id });
+  }, []);
+
+  return { data: ws ? current(ws) : null, teams: ws?.teams ?? [], update, undo, redo, switchTeam, createTeam };
 }

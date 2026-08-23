@@ -74,7 +74,12 @@ next step (see below).
 | Inbox | Left sidebar: tasks added for you, review requests, owner hand-offs, changes to projects you're on |
 | Anywhere | ⌘Z / ⌘⇧Z (Ctrl on Windows) undo and redo — 100 steps |
 
+## Teams
+
+The top-left button switches between teams (and creates new ones). Each team has its own
+people, master plan, weeks, retros and inbox. The **Team** page lists members; moderators
+can rename the team, add and remove people, and promote or demote moderators.
+
 ## Not done yet
 
 - Shared data between teammates (today each machine keeps its own file).
-- A Team page for inviting people.

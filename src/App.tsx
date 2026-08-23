@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BigPlan, Star } from './BigPlan';
 import { Avatar, WeekPlan } from './WeekPlan';
 import { DetailPanel, type Selection } from './DetailPanel';
+import { TeamPage } from './TeamPage';
 import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Notification, Project, Retro, Task } from './types';
 import { shortName } from './types';
@@ -16,13 +17,15 @@ const prefs: typeof DEFAULT_PREFS = (() => {
 const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, JSON.stringify(p));
 
 export default function App() {
-  const { data, update, undo, redo } = useData();
+  const { data, teams, update, undo, redo, switchTeam, createTeam } = useData();
+  const [view, setView] = useState<'plan' | 'team'>('plan');
+  const [teamMenu, setTeamMenu] = useState(false);
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [weekH, setWeekH] = useState(() => prefs.weekH);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | null>(null);
+  const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | 'new-team' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
   const [detailW, setDetailW] = useState(() => prefs.detailW);
@@ -64,6 +67,13 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo]);
+
+  useEffect(() => {
+    if (!teamMenu) return;
+    const close = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.team-switch')) setTeamMenu(false); };
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [teamMenu]);
 
   const notify = (d: Data, n: Omit<Notification, 'id' | 'at' | 'read'>): Data =>
     n.to === n.from ? d : { ...d, notifications: [...(d.notifications ?? []), { ...n, id: uid(), at: new Date().toISOString(), read: false }] };
@@ -196,13 +206,34 @@ export default function App() {
   return (
     <div className="shell">
       <aside className="sidebar">
-        <div className="brand">Exponential</div>
-        <button className="nav-item active"><Icon d="M4 5h16v4H4zM4 11h10v4H4zM4 17h7v2H4z" /> Plan</button>
+        <div className="team-switch">
+          <button className={`team-btn${teamMenu ? ' open' : ''}`} onClick={() => setTeamMenu((o) => !o)}>
+            <span className="team-mark">{data.name.trim()[0]?.toUpperCase()}</span>
+            <span className="team-name">{data.name}</span>
+            <span className="chev">⌄</span>
+          </button>
+          {teamMenu && (
+            <div className="status-menu team-menu">
+              <div className="submenu-title">Your teams</div>
+              {teams.map((t) => (
+                <button key={t.id} className={t.id === data.id ? 'current' : ''} onClick={() => { switchTeam(t.id); setTeamMenu(false); setSelection(null); setSelectedPerson(null); }}>
+                  <span className="team-mark small">{t.name.trim()[0]?.toUpperCase()}</span> {t.name}
+                  {t.id === data.id && <span className="check">✓</span>}
+                </button>
+              ))}
+              <div className="sep" />
+              <button onClick={() => { setTeamMenu(false); setSheet('new-team'); }}><span style={{ width: 18, textAlign: 'center' }}>+</span> New team</button>
+            </div>
+          )}
+        </div>
+        <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><Icon d="M4 5h16v4H4zM4 11h10v4H4zM4 17h7v2H4z" /> Plan</button>
         <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
           <Icon d="M4 6h16v12H4zM4 6l8 7 8-7" /> Inbox
           {unread > 0 && <span className="badge">{unread}</span>}
         </button>
-        <button className="nav-item" title="Coming later"><Icon d="M12 3a9 9 0 110 18 9 9 0 010-18zm0 4v5l3 2" /> Team</button>
+        <button className={`nav-item${view === 'team' ? ' active' : ''}`} onClick={() => setView('team')}>
+          <Icon d="M16 11a4 4 0 10-8 0 4 4 0 008 0zM4 21a8 8 0 0116 0" /> Team
+        </button>
 
         <div className="sidebar-bottom">
           {googleUser ? (
@@ -220,7 +251,8 @@ export default function App() {
       </aside>
 
       <div className={`main${detailOpen ? ' with-detail' : ''}`}>
-        <div className="planners" ref={mainRef}>
+        {view === 'team' && <TeamPage team={data} onUpdate={(fn) => update(fn)} />}
+        <div className="planners" ref={mainRef} style={view === 'team' ? { display: 'none' } : undefined}>
           <section className="panel" style={{ flex: '1 1 0' }}>
             <div className="panel-head">
               <div className="panel-title">Master plan</div>
@@ -368,6 +400,9 @@ export default function App() {
           onCreate={(dl) => { update((d) => ({ ...d, deadlines: [...d.deadlines, dl] })); setSelection({ kind: 'deadline', id: dl.id }); }}
         />
       )}
+      {sheet === 'new-team' && (
+        <NewTeamSheet onClose={() => setSheet(null)} onCreate={(name) => { createTeam(name); setSelection(null); setSelectedPerson(null); setView('team'); }} />
+      )}
       {sheet === 'settings' && (
         <SettingsSheet
           user={googleUser}
@@ -436,6 +471,23 @@ function NewProjectSheet({ defaultStart, nextLane, onClose, onCreate }: {
         </div>
         <div className="sheet-actions">
           <button type="submit" className="btn primary" disabled={!valid}>Add project</button>
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+        </div>
+      </form>
+    </SheetShell>
+  );
+}
+
+function NewTeamSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (name: string) => void }) {
+  const [name, setName] = useState('');
+  const submit = () => { if (!name.trim()) return; onCreate(name.trim()); onClose(); };
+  return (
+    <SheetShell title="New team" onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <div className="field"><label>Team name</label><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Powertrain" /></div>
+        <p className="muted">You'll be its first moderator. Add people from the Team page.</p>
+        <div className="sheet-actions">
+          <button type="submit" className="btn primary" disabled={!name.trim()}>Create team</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
         </div>
       </form>
