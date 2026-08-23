@@ -34,7 +34,7 @@ export function renameTask(d: Data, id: string, title: string): Data {
 export function reorderTask(d: Data, id: string, delta: number): Data {
   const t = d.tasks.find((x) => x.id === id);
   if (!t) return d;
-  const group = d.tasks.filter((x) => x.personId === t.personId && x.date === t.date && x.projectId === t.projectId && x.parentId === t.parentId)
+  const group = d.tasks.filter((x) => x.personId === t.personId && x.date === t.date)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
   const from = group.findIndex((x) => x.id === id);
   const to = Math.min(group.length - 1, Math.max(0, from + delta));
@@ -65,4 +65,9 @@ export function claimTask(d: Data, id: string): Data {
   const t = d.tasks.find((x) => x.id === id);
   if (!t) return d;
   return { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, personId: d.me, date: undefined, end: undefined } : x)) };
+}
+
+/** Give a claimed task back: it leaves my week and returns to the project's open list. */
+export function unclaimTask(d: Data, id: string): Data {
+  return { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, personId: undefined, date: undefined, end: undefined, reviewerId: undefined } : x)) };
 }

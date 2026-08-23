@@ -59,13 +59,14 @@ interface Props {
   onUpdateTask: (id: string, patch: Partial<Task>) => void;
   onDeleteTask: (id: string) => void;
   onClaim: (id: string) => void;
+  onUnclaim: (id: string) => void;
   onOpenTask: (id: string) => void;
 }
 
 type Caret = 'start' | 'end' | number;
 type Focus = { index: number; caret: Caret } | null;
 
-export function BlockEditor({ value, onChange, tasks, people, me, claimable, createTask, onUpdateTask, onDeleteTask, onClaim, onOpenTask }: Props) {
+export function BlockEditor({ value, onChange, tasks, people, me, claimable, createTask, onUpdateTask, onDeleteTask, onClaim, onUnclaim, onOpenTask }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(() => withOrphans(parseBlocks(value), tasks));
   const [focus, setFocus] = useState<Focus>(null);
   const lastEmitted = useRef(value);
@@ -247,6 +248,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
                 onUpdate={(patch) => onUpdateTask(b.taskId, patch)}
                 onDelete={() => removeAt(i, false)}
                 onClaim={() => onClaim(b.taskId)}
+                onUnclaim={() => onUnclaim(b.taskId)}
                 onOpen={() => onOpenTask(b.taskId)}
               />
             ) : b.kind === 'img' ? (
@@ -312,10 +314,10 @@ function TextBlock({ block, focus, onFocused, onChange, onKey }: {
   );
 }
 
-function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTitle, onUpdate, onDelete, onClaim, onOpen }: {
+function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTitle, onUpdate, onDelete, onClaim, onUnclaim, onOpen }: {
   task: Task | undefined; people: Person[]; me: string; claimable: boolean; focus: Focus; onFocused: () => void;
   onKey: (e: React.KeyboardEvent<HTMLInputElement>, t: Task | undefined) => void;
-  onTitle: (title: string) => void; onUpdate: (patch: Partial<Task>) => void; onDelete: () => void; onClaim: () => void; onOpen: () => void;
+  onTitle: (title: string) => void; onUpdate: (patch: Partial<Task>) => void; onDelete: () => void; onClaim: () => void; onUnclaim: () => void; onOpen: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<DOMRect | null>(null);
@@ -346,9 +348,14 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
       </button>
       <input ref={ref} className="task-blk-title" value={title} placeholder="Task" onChange={(e) => change(e.target.value)} onKeyDown={(e) => onKey(e, task)} onBlur={() => { window.clearTimeout(timer.current); if (title !== task.title) onTitle(title); }} />
       {owner ? (
-        <button className="from-chip" title={`${owner.name} · ${STATUS_LABEL[task.status]} — open`} onClick={onOpen}>
-          <Avatar person={owner} size={14} /> {owner.id === me ? 'you' : shortName(owner.name).split(' ')[0]}
-        </button>
+        <span className="from-chip owner-chip">
+          <button className="owner-open" title={`${owner.name} · ${STATUS_LABEL[task.status]} — open`} onClick={onOpen}>
+            <Avatar person={owner} size={14} /> {owner.id === me ? 'you' : shortName(owner.name).split(' ')[0]}
+          </button>
+          {owner.id === me && claimable && (
+            <button className="owner-x" title="Take me off this task" onClick={(e) => { e.stopPropagation(); onUnclaim(); }}>×</button>
+          )}
+        </span>
       ) : claimable ? (
         <button className="pill small claim" onClick={onClaim}>+ Add to my week</button>
       ) : null}

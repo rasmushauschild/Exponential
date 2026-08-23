@@ -469,6 +469,11 @@ img { display: block; -webkit-user-drag: none; }
 .task-blk .claim { opacity: 0; transition: opacity 0.15s; flex: none; }
 .blk:hover .task-blk .claim { opacity: 1; }
 .task-blk .from-chip { cursor: pointer; flex: none; }
+.owner-chip { padding-right: 3px; }
+.owner-open { display: inline-flex; align-items: center; gap: 4px; }
+.owner-x { color: var(--text-3); font-size: 14px; line-height: 1; padding: 0 3px; border-radius: 6px; opacity: 0; transition: opacity 0.15s; }
+.blk:hover .owner-x { opacity: 1; }
+.owner-x:hover { color: var(--today); }
 .task-list { display: flex; flex-direction: column; margin: 0 -12px; }
 .task-list .wk-row { grid-template-columns: 1fr; }
 .task-list .wk-list { padding: 0 12px; }

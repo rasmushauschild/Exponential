@@ -39,6 +39,7 @@ interface Props {
   onCreateLinked: (link: { projectId?: string; parentId?: string }, title: string) => string;
   onDeleteTask: (id: string) => void;
   onClaimTask: (id: string) => void;
+  onUnclaimTask: (id: string) => void;
 }
 
 export function DetailPanel(p: Props) {
@@ -179,6 +180,7 @@ export function DetailPanel(p: Props) {
             onUpdateTask={(id, patch) => p.onUpdateTask(id, patch)}
             onDeleteTask={p.onDeleteTask}
             onClaim={p.onClaimTask}
+            onUnclaim={p.onUnclaimTask}
             onOpenTask={(id) => p.onOpen({ kind: 'task', id })}
           />
         )}

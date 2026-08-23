@@ -7,7 +7,7 @@ import logoUrl from '../build/icon.png';
 import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
-import { addTask, claimTask, nameOf, notify, patchTask, renameTask, reorderTask } from './taskOps';
+import { addTask, claimTask, nameOf, notify, patchTask, renameTask, reorderTask, unclaimTask } from './taskOps';
 import { isPending, onPersistError, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
@@ -464,6 +464,7 @@ export default function App() {
             }}
             onDeleteTask={(id) => update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))}
             onClaimTask={(id) => update((d) => claimTask(d, id))}
+            onUnclaimTask={(id) => update((d) => unclaimTask(d, id))}
             onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
             onUpdateProject={updateProject}
             groups={data.groups ?? []}
