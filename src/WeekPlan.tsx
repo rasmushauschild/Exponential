@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { CalendarEvent, ISODate, Person, Status, Task } from './types';
 import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, shortName } from './types';
 import { addDays, dayIndex, dayOfMonth, isoWeekNumber, weekdayShort } from './dates';
@@ -239,7 +240,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   onLift: (dy: number, rowH: number) => void;
   onDrop: () => void;
 }) {
-  const [menu, setMenu] = useState<false | 'down' | 'up'>(false);
+  const [menu, setMenu] = useState<DOMRect | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState<BlockDrag | null>(null);
   const [hoverCursor, setHoverCursor] = useState('grab');
@@ -251,7 +252,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   useEffect(() => {
     if (!menu) return;
     const close = (e: MouseEvent) => {
-      if (!(e.target as HTMLElement).closest('.status-menu')) setMenu(false);
+      if (!(e.target as HTMLElement).closest('.status-menu')) setMenu(null);
     };
     window.addEventListener('mousedown', close);
     return () => window.removeEventListener('mousedown', close);
@@ -340,7 +341,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
           onClick={(e) => {
             if (readonly) return;
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-            setMenu((m) => (m ? false : r.bottom + 250 > window.innerHeight ? 'up' : 'down'));
+            setMenu((m) => (m ? null : r));
           }}
           style={{ cursor: readonly ? 'default' : 'pointer' }}>
           <StatusDot status={task.status} />
@@ -363,9 +364,9 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
             value={task.status}
             reviewerId={task.reviewerId}
             people={people.filter((x) => x.id !== task.personId)}
-            onPick={(status, reviewerId) => { onUpdate(task.id, reviewerId !== undefined ? { status, reviewerId } : { status }); setMenu(false); }}
-            onDelete={() => { setMenu(false); onDelete(task.id); }}
-            style={menu === 'up' ? { bottom: 32, left: 0 } : { top: 32, left: 0 }}
+            onPick={(status, reviewerId) => { onUpdate(task.id, reviewerId !== undefined ? { status, reviewerId } : { status }); setMenu(null); }}
+            onDelete={() => { setMenu(null); onDelete(task.id); }}
+            anchor={menu}
           />
         )}
       </div>
@@ -393,16 +394,19 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
  * Status picker. Hovering "Needs review" slides out a list of people so a review can be requested
  * in the same gesture; clicking "Needs review" itself just sets the status.
  */
-export function StatusMenu({ value, reviewerId, people, onPick, onDelete, style }: {
+export function StatusMenu({ value, reviewerId, people, onPick, onDelete, anchor }: {
   value: Status;
   reviewerId?: string;
   people: Person[];
   onPick: (status: Status, reviewerId?: string) => void;
   onDelete?: () => void;
-  style?: React.CSSProperties;
+  anchor: DOMRect; // the button that opened it; the menu renders in a portal so panels can't clip it
 }) {
   const [sub, setSub] = useState(false);
-  return (
+  const menuH = 44 * 5 + (onDelete ? 50 : 0) + 12;
+  const up = anchor.bottom + menuH > window.innerHeight - 8;
+  const style: React.CSSProperties = { position: 'fixed', left: Math.min(anchor.left, window.innerWidth - 420), ...(up ? { bottom: window.innerHeight - anchor.top + 6 } : { top: anchor.bottom + 6 }) };
+  return createPortal(
     <div className="status-menu" style={style} onPointerDown={(e) => e.stopPropagation()}>
       {STATUS_ORDER.map((s) => (
         <div key={s} className="status-item" onPointerEnter={() => setSub(s === 'review')}>
@@ -429,7 +433,8 @@ export function StatusMenu({ value, reviewerId, people, onPick, onDelete, style 
           <button className="danger" onClick={onDelete}><span style={{ width: 14 }} /> Delete</button>
         </>
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 

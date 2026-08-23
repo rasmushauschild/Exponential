@@ -49,10 +49,9 @@ img { display: block; -webkit-user-drag: none; }
 .sidebar.mac .team-list { padding-top: 40px; } /* room for the window's traffic lights */
 .team-row.add { display: none; }
 .team-list:hover .team-row.add, .team-list:focus-within .team-row.add { display: flex; }
-.team-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 14px; text-align: left; transition: background 0.15s; }
-.team-row:hover { background: var(--soft); }
-.team-row.current { background: var(--text); color: #fff; }
-.team-row.current .team-mark { background: #fff; color: var(--text); }
+.team-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 22px; text-align: left; transition: background 0.15s; }
+.team-row:hover { background: rgba(0, 0, 0, 0.03); }
+.team-row.current { background: rgba(0, 0, 0, 0.05); }
 .team-row.add { color: var(--text-3); }
 .team-row.add:hover { color: var(--text-2); }
 .team-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--text); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }
@@ -217,7 +216,6 @@ img { display: block; -webkit-user-drag: none; }
 .wk-day.today .num { color: var(--today); }
 
 .wk-row.task { border-radius: 14px; transition: background 0.15s; position: relative; }
-.wk-row.task:has(.status-menu) { z-index: 60; }
 .wk-row.task.lifting { z-index: 40; background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); transition: none; cursor: grabbing; }
 .wk-row.task.shifted { transition: transform 0.15s ease-out; }
 .task-title { cursor: pointer; }
@@ -266,7 +264,7 @@ img { display: block; -webkit-user-drag: none; }
 }
 
 .status-menu {
-  position: absolute; z-index: 50; background: #fff; border-radius: 16px;
+  position: absolute; z-index: 500; background: #fff; border-radius: 16px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 16px 40px rgba(0, 0, 0, 0.14); padding: 6px; min-width: 170px; animation: pop 0.14s ease-out;
 }
 .status-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px; text-align: left; font-weight: 500; }

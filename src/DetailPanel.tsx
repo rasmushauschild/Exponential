@@ -298,12 +298,12 @@ function useClickAway(open: boolean, cls: string, close: () => void) {
 function StatusSelect({ value, reviewerId, people, onPick }: {
   value: Status; reviewerId?: string; people: Person[]; onPick: (s: Status, reviewerId?: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  useClickAway(open, '.status-select', () => setOpen(false));
+  const [open, setOpen] = useState<DOMRect | null>(null);
+  useClickAway(!!open, '.status-select', () => setOpen(null));
   return (
     <div className="status-select">
-      <button className="pill small" onClick={() => setOpen((o) => !o)}><StatusDot status={value} /> {STATUS_LABEL[value]}</button>
-      {open && <StatusMenu value={value} reviewerId={reviewerId} people={people} onPick={(s, r) => { onPick(s, r); setOpen(false); }} style={{ top: 34, left: 0 }} />}
+      <button className="pill small" onClick={(e) => setOpen((o) => (o ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()))}><StatusDot status={value} /> {STATUS_LABEL[value]}</button>
+      {open && <StatusMenu value={value} reviewerId={reviewerId} people={people} onPick={(s, r) => { onPick(s, r); setOpen(null); }} anchor={open} />}
     </div>
   );
 }
@@ -468,7 +468,7 @@ function MarkdownEditor({ value, onChange }: { value: string; onChange: (md: str
           ref={ref}
           className="md-source"
           value={local}
-          placeholder={'Write in Markdown — # headings, - bullets, - [ ] todos, **bold**. Paste or drop images.'}
+          placeholder="Write something…"
           onChange={(e) => commit(e.target.value)}
           onKeyDown={onKeyDown}
           onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f); } }}
