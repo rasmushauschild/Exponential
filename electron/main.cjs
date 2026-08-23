@@ -5,8 +5,11 @@ const google = require('./google.cjs');
 
 const dataFile = () => path.join(app.getPath('userData'), 'exponential-data.json');
 
+const iconPath = path.join(__dirname, '..', 'build', process.platform === 'win32' ? 'icon.png' : 'icon.png');
+
 function createWindow() {
   const win = new BrowserWindow({
+    icon: iconPath,
     width: 1280,
     height: 860,
     minWidth: 900,
@@ -47,6 +50,8 @@ ipcMain.handle('google:signOut', () => google.signOut());
 ipcMain.handle('google:events', (_e, calendarId, from, to) => google.events(calendarId, from, to));
 
 app.whenReady().then(() => {
+  // In development the dock shows Electron's own icon unless we set ours.
+  if (process.platform === 'darwin' && app.dock) app.dock.setIcon(iconPath);
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

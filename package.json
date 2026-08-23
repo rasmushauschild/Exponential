@@ -15,10 +15,10 @@
   "build": {
     "appId": "com.airy.exponential",
     "productName": "Exponential",
-    "files": ["dist/**", "electron/**", "package.json"],
-    "directories": { "output": "release" },
-    "mac": { "target": ["dmg"], "category": "public.app-category.productivity" },
-    "win": { "target": ["nsis"] }
+    "files": ["dist/**", "electron/**", "build/icon.png", "package.json"],
+    "directories": { "output": "release", "buildResources": "build" },
+    "mac": { "target": ["dmg"], "category": "public.app-category.productivity", "icon": "build/icon.icns" },
+    "win": { "target": ["nsis"], "icon": "build/icon.png" }
   },
   "devDependencies": {
     "@types/react": "^19.2.14",

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="steel" x1="0.12" y1="0.85" x2="0.92" y2="0.55">
+      <stop offset="0" stop-color="#f3f4f8"/>
+      <stop offset="0.28" stop-color="#c7c9d3"/>
+      <stop offset="0.5" stop-color="#3c3d45"/>
+      <stop offset="0.72" stop-color="#4b4c56"/>
+      <stop offset="1" stop-color="#9597a3"/>
+    </linearGradient>
+    <linearGradient id="apex" x1="0.5" y1="0.3" x2="0.5" y2="0.75">
+      <stop offset="0" stop-color="#2a2b31" stop-opacity="0.9"/>
+      <stop offset="0.35" stop-color="#2a2b31" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#2a2b31" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="soft" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="1.2"/></filter>
+  </defs>
+  <path d="M512 318 L783 678 L512 524 L241 678 Z" fill="url(#steel)" filter="url(#soft)"/>
+  <path d="M512 318 L783 678 L512 524 L241 678 Z" fill="url(#apex)"/>
+</svg>
