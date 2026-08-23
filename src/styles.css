@@ -212,6 +212,13 @@ img { display: block; -webkit-user-drag: none; }
 .today-line { position: absolute; top: 44px; bottom: 10px; border-radius: 2px; width: 2px; margin-left: -1px; background: var(--today); pointer-events: none; z-index: 5; }
 
 .tl-lanes { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; }
+.tl-group {
+  position: absolute; left: 14px; height: 20px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px 0 6px; border-radius: 999px;
+  font-size: 12px; font-weight: 700; color: var(--text-2); background: var(--panel); box-shadow: 0 0 0 1px var(--line); z-index: 3; white-space: nowrap;
+}
+.tl-group .dot { width: 8px; height: 8px; border-radius: 50%; }
+.tl-group.none { color: var(--text-3); cursor: default; }
+.tl-group:not(.none):hover { color: var(--text); }
 .tl-project {
   position: absolute; height: 30px; display: flex; align-items: center; gap: 10px;
   border-radius: 999px; padding: 0 12px; font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden;

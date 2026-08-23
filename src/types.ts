@@ -10,13 +10,21 @@ export interface Person {
   color: string;
 }
 
+export interface Group {
+  id: string;
+  name: string;
+  color: string;
+  sort: number;
+}
+
 export interface Project {
   id: string;
   name: string;
   start: ISODate;
   end: ISODate;
-  lane: number;
-  color?: string;
+  lane: number; // within its group's section
+  groupId?: string;
+  color?: string; // legacy; colour now comes from the group
   notes?: string; // Markdown
   assignees?: string[];
 }
@@ -82,6 +90,7 @@ export interface Data {
   retroFields?: RetroField[]; // defaults to DEFAULT_RETRO_FIELDS
   moderators: string[]; // person ids allowed to manage members
   people: Person[];
+  groups?: Group[];
   projects: Project[];
   deadlines: Deadline[];
   tasks: Task[];
@@ -133,6 +142,7 @@ export const STATUS_COLOR: Record<Status, string> = {
 };
 
 export const PROJECT_COLORS = ['#5b8def', '#f0a04b', '#3fb98a', '#9b7fe8', '#e8739b', '#e2b93b', '#3fb4d6'];
+export const NO_GROUP_COLOR = '#9a9aa3';
 
 /** "Rasmus Hauschild" → "Rasmus H." */
 export function shortName(name: string): string {

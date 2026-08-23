@@ -1,5 +1,5 @@
 import { createClient, type RealtimeChannel } from '@supabase/supabase-js';
-import type { Data, Deadline, Notification, Person, Project, Retro, Task } from './types';
+import type { Data, Deadline, Group, Notification, Person, Project, Retro, Task } from './types';
 import { PROJECT_COLORS } from './types';
 
 export const SUPABASE_URL = 'https://mojqfsnnawdxndqaciuv.supabase.co';
@@ -41,7 +41,8 @@ export async function signOutCloud() {
 type ProfileRow = { id: string; email: string; name: string; photo: string | null; color: string };
 type TeamRow = { id: string; name: string; icon: string | null; retro_fields: Data['retroFields'] | null };
 type MemberRow = { team_id: string; email: string; user_id: string | null; role: 'moderator' | 'member'; color: string; profiles: ProfileRow | null };
-type ProjectRow = { id: string; team_id: string; name: string; start_date: string; end_date: string; lane: number; color: string | null; notes: string | null; assignees: string[] };
+type ProjectRow = { id: string; team_id: string; name: string; start_date: string; end_date: string; lane: number; color: string | null; notes: string | null; assignees: string[]; group_id: string | null };
+type GroupRow = { id: string; team_id: string; name: string; color: string; sort: number };
 type DeadlineRow = { id: string; team_id: string; name: string; date: string; notes: string | null };
 type TaskRow = { id: string; team_id: string; person_id: string | null; title: string; date: string | null; end_date: string | null; status: Task['status']; sort_order: number; notes: string | null; created_by: string | null; reviewer_id: string | null; project_id: string | null; parent_id: string | null };
 type RetroRow = { team_id: string; week: string; answers: Record<string, string>; notes: string | null };
@@ -49,13 +50,15 @@ type NotificationRow = { id: string; team_id: string; to_user: string; from_user
 
 const und = <T>(v: T | null): T | undefined => (v === null ? undefined : v);
 
-const toProject = (r: ProjectRow): Project => ({ id: r.id, name: r.name, start: r.start_date, end: r.end_date, lane: r.lane, color: und(r.color), notes: und(r.notes), assignees: r.assignees?.length ? r.assignees : undefined });
+const toProject = (r: ProjectRow): Project => ({ id: r.id, name: r.name, start: r.start_date, end: r.end_date, lane: r.lane, groupId: und(r.group_id), color: und(r.color), notes: und(r.notes), assignees: r.assignees?.length ? r.assignees : undefined });
+const toGroup = (r: GroupRow): Group => ({ id: r.id, name: r.name, color: r.color, sort: r.sort });
 const toDeadline = (r: DeadlineRow): Deadline => ({ id: r.id, name: r.name, date: r.date, notes: und(r.notes) });
 const toTask = (r: TaskRow): Task => ({ id: r.id, personId: und(r.person_id), title: r.title, date: und(r.date), end: und(r.end_date), status: r.status, order: r.sort_order, notes: und(r.notes), createdBy: und(r.created_by), reviewerId: und(r.reviewer_id), projectId: und(r.project_id), parentId: und(r.parent_id) });
 const toRetro = (r: RetroRow): Retro => ({ week: r.week, answers: r.answers ?? {}, notes: und(r.notes) });
 const toNotification = (r: NotificationRow): Notification => ({ id: r.id, to: r.to_user, from: r.from_user ?? '', kind: r.kind, text: r.text, ref: { kind: r.ref_kind, id: r.ref_id }, at: r.created_at, read: r.read });
 
-const fromProject = (teamId: string, p: Project) => ({ id: p.id, team_id: teamId, name: p.name, start_date: p.start, end_date: p.end, lane: p.lane, color: p.color ?? null, notes: p.notes ?? null, assignees: (p.assignees ?? []).filter((a) => !isPending(a)) });
+const fromProject = (teamId: string, p: Project) => ({ id: p.id, team_id: teamId, name: p.name, start_date: p.start, end_date: p.end, lane: p.lane, group_id: p.groupId ?? null, color: p.color ?? null, notes: p.notes ?? null, assignees: (p.assignees ?? []).filter((a) => !isPending(a)) });
+const fromGroup = (teamId: string, g: Group) => ({ id: g.id, team_id: teamId, name: g.name, color: g.color, sort: g.sort });
 const fromDeadline = (teamId: string, d: Deadline) => ({ id: d.id, team_id: teamId, name: d.name, date: d.date, notes: d.notes ?? null });
 const fromTask = (teamId: string, t: Task) => ({ id: t.id, team_id: teamId, person_id: t.personId ?? null, title: t.title, date: t.date ?? null, end_date: t.end ?? null, status: t.status, sort_order: t.order ?? 0, notes: t.notes ?? null, created_by: t.createdBy ?? null, reviewer_id: t.reviewerId ?? null, project_id: t.projectId ?? null, parent_id: t.parentId ?? null });
 const fromRetro = (teamId: string, r: Retro) => ({ team_id: teamId, week: r.week, answers: r.answers, notes: r.notes ?? null });
@@ -83,7 +86,7 @@ export async function deleteTeam(id: string) {
 }
 
 export async function loadTeam(teamId: string, me: string): Promise<Data> {
-  const [team, members, projects, deadlines, tasks, retros, notifications] = await Promise.all([
+  const [team, members, projects, deadlines, tasks, retros, notifications, groups] = await Promise.all([
     supabase.from('teams').select('id, name, icon, retro_fields').eq('id', teamId).single(),
     supabase.from('team_members').select('team_id, email, user_id, role, color, profiles(id, email, name, photo, color)').eq('team_id', teamId).order('created_at'),
     supabase.from('projects').select('*').eq('team_id', teamId),
@@ -91,8 +94,9 @@ export async function loadTeam(teamId: string, me: string): Promise<Data> {
     supabase.from('tasks').select('*').eq('team_id', teamId),
     supabase.from('retros').select('*').eq('team_id', teamId),
     supabase.from('notifications').select('*').eq('team_id', teamId).eq('to_user', me).order('created_at'),
+    supabase.from('groups').select('*').eq('team_id', teamId).order('sort').order('created_at'),
   ]);
-  for (const r of [team, members, projects, deadlines, tasks, retros, notifications]) if (r.error) throw r.error;
+  for (const r of [team, members, projects, deadlines, tasks, retros, notifications, groups]) if (r.error) throw r.error;
   const t = team.data as TeamRow;
   const rows = members.data as unknown as MemberRow[];
   const people: Person[] = rows.map((m, i) => m.profiles
@@ -106,6 +110,7 @@ export async function loadTeam(teamId: string, me: string): Promise<Data> {
     moderators: rows.filter((m) => m.role === 'moderator').map((m) => m.user_id ?? pendingId(m.email)),
     me,
     people,
+    groups: (groups.data as GroupRow[]).map(toGroup),
     projects: (projects.data as ProjectRow[]).map(toProject),
     deadlines: (deadlines.data as DeadlineRow[]).map(toDeadline),
     tasks: (tasks.data as TaskRow[]).map(toTask),
@@ -141,6 +146,10 @@ async function run(label: string, p: PromiseLike<{ error: unknown }>) {
 export async function persistDiff(prev: Data, next: Data) {
   const teamId = next.id;
   const ops: Promise<void>[] = [];
+
+  const gr = diff(prev.groups ?? [], next.groups ?? []);
+  if (gr.upsert.length) await run('groups', supabase.from('groups').upsert(gr.upsert.map((g) => fromGroup(teamId, g)))); // before projects that reference them
+  if (gr.remove.length) ops.push(run('groups-del', supabase.from('groups').delete().in('id', gr.remove)));
 
   const pr = diff(prev.projects, next.projects);
   if (pr.upsert.length) ops.push(run('projects', supabase.from('projects').upsert(pr.upsert.map((p) => fromProject(teamId, p)))));
@@ -197,7 +206,7 @@ export function subscribeTeam(teamId: string, me: string, onChange: () => void):
   let timer: number | undefined;
   const kick = () => { window.clearTimeout(timer); timer = window.setTimeout(onChange, 150); };
   const ch: RealtimeChannel = supabase.channel(`team:${teamId}`);
-  for (const table of ['projects', 'deadlines', 'tasks', 'retros', 'team_members', 'teams']) {
+  for (const table of ['projects', 'deadlines', 'tasks', 'retros', 'team_members', 'teams', 'groups']) {
     ch.on('postgres_changes', { event: '*', schema: 'public', table, filter: table === 'teams' ? `id=eq.${teamId}` : `team_id=eq.${teamId}` }, kick);
   }
   ch.on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `to_user=eq.${me}` }, kick);

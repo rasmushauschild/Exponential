@@ -39,7 +39,7 @@ export function parseBlocks(md: string): Block[] {
 }
 
 export function serializeBlocks(blocks: Block[], tasks: Task[]): string {
-  return blocks.map((b) => {
+  return blocks.filter((b, i) => !(i === blocks.length - 1 && b.kind === 'p' && b.text === '')).map((b) => {
     if (b.kind === 'h1') return `# ${b.text}`;
     if (b.kind === 'h2') return `## ${b.text}`;
     if (b.kind === 'img') return `![](${b.src})`;
@@ -78,13 +78,15 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tasks created elsewhere (e.g. in the week view) for this project get a block appended.
   useEffect(() => { setBlocks((b) => { const n = withOrphans(b, tasks); return n.length === b.length ? b : n; }); }, [tasks]);
+  // Backspace on the final empty block must not remove it: removeAt keeps one via ensureTrailing.
 
   // Emit Markdown on a short pause rather than every keystroke; flush when the editor goes away.
   const pending = useRef<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
   const flush = () => { window.clearTimeout(timer.current); if (pending.current !== null) { onChange(pending.current); pending.current = null; } };
   useEffect(() => flush, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const commit = (next: Block[]) => {
+  const commit = (raw: Block[]) => {
+    const next = ensureTrailing(raw);
     setBlocks(next);
     const md = serializeBlocks(next, tasks);
     lastEmitted.current = md;
@@ -261,21 +263,25 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
             {b.kind === 'img' && <button className="blk-x" title="Remove image" onClick={() => removeAt(i)}>×</button>}
           </div>
         ))}
-        {blocks.length === 0 && (
-          <button className="add-task list-add" onClick={() => insertAt(0, { key: newKey(), kind: 'p', text: '' })}><span className="plus">+</span> Write something</button>
-        )}
       </div>
     </div>
   );
 }
 
-/** Tasks that exist for this project but aren't in the notes yet get a block at the end. */
+/** Tasks that exist for this project but aren't in the notes yet get a block at the end; the list always ends with an empty text block. */
 function withOrphans(blocks: Block[], tasks: Task[]): Block[] {
   const present = new Set(blocks.filter((b): b is Extract<Block, { kind: 'task' }> => b.kind === 'task').map((b) => b.taskId));
   const missing = tasks.filter((t) => !present.has(t.id)).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   // drop task blocks whose task is gone
   const kept = blocks.filter((b) => b.kind !== 'task' || tasks.some((t) => t.id === b.taskId));
-  return missing.length ? [...kept, ...missing.map((t) => ({ key: newKey(), kind: 'task' as const, taskId: t.id }))] : kept;
+  const withTasks = missing.length ? [...kept, ...missing.map((t) => ({ key: newKey(), kind: 'task' as const, taskId: t.id }))] : kept;
+  return ensureTrailing(withTasks);
+}
+
+function ensureTrailing(blocks: Block[]): Block[] {
+  const last = blocks[blocks.length - 1];
+  if (last && last.kind === 'p' && last.text === '') return blocks;
+  return [...blocks, { key: newKey(), kind: 'p', text: '' }];
 }
 
 function TextBlock({ block, focus, onFocused, onChange, onKey }: {

@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { Deadline, ISODate, Person, Project } from './types';
-import { PROJECT_COLORS } from './types';
+import type { Deadline, Group, ISODate, Person, Project } from './types';
+import { NO_GROUP_COLOR } from './types';
 import { dayIndex, dayOfMonth, formatShort, fromDayIndex, isoWeekNumber, monthShort, weekStart, weekdayShort } from './dates';
 import { Avatar } from './WeekPlan';
 
@@ -8,12 +8,15 @@ const ROW_H = 38;
 const DEADLINE_ROW_H = 30;
 const HEADER_H = 44; // month + day labels; tints and the band start below this
 const RETRO_H = 30; // strip along the bottom that shows week labels / opens the retro
+const GROUP_H = 26; // group label row above each section
+const GROUP_GAP = 8;
 const MIN_PPD = 4;
 const MAX_PPD = 90;
 const EDGE = 10; // px from a bar's end that acts as a resize handle
 
 interface Props {
   projects: Project[];
+  groups: Group[];
   deadlines: Deadline[];
   people: Person[];
   today: ISODate;
@@ -25,24 +28,26 @@ interface Props {
   onWeekChange: (monday: ISODate) => void;
   onOpenProject: (p: Project) => void;
   onOpenDeadline: (d: Deadline) => void;
-  onMoveProject: (id: string, patch: Pick<Project, 'start' | 'end' | 'lane'>) => void;
+  onMoveProject: (id: string, patch: Pick<Project, 'start' | 'end' | 'lane' | 'groupId'>) => void;
+  onOpenGroup: (g: Group) => void;
   onMoveDeadline: (id: string, date: ISODate) => void;
-  onCreateProject: (start: ISODate, lane: number) => void;
+  onCreateProject: (start: ISODate, lane: number, groupId?: string) => void;
   onRename: (id: string, name: string) => void;
   onOpenRetro: (monday: ISODate) => void;
   onCreateDeadline: (date: ISODate) => void;
   onRenameDeadline: (id: string, name: string) => void;
 }
 
-export function projectColor(p: Project, index: number) {
-  return p.color ?? PROJECT_COLORS[index % PROJECT_COLORS.length];
+export function projectColor(p: Project, groups: Group[]) {
+  return groups.find((g) => g.id === p.groupId)?.color ?? NO_GROUP_COLOR;
 }
 
-type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: number; lane: number; moved: boolean };
+type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: number; lane: number; groupId?: string; moved: boolean };
+type Section = { groupId?: string; name: string; color: string; headerTop: number; laneTop: number; lanes: number };
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, deadlines, people, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline } = props;
+  const { projects, groups, deadlines, people, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -54,12 +59,31 @@ export function BigPlan(props: Props) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [dlDrag, setDlDrag] = useState<{ id: string; date: number } | null>(null);
   const [hoverCursor, setHoverCursor] = useState<string>('');
-  const [ghost, setGhost] = useState<{ day: number; lane: number } | null>(null);
+  const [ghost, setGhost] = useState<{ day: number; lane: number; groupId?: string } | null>(null);
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
   const [scrollY, setScrollY] = useState(0); // vertical offset of the lanes when they don't fit
   const scrollRef = useRef(0);
   scrollRef.current = scrollY;
-  const laneCount = projects.reduce((m, p) => Math.max(m, p.lane + 1), 0) + 1;
+  // Vertical layout: one section per group (then ungrouped), each with its projects' lanes plus a spare lane.
+  const sections: Section[] = (() => {
+    const list: Section[] = [];
+    const ordered = [...groups].sort((a, b) => a.sort - b.sort);
+    const keys: (string | undefined)[] = [...ordered.map((g) => g.id), undefined];
+    let y = HEADER_H + DEADLINE_ROW_H + 10;
+    for (const gid of keys) {
+      const inGroup = projects.filter((p) => (p.groupId ?? undefined) === gid || (gid === undefined && (!p.groupId || !groups.some((g) => g.id === p.groupId))));
+      const g = ordered.find((x) => x.id === gid);
+      const showHeader = groups.length > 0;
+      const headerTop = y;
+      if (showHeader) y += GROUP_H;
+      const lanes = inGroup.reduce((m, p) => Math.max(m, p.lane + 1), 0) + 1;
+      list.push({ groupId: gid, name: g?.name ?? 'No group', color: g?.color ?? NO_GROUP_COLOR, headerTop, laneTop: y, lanes });
+      y += lanes * ROW_H + GROUP_GAP;
+    }
+    return list;
+  })();
+  const sectionOf = (gid?: string) => sections.find((s) => s.groupId === gid) ?? sections[sections.length - 1];
+  const laneCount = sections.reduce((m, s) => m + s.lanes, 0);
   const weekRef = useRef(week);
   weekRef.current = week;
   // The band eases between weeks by default; while the timeline itself moves (pan/zoom) it must
@@ -119,7 +143,8 @@ export function BigPlan(props: Props) {
   };
 
   const projectTop = HEADER_H + DEADLINE_ROW_H + 10; // the deadline row is always there (hover it to add one)
-  const contentH = projectTop + laneCount * ROW_H + RETRO_H;
+  const lastSec = sections[sections.length - 1];
+  const contentH = lastSec.laneTop + lastSec.lanes * ROW_H + RETRO_H;
   const clampScroll = (y: number) => Math.max(0, Math.min(y, Math.max(0, contentH - height)));
   const clampRef = useRef(clampScroll);
   clampRef.current = clampScroll; // the wheel listener is bound once; it must see the current sizes
@@ -127,14 +152,18 @@ export function BigPlan(props: Props) {
   const inDeadlineRow = (clientY: number) => { const y = clientY - ref.current!.getBoundingClientRect().top; return y >= HEADER_H && y < HEADER_H + DEADLINE_ROW_H; };
   const inRetroStrip = (clientY: number) => clientY - ref.current!.getBoundingClientRect().top > height - RETRO_H;
 
+  /** Day under the cursor, plus the section/lane if the cursor is inside a section's lanes (lane -2 = nowhere). */
   const slotAt = (clientX: number, clientY: number) => {
     const rect = ref.current!.getBoundingClientRect();
     const day = Math.floor(origin + (clientX - rect.left) / ppd);
-    const lane = Math.floor((clientY - rect.top + scrollY - projectTop) / ROW_H);
-    return { day, lane };
+    const yc = clientY - rect.top + scrollY;
+    for (const sec of sections) {
+      if (yc >= sec.laneTop && yc < sec.laneTop + sec.lanes * ROW_H) return { day, lane: Math.floor((yc - sec.laneTop) / ROW_H), groupId: sec.groupId };
+    }
+    return { day, lane: -2, groupId: undefined as string | undefined };
   };
 
-  const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .week-label');
+  const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .week-label, .tl-group');
 
   // Empty space: a still click creates a week-long project at the ghost; a drag pans.
   const onPointerDown = (e: React.PointerEvent) => {
@@ -152,20 +181,20 @@ export function BigPlan(props: Props) {
       (ev) => {
         setPanning(false);
         if (moved || inRetroStrip(ev.clientY)) return;
-        const { day, lane } = slotAt(ev.clientX, ev.clientY);
+        const { day, lane, groupId } = slotAt(ev.clientX, ev.clientY);
         if (inDeadlineRow(ev.clientY)) onCreateDeadline(fromDayIndex(day));
-        else if (lane >= 0) onCreateProject(fromDayIndex(day), lane);
+        else if (lane >= 0) onCreateProject(fromDayIndex(day), lane, groupId);
       },
     );
   };
 
   const onHover = (e: React.PointerEvent) => {
     if (drag || dlDrag || panning || bandDrag) return;
-    const { day, lane } = slotAt(e.clientX, e.clientY);
+    const { day, lane, groupId } = slotAt(e.clientX, e.clientY);
     setHoverWeek(dayIndex(weekStart(fromDayIndex(day))));
     if (!isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); return; }
     if (inDeadlineRow(e.clientY)) { setGhost({ day, lane: -1 }); return; } // lane -1 = deadline row
-    setGhost(lane >= 0 ? { day, lane } : null);
+    setGhost(lane >= 0 ? { day, lane, groupId } : null);
   };
 
   const onBandDown = (e: React.PointerEvent) => {
@@ -192,15 +221,20 @@ export function BigPlan(props: Props) {
     const s0 = dayIndex(p.start), e0 = dayIndex(p.end), lane0 = p.lane;
     const startX = e.clientX, startY = e.clientY;
     const multi = e.metaKey || e.shiftKey || e.ctrlKey;
-    const d: Drag = { id: p.id, mode, start: s0, end: e0, lane: lane0, moved: false };
+    const d: Drag = { id: p.id, mode, start: s0, end: e0, lane: lane0, groupId: p.groupId, moved: false };
     setDrag(d);
     let latest = d;
+    const grabOffset = startY - (ref.current!.getBoundingClientRect().top + sectionOf(p.groupId).laneTop + lane0 * ROW_H - scrollY); // where in the row the bar was grabbed
     track(
       (ev) => {
         const dd = Math.round((ev.clientX - startX) / ppd);
-        const dl = Math.round((ev.clientY - startY) / ROW_H);
         const moved = latest.moved || Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3;
-        if (mode === 'move') latest = { ...d, start: s0 + dd, end: e0 + dd, lane: Math.max(0, lane0 + dl), moved };
+        if (mode === 'move') {
+          const slot = slotAt(ev.clientX, ev.clientY - grabOffset + ROW_H / 2);
+          const lane = slot.lane >= 0 ? slot.lane : latest.lane;
+          const groupId = slot.lane >= 0 ? slot.groupId : latest.groupId;
+          latest = { ...d, start: s0 + dd, end: e0 + dd, lane, groupId, moved };
+        }
         else if (mode === 'start') latest = { ...d, start: Math.min(s0 + dd, e0), moved };
         else latest = { ...d, end: Math.max(e0 + dd, s0), moved };
         setDrag(latest);
@@ -208,7 +242,7 @@ export function BigPlan(props: Props) {
       () => {
         setDrag(null);
         if (!latest.moved) { if (multi) onToggleSelect(p.id); else onOpenProject(p); }
-        else onMoveProject(p.id, { start: fromDayIndex(latest.start), end: fromDayIndex(latest.end), lane: latest.lane });
+        else onMoveProject(p.id, { start: fromDayIndex(latest.start), end: fromDayIndex(latest.end), lane: latest.lane, groupId: latest.groupId });
       },
     );
   };
@@ -357,18 +391,25 @@ export function BigPlan(props: Props) {
 
       <div className="tl-lanes" style={{ top: projectTop - 6 }}>
       {ghost && !drag && ghost.lane >= 0 && (
-        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: 6 + ghost.lane * ROW_H - scrollY }}>
+        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 6 + ghost.lane * ROW_H - scrollY }}>
           New project
         </div>
       )}
-      {projects.map((p, i) => {
+      {sections.map((sec) => groups.length > 0 && (
+        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}`} style={{ top: sec.headerTop - projectTop + 6 - scrollY }}
+          onPointerDown={(e) => e.stopPropagation()} onClick={() => { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); }}>
+          <span className="dot" style={{ background: sec.color }} /> {sec.name}
+        </button>
+      ))}
+      {projects.map((p) => {
         const live = drag?.id === p.id ? drag : null;
         const s = live ? live.start : dayIndex(p.start);
         const en = live ? live.end : dayIndex(p.end);
         const lane = live ? live.lane : p.lane;
+        const sec = sectionOf(live ? live.groupId : p.groupId);
         const left = (s - origin) * ppd;
         const w = Math.max(ppd, (en - s + 1) * ppd);
-        const color = projectColor(p, i);
+        const color = projectColor(p, groups);
         const editing = editingId === p.id;
         return (
           <div
@@ -377,7 +418,7 @@ export function BigPlan(props: Props) {
             style={{
               left,
               width: w,
-              top: 6 + lane * ROW_H - scrollY,
+              top: sec.laneTop - projectTop + 6 + lane * ROW_H - scrollY,
               ['--pc' as string]: color,
               paddingLeft: Math.max(12, Math.min(w - 12, 12 - left)),
               cursor: live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',

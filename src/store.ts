@@ -32,6 +32,8 @@ declare global {
         signOut: () => Promise<void>;
         events: (calendarId: string, from: ISODate, to: ISODate) => Promise<CalendarEvent[]>;
         idToken: () => Promise<string | null>;
+        hasCalendar: () => Promise<boolean>;
+        grantCalendar: () => Promise<boolean>;
       };
     };
   }

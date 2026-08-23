@@ -126,6 +126,8 @@ ipcMain.handle('google:status', () => google.status());
 ipcMain.handle('google:signIn', () => google.signIn());
 ipcMain.handle('google:signOut', () => google.signOut());
 ipcMain.handle('google:idToken', () => google.idToken());
+ipcMain.handle('google:hasCalendar', () => google.hasCalendarScope());
+ipcMain.handle('google:grantCalendar', () => google.grantCalendar());
 ipcMain.handle('google:events', (_e, calendarId, from, to) => google.events(calendarId, from, to));
 
 /** Auto-update from GitHub Releases: check shortly after launch and every two hours; install on request. */

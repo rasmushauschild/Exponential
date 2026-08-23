@@ -5,8 +5,8 @@ import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
 import logoUrl from '../build/icon.png';
 import { useData, uid, type GoogleConfig } from './store';
-import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Project, Retro, Task } from './types';
-import { DEFAULT_RETRO_FIELDS, shortName } from './types';
+import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
+import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, nameOf, notify, patchTask, renameTask, reorderTask } from './taskOps';
 import { isPending, onPersistError, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
@@ -36,7 +36,8 @@ export default function App() {
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [weekH, setWeekH] = useState(() => prefs.weekH);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | 'new-team' | null>(null);
+  const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | 'new-team' | 'group' | null>(null);
+  const [editGroup, setEditGroup] = useState<Group | null>(null); // group being edited in the group sheet
   const [editingId, setEditingId] = useState<string | null>(null);
   const [multi, setMulti] = useState<Set<string>>(new Set()); // shift/cmd-click selection across both panels
   const toggleSelect = (id: string) => setMulti((m) => {
@@ -338,6 +339,7 @@ export default function App() {
               <div className="panel-title">Master plan</div>
               <div className="panel-spacer" />
               {!isThisWeek && <button className="pill" onClick={() => setWeek(weekStart(today))}>Back to this week</button>}
+              <button className="pill" onClick={() => { setEditGroup(null); setSheet('group'); }}>+ Group</button>
               <button className="pill" onClick={() => setSheet('project')}>+ Project</button>
               <button className="pill" onClick={() => setSheet('deadline')}>
 +<span className="dot-icon" />Deadline
@@ -345,6 +347,7 @@ export default function App() {
             </div>
             <BigPlan
               projects={data.projects}
+              groups={data.groups ?? []}
               deadlines={data.deadlines}
               people={data.people}
               today={today}
@@ -358,6 +361,7 @@ export default function App() {
               onOpenDeadline={(d) => setSelection({ kind: 'deadline', id: d.id })}
               onMoveProject={(id, patch) => updateProject(id, patch)}
               onOpenRetro={(monday) => setSelection({ kind: 'retro', id: monday })}
+              onOpenGroup={(g) => { setEditGroup(g); setSheet('group'); }}
               onMoveDeadline={(id, date) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, date } : x)) }))}
               onCreateDeadline={(date) => {
                 const id = uid();
@@ -369,9 +373,9 @@ export default function App() {
                 if (!name) update((d) => ({ ...d, deadlines: d.deadlines.filter((x) => x.id !== id) }));
                 else update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, name } : x)) }));
               }}
-              onCreateProject={(start, lane) => {
+              onCreateProject={(start, lane, groupId) => {
                 const id = uid();
-                update((d) => ({ ...d, projects: [...d.projects, { id, name: 'New project', start, end: addDays(start, 6), lane }] }));
+                update((d) => ({ ...d, projects: [...d.projects, { id, name: 'New project', start, end: addDays(start, 6), lane, groupId }] }));
                 setEditingId(id);
               }}
               onRename={(id, name) => {
@@ -416,7 +420,18 @@ export default function App() {
                 events: calEvents[calKey] ?? [],
                 note: !window.exponential ? 'Available in the desktop app' : !googleUser ? 'Sign in with Google to see events' : calNote,
               }}
-              onToggleCalendar={() => setCalendarOn((c) => !c)}
+              onToggleCalendar={async () => {
+                if (calendarOn) { setCalendarOn(false); return; }
+                // First use: Google may not have granted calendar access with the sign-in; ask for it now.
+                const g = window.exponential?.google;
+                if (g && !(await g.hasCalendar())) {
+                  setCalNote('Waiting for Google in your browser…');
+                  const ok = await g.grantCalendar().catch(() => false);
+                  if (!ok) { setCalNote('Calendar access was not granted'); return; }
+                  setCalEvents({});
+                }
+                setCalendarOn(true);
+              }}
             />
           </section>
         </div>
@@ -451,6 +466,8 @@ export default function App() {
             onClaimTask={(id) => update((d) => claimTask(d, id))}
             onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
             onUpdateProject={updateProject}
+            groups={data.groups ?? []}
+            onNewGroup={() => { setEditGroup(null); setSheet('group'); }}
             onToggleAssignee={(pid, who) => {
               const cur = data.projects.find((x) => x.id === pid)?.assignees ?? [];
               updateProject(pid, { assignees: cur.includes(who) ? cur.filter((i) => i !== who) : [...cur, who] });
@@ -491,6 +508,24 @@ export default function App() {
           defaultDate={today}
           onClose={() => setSheet(null)}
           onCreate={(dl) => { update((d) => ({ ...d, deadlines: [...d.deadlines, dl] })); setSelection({ kind: 'deadline', id: dl.id }); }}
+        />
+      )}
+      {sheet === 'group' && (
+        <GroupSheet
+          group={editGroup}
+          onClose={() => setSheet(null)}
+          onSave={(g) => update((d) => ({ ...d, groups: editGroup ? (d.groups ?? []).map((x) => (x.id === g.id ? g : x)) : [...(d.groups ?? []), g] }))}
+          onDelete={(id) => update((d) => ({ ...d, groups: (d.groups ?? []).filter((x) => x.id !== id), projects: d.projects.map((p) => (p.groupId === id ? { ...p, groupId: undefined } : p)) }))}
+          nextSort={(data.groups ?? []).reduce((m, g) => Math.max(m, g.sort + 1), 0)}
+        />
+      )}
+      {sheet === 'group' && (
+        <GroupSheet
+          group={editGroup}
+          onClose={() => setSheet(null)}
+          onSave={(g) => update((d) => ({ ...d, groups: editGroup ? (d.groups ?? []).map((x) => (x.id === g.id ? g : x)) : [...(d.groups ?? []), g] }))}
+          onDelete={(id) => update((d) => ({ ...d, groups: (d.groups ?? []).filter((x) => x.id !== id), projects: d.projects.map((p) => (p.groupId === id ? { ...p, groupId: undefined } : p)) }))}
+          nextSort={(data.groups ?? []).reduce((m, g) => Math.max(m, g.sort + 1), 0)}
         />
       )}
       {sheet === 'new-team' && (
@@ -619,6 +654,34 @@ function NewProjectSheet({ defaultStart, nextLane, onClose, onCreate }: {
         <div className="sheet-actions">
           <button type="submit" className="btn primary" disabled={!valid}>Add project</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
+        </div>
+      </form>
+    </SheetShell>
+  );
+}
+
+function GroupSheet({ group, onClose, onSave, onDelete, nextSort }: {
+  group: Group | null; onClose: () => void; onSave: (g: Group) => void; onDelete: (id: string) => void; nextSort: number;
+}) {
+  const [name, setName] = useState(group?.name ?? '');
+  const [color, setColor] = useState(group?.color ?? PROJECT_COLORS[nextSort % PROJECT_COLORS.length]);
+  const submit = () => { if (!name.trim()) return; onSave({ id: group?.id ?? uid(), name: name.trim(), color, sort: group?.sort ?? nextSort }); onClose(); };
+  return (
+    <SheetShell title={group ? 'Edit group' : 'New group'} onClose={onClose}>
+      <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+        <div className="field"><label>Name</label><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Aerodynamics" /></div>
+        <div className="field"><label>Colour</label>
+          <div className="swatches" style={{ padding: '4px 0' }}>
+            {PROJECT_COLORS.map((c) => (
+              <button type="button" key={c} className={`swatch${color === c ? ' on' : ''}`} style={{ ['--pc' as string]: c }} onClick={() => setColor(c)} />
+            ))}
+          </div>
+        </div>
+        <div className="sheet-actions">
+          <button type="submit" className="btn primary" disabled={!name.trim()}>{group ? 'Save' : 'Create group'}</button>
+          <button type="button" className="btn" onClick={onClose}>Cancel</button>
+          <span style={{ flex: 1 }} />
+          {group && <button type="button" className="btn" style={{ color: 'var(--today)' }} onClick={() => { onDelete(group.id); onClose(); }}>Delete</button>}
         </div>
       </form>
     </SheetShell>

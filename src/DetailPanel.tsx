@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Deadline, ISODate, Notification, Person, Project, Retro, RetroField, Status, Task } from './types';
+import type { Deadline, Group, ISODate, Notification, Person, Project, Retro, RetroField, Status, Task } from './types';
 import { htmlToMarkdown } from './store';
-import { PROJECT_COLORS, STATUS_LABEL, shortName } from './types';
+import { NO_GROUP_COLOR, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { BlockEditor } from './BlockEditor';
 import { addDays, formatRange, isoWeekNumber } from './dates';
@@ -25,6 +25,8 @@ interface Props {
   me: string;
   onClose: () => void;
   onUpdateProject: (id: string, patch: Partial<Project>, coalesce?: string) => void;
+  groups: Group[];
+  onNewGroup: () => void;
   onToggleAssignee: (projectId: string, personId: string) => void;
   onUpdateTask: (id: string, patch: Partial<Task>, coalesce?: string) => void;
   onUpdateDeadline: (id: string, patch: Partial<Deadline>, coalesce?: string) => void;
@@ -109,8 +111,8 @@ export function DetailPanel(p: Props) {
               <Prop label="People">
                 <AssigneePicker people={people} me={me} assignees={project.assignees ?? []} onToggle={(id) => p.onToggleAssignee(project.id, id)} />
               </Prop>
-              <Prop label="Colour">
-                <ColorPicker value={project.color} onChange={(c) => p.onUpdateProject(project.id, { color: c })} />
+              <Prop label="Group">
+                <GroupPicker groups={p.groups} value={project.groupId} onChange={(gid) => p.onUpdateProject(project.id, { groupId: gid })} onNew={p.onNewGroup} />
               </Prop>
             </>
           )}
@@ -372,20 +374,25 @@ function AssigneePicker({ people, me, assignees, onToggle }: { people: Person[];
   );
 }
 
-function ColorPicker({ value, onChange }: { value?: string; onChange: (c: string) => void }) {
+function GroupPicker({ groups, value, onChange, onNew }: { groups: Group[]; value?: string; onChange: (id: string | undefined) => void; onNew: () => void }) {
   const [open, setOpen] = useState(false);
-  useClickAway(open, '.color-picker', () => setOpen(false));
-  const cur = value ?? PROJECT_COLORS[0];
+  useClickAway(open, '.group-picker', () => setOpen(false));
+  const cur = groups.find((g) => g.id === value);
   return (
-    <div className="color-picker status-select">
-      <button className="chip" onClick={() => setOpen((o) => !o)} title="Change colour">
-        <span className="swatch small" style={{ ['--pc' as string]: cur }} /> <span className="chev">▾</span>
+    <div className="group-picker status-select">
+      <button className="pill small" onClick={() => setOpen((o) => !o)}>
+        <span className="dot" style={{ background: cur?.color ?? NO_GROUP_COLOR }} /> {cur?.name ?? 'No group'}
       </button>
       {open && (
-        <div className="status-menu swatch-menu" style={{ top: 34, left: 0 }}>
-          {PROJECT_COLORS.map((c) => (
-            <button key={c} className={`swatch${cur === c ? ' on' : ''}`} style={{ ['--pc' as string]: c }} onClick={() => { onChange(c); setOpen(false); }} />
+        <div className="status-menu" style={{ top: 34, left: 0 }}>
+          <button className={!cur ? 'current' : ''} onClick={() => { onChange(undefined); setOpen(false); }}><span className="dot" style={{ background: NO_GROUP_COLOR, width: 10, height: 10, borderRadius: 5 }} /> No group</button>
+          {groups.map((g) => (
+            <button key={g.id} className={g.id === value ? 'current' : ''} onClick={() => { onChange(g.id); setOpen(false); }}>
+              <span className="dot" style={{ background: g.color, width: 10, height: 10, borderRadius: 5 }} /> {g.name}
+            </button>
           ))}
+          <div className="sep" />
+          <button onClick={() => { setOpen(false); onNew(); }}><span style={{ width: 10, textAlign: 'center' }}>+</span> New group…</button>
         </div>
       )}
     </div>

@@ -55,7 +55,7 @@ async function accessToken() {
     refresh_token: t.refresh_token,
     grant_type: 'refresh_token',
   });
-  const next = { ...t, access_token: fresh.access_token, expires_at: Date.now() + fresh.expires_in * 1000 };
+  const next = { ...t, access_token: fresh.access_token, scope: fresh.scope ?? t.scope, expires_at: Date.now() + fresh.expires_in * 1000 };
   setTokens(next);
   return next.access_token;
 }
@@ -92,9 +92,21 @@ async function status() {
   try { return await userInfo(); } catch { return null; }
 }
 
-function signIn() {
+const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+function currentEmail() {
+  try { return JSON.parse(Buffer.from(getTokens().id_token.split('.')[1], 'base64url').toString()).email; } catch { return null; }
+}
+function hasCalendarScope() { return (getTokens()?.scope ?? '').split(' ').includes(CAL_SCOPE); }
+
+/** Ask only for calendar access, keeping the existing sign-in (incremental authorization). */
+function grantCalendar() {
+  return signIn({ scope: CAL_SCOPE, incremental: true }).then(() => hasCalendarScope());
+}
+
+function signIn(opts = {}) {
   const cfg = getConfig();
   if (!cfg?.clientId) return Promise.reject(new Error('Google client ID is not configured'));
+  const scopes = opts.scope ?? SCOPES;
 
   return new Promise((resolve, reject) => {
     const verifier = b64url(crypto.randomBytes(32));
@@ -118,8 +130,10 @@ function signIn() {
           grant_type: 'authorization_code',
           redirect_uri: redirectUri,
         });
-        setTokens({ ...tok, expires_at: Date.now() + tok.expires_in * 1000 });
-        finish('<body style="font-family:-apple-system,Segoe UI,sans-serif;text-align:center;padding-top:80px"><h2>Signed in to Exponential</h2>You can close this tab.</body>');
+        const prev = getTokens();
+        // Incremental grants may omit a refresh token / id token; keep the ones we already have.
+        setTokens({ ...prev, ...tok, refresh_token: tok.refresh_token ?? prev?.refresh_token, id_token: tok.id_token ?? prev?.id_token, expires_at: Date.now() + tok.expires_in * 1000 });
+        finish('<body style="font-family:-apple-system,Segoe UI,sans-serif;text-align:center;padding-top:80px"><h2>Done</h2>You can close this tab and return to Exponential.</body>');
         resolve(await userInfo());
       } catch (err) {
         finish(`<body style="font-family:-apple-system,Segoe UI,sans-serif;text-align:center;padding-top:80px"><h2>Sign-in failed</h2>${String(err.message)}</body>`);
@@ -134,12 +148,14 @@ function signIn() {
         client_id: cfg.clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: SCOPES,
+        scope: scopes,
         code_challenge: challenge,
         code_challenge_method: 'S256',
         state,
         access_type: 'offline',
         prompt: 'consent',
+        include_granted_scopes: 'true',
+        ...(opts.incremental && currentEmail() ? { login_hint: currentEmail() } : {}),
       }).toString();
       shell.openExternal(authUrl.toString());
     });
@@ -179,4 +195,4 @@ async function events(calendarId, from, to) {
     });
 }
 
-module.exports = { getConfig, setConfig, status, signIn, signOut, events, idToken };
+module.exports = { getConfig, setConfig, status, signIn, signOut, events, idToken, hasCalendarScope, grantCalendar };

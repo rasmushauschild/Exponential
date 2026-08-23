@@ -72,7 +72,8 @@ Authentication → Sign In / Providers → Google add the OAuth client ID to *Au
 | Master plan | Pinch (or ⌘/Ctrl + scroll) to zoom, scroll sideways or drag empty space to pan, scroll vertically when the rows overflow |
 | Anywhere | Shift/⌘-click projects, deadlines and tasks to select several; Backspace/Delete removes them, Escape clears the selection |
 | Master plan | Drag the blue week band to choose the week shown below |
-| Master plan | Drag a project to move it (left/right = dates, up/down = row); drag either end to stretch it |
+| Master plan | Drag a project to move it (left/right = dates, up/down = row, including into another group's section); drag either end to stretch it |
+| Master plan | **+ Group** creates a named, coloured group; projects take their group's colour (grey without one) and sit together in its section. Click a group label to rename, recolour or delete it |
 | Master plan | Click a project or deadline star to open its details on the right; drag a star to move a deadline |
 | Master plan | Hover empty space to see a ghost bar; click to create a one-week project and type its name. Hover the top (deadline) row and click to add a deadline the same way |
 | Divider | Drag the handle between the panels to rebalance them |
