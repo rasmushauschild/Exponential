@@ -132,14 +132,7 @@ export function WeekPlan(props: Props) {
         </button>
         <div className="panel-spacer" />
         {headExtra}
-        <div className="people-scroll">
-          {people.map((p) => (
-            <button key={p.id} className={`pill person${p.id === selected ? ' active' : ''}`} onClick={() => onSelect(p.id)}>
-              <Avatar person={p} />
-              {p.id === me ? 'Me' : shortName(p.name)}
-            </button>
-          ))}
-        </div>
+        <PersonDropdown people={people} me={me} selected={selected} onSelect={onSelect} />
       </div>
 
       <div className="wk-body" ref={bodyRef}>
@@ -476,6 +469,41 @@ function PlaceholderRow({ onAdd }: { onAdd: (title: string) => void }) {
       </div>
       <div className="wk-days" />
     </div>
+  );
+}
+
+/** Whose week is shown: me first, then teammates alphabetically. */
+function PersonDropdown({ people, me, selected, onSelect }: { people: Person[]; me: string; selected: string; onSelect: (id: string) => void }) {
+  const [open, setOpen] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!(e.target as HTMLElement).closest('.status-menu')) setOpen(null); };
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [open]);
+  const meP = people.find((p) => p.id === me);
+  const rest = people.filter((p) => p.id !== me).sort((a, b) => a.name.localeCompare(b.name));
+  const ordered = meP ? [meP, ...rest] : rest;
+  const cur = people.find((p) => p.id === selected);
+  if (people.length <= 1) return cur ? <span className="pill person active"><Avatar person={cur} /> Me</span> : null;
+  return (
+    <>
+      <button className="pill person active" onClick={(e) => setOpen((o) => (o ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()))}>
+        {cur && <Avatar person={cur} />}
+        {selected === me ? 'Me' : shortName(cur?.name ?? '')}
+        <span className="chev">⌄</span>
+      </button>
+      {open && createPortal(
+        <div className="status-menu" style={{ position: 'fixed', top: open.bottom + 6, left: Math.min(open.left, window.innerWidth - 230), minWidth: 200 }} onPointerDown={(e) => e.stopPropagation()}>
+          {ordered.map((p) => (
+            <button key={p.id} className={p.id === selected ? 'current' : ''} onClick={() => { onSelect(p.id); setOpen(null); }}>
+              <Avatar person={p} size={18} /> {p.id === me ? 'Me' : shortName(p.name)}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 

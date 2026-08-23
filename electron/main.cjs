@@ -133,6 +133,9 @@ ipcMain.handle('google:events', (_e, calendarId, from, to) => google.events(cale
 /** Auto-update from GitHub Releases: check shortly after launch and every two hours; install on request. */
 function setupUpdates() {
   if (!app.isPackaged) return;
+  const logFile = path.join(app.getPath('userData'), 'updater.log');
+  const log = (...a) => { try { fs.appendFileSync(logFile, `${new Date().toISOString()} ${a.join(' ')}\n`); } catch { /* ignore */ } };
+  autoUpdater.logger = { info: (m) => log('info', m), warn: (m) => log('warn', m), error: (m) => log('error', m), debug: () => {} };
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
   const tell = (state, info) => { for (const w of BrowserWindow.getAllWindows()) w.webContents.send('update:state', { state, ...info }); };

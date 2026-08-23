@@ -28,7 +28,7 @@ export default function App() {
   useEffect(() => onPersistError((m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 8000); }), []);
   useEffect(() => {
     window.exponential?.version().then(setAppVersion);
-    return window.exponential?.onUpdate((s) => setUpdateState(s.state === 'none' || s.state === 'checking' ? null : s));
+    return window.exponential?.onUpdate((s) => setUpdateState(s.state === 'checking' ? null : s));
   }, []);
   const [view, setView] = useState<'plan' | 'team'>('plan');
   const [today, setToday] = useState(todayISO());
@@ -553,6 +553,8 @@ export default function App() {
           onSignIn={signIn}
           onSignOut={signOut}
           appVersionText={appVersion ? `Exponential ${appVersion}` : undefined}
+          updateText={updateInfo ? (updateInfo.state === 'error' ? `update failed: ${(updateInfo as { message?: string }).message ?? 'unknown'}` : updateInfo.state === 'none' ? 'up to date' : updateInfo.state === 'ready' ? `v${updateInfo.version} ready` : updateInfo.state) : undefined}
+          onCheckUpdate={() => window.exponential?.checkForUpdate()}
         />
       )}
     </div>
@@ -773,8 +775,10 @@ function SignInGate({ config, error, onSaveConfig, onSignIn }: {
   );
 }
 
-function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, onSignOut, appVersionText }: {
+function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, onSignOut, appVersionText, updateText, onCheckUpdate }: {
   appVersionText?: string;
+  updateText?: string;
+  onCheckUpdate: () => void;
   user: GoogleUser | null;
   config: GoogleConfig | null;
   error: string | null;
@@ -803,7 +807,7 @@ function SettingsSheet({ user, config, error, onClose, onSaveConfig, onSignIn, o
       {user ? (
         <>
           <p className="muted">Signed in as <b>{user.name}</b> ({user.email}). Your name and photo come from Google, and the Calendar toggle in the week panel reads your calendar.</p>
-          {appVersionText && <p className="hint">{appVersionText}</p>}
+          {appVersionText && <p className="hint">{appVersionText}{updateText ? ` · ${updateText}` : ''} <button className="pill small" style={{ marginLeft: 8 }} onClick={onCheckUpdate}>Check for updates</button></p>}
           <div className="sheet-actions">
             <button className="btn" onClick={() => { onSignOut(); onClose(); }}>Sign out</button>
             <button className="btn primary" onClick={onClose}>Done</button>
