@@ -3,7 +3,7 @@ import type { Deadline, ISODate, Notification, Person, Project, Retro, RetroFiel
 import { htmlToMarkdown } from './store';
 import { PROJECT_COLORS, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
-import { TaskList } from './TaskList';
+import { BlockEditor } from './BlockEditor';
 import { addDays, formatRange, isoWeekNumber } from './dates';
 
 export type Selection =
@@ -34,11 +34,8 @@ interface Props {
   onMarkRead: (ids: string[]) => void;
   onDelete: () => void;
   tasks: Task[]; // all tasks of the team
-  editingId?: string;
-  onAddLinked: (link: { projectId?: string; parentId?: string }) => void;
-  onRenameTask: (id: string, title: string) => void;
+  onCreateLinked: (link: { projectId?: string; parentId?: string }, title: string) => string;
   onDeleteTask: (id: string) => void;
-  onReorderTask: (id: string, delta: number) => void;
   onClaimTask: (id: string) => void;
 }
 
@@ -80,7 +77,13 @@ export function DetailPanel(p: Props) {
       if (task.reviewerId) lines.push(`- Reviewer: ${who(task.reviewerId)}`);
     }
     if (deadline) lines.push(`- Date: ${deadline.date}`);
-    if (item.notes?.trim()) lines.push('', '## Notes', '', item.notes.trim());
+    if (item.notes?.trim()) {
+      const live = item.notes.replace(/^- \[( |x)\] ?(.*?)\s*<!--task:([0-9a-f-]{36})-->\s*$/gim, (_m, _c, _t, id) => {
+        const t = p.tasks.find((x) => x.id === id);
+        return t ? `- [${t.status === 'done' ? 'x' : ' '}] ${t.title}${t.personId ? ` (${who(t.personId)}, ${STATUS_LABEL[t.status]})` : ' (unassigned)'}` : '';
+      });
+      lines.push('', '## Notes', '', live.trim());
+    }
     return lines.join('\n');
   };
 
@@ -159,26 +162,24 @@ export function DetailPanel(p: Props) {
           )}
         </div>
 
-        {!deadline && (
-          <>
-            <div className="retro-label" style={{ marginBottom: 6 }}>{project ? 'Tasks' : 'Subtasks'}</div>
-            <TaskList
-              tasks={p.tasks.filter((t) => (project ? t.projectId === project.id : t.parentId === task!.id))}
-              people={people}
-              me={me}
-              editingId={p.editingId}
-              onAdd={() => p.onAddLinked(project ? { projectId: project.id } : { parentId: task!.id })}
-              onRename={p.onRenameTask}
-              onUpdate={(id, patch) => p.onUpdateTask(id, patch)}
-              onDelete={p.onDeleteTask}
-              onReorder={p.onReorderTask}
-              onClaim={p.onClaimTask}
-              onOpen={(t) => p.onOpen({ kind: 'task', id: t.id })}
-            />
-            <div className="retro-label" style={{ margin: '22px 0 6px' }}>Notes</div>
-          </>
+        {deadline ? (
+          <MarkdownEditor key={`ed-${item.id}`} value={item.notes ?? ''} onChange={setNotes} />
+        ) : (
+          <BlockEditor
+            key={`blocks-${item.id}`}
+            value={item.notes ?? ''}
+            onChange={setNotes}
+            tasks={p.tasks.filter((t) => (project ? t.projectId === project.id : t.parentId === task!.id))}
+            people={people}
+            me={me}
+            claimable={!!project}
+            createTask={(title) => p.onCreateLinked(project ? { projectId: project.id } : { parentId: task!.id }, title)}
+            onUpdateTask={(id, patch) => p.onUpdateTask(id, patch)}
+            onDeleteTask={p.onDeleteTask}
+            onClaim={p.onClaimTask}
+            onOpenTask={(id) => p.onOpen({ kind: 'task', id })}
+          />
         )}
-        <MarkdownEditor key={`ed-${item.id}`} value={item.notes ?? ''} onChange={setNotes} />
       </div>
       <SendToAgent doc={agentDoc} />
     </aside>

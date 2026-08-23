@@ -84,8 +84,8 @@ Authentication → Sign In / Providers → Google add the OAuth client ID to *Au
 | Master plan | Hover a week near the bottom edge for its "Retro · Week N" pill; click it to open that week's retro |
 | Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |
 | Week | Pick a teammate and add tasks to *their* week — they show up dashed with an "added by" chip |
-| Details | Edit title, dates, colour/status; notes are rich text stored as Markdown — H1, H2, text, and **Todo** lines; drop or paste images straight in |
-| Details | A project (or task) has its own task list — the same rows as the week view. Add tasks nobody owns yet; anyone can hover one and **+ Add to my week** to take it into their backlog; taken rows show who has it |
+| Details | Notes are Notion-style blocks: Enter makes a new block, Backspace on an empty one removes it, drag the ⋮⋮ handle to move blocks. H1 / H2 / Text / **Task** turn the current block into that kind; drop or paste images in |
+| Details | Task blocks are real tasks with the week view's status dot and menu. In a project, hover one and **+ Add to my week** to take it (it shows who has it); in a task they are subtasks |
 | Details | **Send to Agent** copies the item (title, properties, notes) as one Markdown document to the clipboard |
 | Week | Drag a task's title up or down to reorder tasks that share a day |
 | Layout | Drag the gaps between panels; proportions are remembered on this machine |

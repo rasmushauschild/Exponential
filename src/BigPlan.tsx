@@ -341,7 +341,7 @@ export function BigPlan(props: Props) {
           <div
             key={d.id}
             className={`tl-deadline${selectedId === d.id || selectedIds?.has(d.id) ? ' selected' : ''}${dlDrag?.id === d.id ? ' live' : ''}`}
-            style={{ left, top: HEADER_H, maxWidth: Math.max(22, room + 22) }}
+            style={{ left, top: HEADER_H, maxWidth: Number.isFinite(room) ? Math.max(22, room + 22) : undefined }}
             onPointerDown={(e) => onDeadlineDown(e, d)}
             title={`${d.name} · ${formatShort(d.date)}`}
           >
