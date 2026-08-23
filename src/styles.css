@@ -50,7 +50,7 @@
 html, body, #root { height: 100%; margin: 0; }
 /* Transparent macOS window: the page itself is the rounded window body. */
 .mac-window, .mac-window body { background: transparent; }
-.mac-window #root { background: var(--bg); border-radius: 26px; overflow: hidden; }
+.mac-window #root { background: var(--bg); border-radius: 36px; overflow: hidden; }
 body {
   font-family: var(--font);
   color: var(--text);
@@ -75,21 +75,21 @@ img { display: block; -webkit-user-drag: none; }
 .panel-head button, .panel-head input, .detail-top button { -webkit-app-region: no-drag; }
 
 .sidebar {
-  width: 72px; flex: none; position: relative; z-index: 200; -webkit-app-region: drag;
+  width: 86px; flex: none; position: relative; z-index: 200; -webkit-app-region: drag;
   transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .sidebar:hover { width: 232px; } /* expands in the layout, squeezing the panels beside it */
 .sidebar * { -webkit-app-region: no-drag; }
 .sidebar-inner {
   position: absolute; top: 0; bottom: 0; left: 0; right: 0; display: flex; flex-direction: column;
-  padding: 14px 14px 8px 14px; overflow: hidden;
+  padding: 14px 14px 8px 21px; overflow: hidden;
 }
 .sidebar.mac .sidebar-inner { padding-top: 14px; }
 .nav-text, .team-name, .badge { opacity: 0; transition: opacity 0.15s; white-space: nowrap; }
 .sidebar:hover .nav-text, .sidebar:hover .team-name, .sidebar:hover .badge { opacity: 1; transition-delay: 0.08s; }
 
 .team-list { padding: 0; margin-bottom: 18px; display: flex; flex-direction: column; gap: 2px; }
-.sidebar.mac .team-list { padding-top: 30px; } /* room for the window's traffic lights */
+.sidebar.mac .team-list { padding-top: 34px; } /* room for the window's traffic lights */
 .team-row { display: flex; align-items: center; gap: 0; width: 100%; border-radius: 14px; transition: background 0.15s; position: relative; }
 .team-row:hover { background: var(--ov-35); }
 .team-row.current { background: var(--ov-6); }
