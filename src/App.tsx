@@ -30,6 +30,13 @@ export default function App() {
   const [resizing, setResizing] = useState(false);
   const [detailW, setDetailW] = useState(() => prefs.detailW);
   const [slotAnimating, setSlotAnimating] = useState(false); // clip the slot only while its width is changing
+  const openKind = selection?.kind ?? null;
+  const prevOpenKind = useRef(openKind);
+  useEffect(() => {
+    const wasOpen = prevOpenKind.current !== null, isOpen = openKind !== null;
+    prevOpenKind.current = openKind;
+    if (wasOpen !== isOpen) setSlotAnimating(true);
+  }, [openKind]);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => prefs.theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
@@ -178,8 +185,6 @@ export default function App() {
   const selTask = selection?.kind === 'task' ? data.tasks.find((t) => t.id === selection.id) : undefined;
   const selDeadline = selection?.kind === 'deadline' ? data.deadlines.find((d) => d.id === selection.id) : undefined;
   const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro' || selection?.kind === 'inbox';
-  const prevOpen = useRef(detailOpen);
-  if (prevOpen.current !== detailOpen) { prevOpen.current = detailOpen; if (!slotAnimating) queueMicrotask(() => setSlotAnimating(true)); }
   const unread = (data.notifications ?? []).filter((n) => n.to === data.me && !n.read).length;
 
   const calKey = `${person === data.me ? 'primary' : data.people.find((x) => x.id === person)?.email}|${week}`;
