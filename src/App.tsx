@@ -306,7 +306,7 @@ export default function App() {
             <span className="nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
           </button>
           {googleUser ? (
-            <button className="account" onClick={() => setSheet('settings')} title={googleUser.email}>
+            <button className="account has-avatar" onClick={() => setSheet('settings')} title={googleUser.email}>
               <Avatar person={me} size={28} />
               <span className="account-name nav-text">{shortName(googleUser.name)}</span>
             </button>
@@ -403,6 +403,7 @@ export default function App() {
                 setEditingId(id);
               }}
               onRename={(id, title) => { setEditingId(null); update((d) => renameTask(d, id, title)); }}
+              onAddNamed={(title) => { if (isPending(person)) return; update((d) => { const r = addTask(d, person, undefined); return renameTask(r.data, r.id, title); }); }}
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
               onOpen={(t) => setSelection({ kind: 'task', id: t.id })}

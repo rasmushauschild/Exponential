@@ -74,6 +74,7 @@ export default function Widget() {
           onToggleSelect={() => {}}
           onAdd={(date) => { let id = ''; update((d) => { const r = addTask(d, who, date); id = r.id; return r.data; }); setEditingId(id); }}
           onRename={(id, title) => { setEditingId(null); update((d) => renameTask(d, id, title)); }}
+          onAddNamed={(title) => update((d) => { const r = addTask(d, who, undefined); return renameTask(r.data, r.id, title); })}
           onUpdate={(id, patch) => update((d) => patchTask(d, id, patch))}
           onDelete={(id) => update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))}
           onOpen={(t) => window.exponential?.openMain({ kind: 'task', id: t.id })}

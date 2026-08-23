@@ -404,11 +404,6 @@ export function BigPlan(props: Props) {
 
       <div className="today-line" style={{ left: x(today) + ppd / 2 }} />
 
-      {projects.length === 0 && deadlines.length === 0 && !ghost && (
-        <div className="hint" style={{ position: 'absolute', left: 26, top: HEADER_H + 20 }}>
-          Click anywhere to start a project.
-        </div>
-      )}
     </div>
   );
 }

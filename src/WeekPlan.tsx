@@ -21,6 +21,7 @@ interface Props {
   editingId?: string;
   onToggleSelect: (id: string) => void;
   onAdd: (date?: ISODate) => void;
+  onAddNamed: (title: string) => void; // from the placeholder row shown when the week is empty
   onRename: (id: string, title: string) => void;
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
@@ -34,7 +35,7 @@ interface Props {
 
 /** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const readonly = selected !== me;
   const todayIdx = dayIndex(today) - dayIndex(week);
@@ -177,6 +178,7 @@ export function WeekPlan(props: Props) {
               />
             ))}
             {readonly && sorted.length === 0 && <div className="hint wk-empty">Nothing planned this week.</div>}
+            {!readonly && sorted.length === 0 && <PlaceholderRow onAdd={onAddNamed} />}
 
             {(
               <div className="wk-row wk-free">
@@ -458,6 +460,22 @@ export function StatusMenu({ value, reviewerId, people, onPick, onDelete, anchor
       )}
     </div>,
     document.body,
+  );
+}
+
+/** An empty week shows one ready-to-type row so the list never looks blank; typing creates the task. */
+function PlaceholderRow({ onAdd }: { onAdd: (title: string) => void }) {
+  const [v, setV] = useState('');
+  const commit = () => { const t = v.trim(); if (t) onAdd(t); setV(''); };
+  return (
+    <div className="wk-row task todo placeholder">
+      <div className="wk-list">
+        <span className="status-btn"><StatusDot status="todo" /></span>
+        <input className="inline-name" placeholder="Task name…" value={v} onChange={(e) => setV(e.target.value)} onBlur={commit}
+          onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setV(''); }} />
+      </div>
+      <div className="wk-days" />
+    </div>
   );
 }
 
