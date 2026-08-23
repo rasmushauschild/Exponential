@@ -54,16 +54,13 @@ export function WeekPlan(props: Props) {
     return () => ro.disconnect();
   }, [todayIdx, week]);
 
-  // Horizontal trackpad swipe: rubber-band, flip exactly once per gesture, then ignore the rest of
-  // that gesture (including its momentum tail). A new gesture is a pause, a reversal, or a fresh
-  // ramp-up after the deltas have decayed to almost nothing.
+  // Horizontal trackpad swipe: flip exactly once per gesture, then ignore the rest of that gesture
+  // (including its momentum tail). No rubber-banding — the content just eases in on the flip.
   const weekRef = useRef(week);
   weekRef.current = week;
   useEffect(() => {
     const el = bodyRef.current!;
-    let acc = 0, locked = false, lockDir = 0, timer: number | undefined, last = 0, prevAbs = 0;
-    const rubber = (v: number) => Math.sign(v) * 40 * Math.log1p(Math.abs(v) / 40);
-    const reset = () => { acc = 0; locked = false; lockDir = 0; prevAbs = 0; setSwipe({ x: 0, animate: true }); };
+    let acc = 0, locked = false, lockDir = 0, last = 0, prevAbs = 0;
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
@@ -75,22 +72,18 @@ export function WeekPlan(props: Props) {
       if (newGesture) { acc = 0; locked = false; lockDir = 0; }
       last = now;
       prevAbs = abs;
-      window.clearTimeout(timer);
-      timer = window.setTimeout(reset, 150);
       if (locked) return;
       acc += e.deltaX;
       if (Math.abs(acc) >= SWIPE_TRIGGER) {
         locked = true;
         lockDir = Math.sign(acc);
         onWeekChange(addDays(weekRef.current, lockDir * 7));
-        setSwipe({ x: lockDir * 36, animate: false });
-        requestAnimationFrame(() => setSwipe({ x: 0, animate: true }));
-        return;
+        setSwipe({ x: lockDir * 28, animate: false });
+        requestAnimationFrame(() => requestAnimationFrame(() => setSwipe({ x: 0, animate: true })));
       }
-      setSwipe({ x: -rubber(acc), animate: false });
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => { el.removeEventListener('wheel', onWheel); window.clearTimeout(timer); };
+    return () => el.removeEventListener('wheel', onWheel);
   }, [onWeekChange]);
 
   const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
@@ -123,7 +116,7 @@ export function WeekPlan(props: Props) {
       </div>
 
       <div className="wk-body" ref={bodyRef}>
-        <div className="wk-swipe" style={{ transform: `translateX(${swipe.x}px)`, transition: swipe.animate ? 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none' }}>
+        <div className="wk-swipe" style={{ transform: `translateX(${swipe.x}px)`, transition: swipe.animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none' }}>
           <div className="wk-row wk-header">
             <div className="wk-list" />
             <div className="wk-days">

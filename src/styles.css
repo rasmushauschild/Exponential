@@ -101,7 +101,7 @@ img { display: block; -webkit-user-drag: none; }
 .timeline.dragging-item { cursor: grabbing; }
 
 .tl-month { position: absolute; top: 0; font-size: 12px; font-weight: 600; color: var(--text-2); padding-left: 8px; white-space: nowrap; pointer-events: none; }
-.tl-week-tint { position: absolute; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.022); pointer-events: none; }
+.tl-week-tint { position: absolute; top: 6px; bottom: 10px; border-radius: 18px; background: rgba(0, 0, 0, 0.022); pointer-events: none; }
 .tl-day { position: absolute; top: 22px; font-size: 10px; color: var(--text-3); text-align: center; pointer-events: none; font-variant-numeric: tabular-nums; }
 .tl-day.weekend { color: #d1d1d6; }
 
@@ -110,6 +110,7 @@ img { display: block; -webkit-user-drag: none; }
   cursor: ew-resize; transition: background 0.15s;
 }
 .week-band.anim { transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1); }
+.week-band.dragging { transition: background 0.15s, left 0.16s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .week-band:hover, .week-band.dragging { background: rgba(10, 132, 255, 0.12); }
 .week-label {
   position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 700; color: var(--text-3);

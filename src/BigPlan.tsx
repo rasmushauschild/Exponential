@@ -46,7 +46,7 @@ export function BigPlan(props: Props) {
   viewRef.current = view;
   const { ppd, origin } = view;
   const [panning, setPanning] = useState(false);
-  const [bandDrag, setBandDrag] = useState<{ startDay: number; dx: number } | null>(null); // free position while dragging
+  const [bandDrag, setBandDrag] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [dlDrag, setDlDrag] = useState<{ id: string; date: number } | null>(null);
   const [hoverCursor, setHoverCursor] = useState<string>('');
@@ -159,19 +159,13 @@ export function BigPlan(props: Props) {
     e.preventDefault();
     const startX = e.clientX;
     const startWeek = dayIndex(week);
-    setBandDrag({ startDay: startWeek, dx: 0 });
+    setBandDrag(true);
+    // Snaps to the nearest week as the cursor moves; the .dragging class gives it a quick smooth slide.
     track((ev) => {
-      const dx = ev.clientX - startX;
-      setBandDrag({ startDay: startWeek, dx });
-      const shift = Math.round(dx / ppd / 7) * 7;
+      const shift = Math.round((ev.clientX - startX) / ppd / 7) * 7;
       const next = fromDayIndex(startWeek + shift);
       if (next !== weekRef.current) onWeekChange(next);
-    }, () => {
-      // let go: ease from wherever the cursor left it into the snapped week
-      setBandDrag(null);
-      setBandAnim(true);
-      setTimeout(() => setBandAnim(false), 380);
-    });
+    }, () => setBandDrag(false));
   };
 
   const onProjectDown = (e: React.PointerEvent, p: Project) => {
@@ -304,7 +298,7 @@ export function BigPlan(props: Props) {
 
       <div
         className={`week-band${bandDrag ? ' dragging' : ''}${bandAnim && !bandDrag ? ' anim' : ''}`}
-        style={{ left: bandDrag ? (bandDrag.startDay - origin) * ppd + bandDrag.dx : x(week), width: ppd * 7 }}
+        style={{ left: x(week), width: ppd * 7 }}
         onPointerDown={onBandDown}
         title="Drag to choose the week shown below"
       >
