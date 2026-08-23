@@ -1,14 +1,27 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, nativeImage, screen } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
 
 const dataFile = () => path.join(app.getPath('userData'), 'exponential-data.json');
+const iconPath = path.join(__dirname, '..', 'build', 'icon.png');
+const devUrl = process.env.VITE_DEV_SERVER_URL;
 
-const iconPath = path.join(__dirname, '..', 'build', process.platform === 'win32' ? 'icon.png' : 'icon.png');
+let mainWin = null;
+let widgetWin = null;
+let tray = null;
 
-function createWindow() {
-  const win = new BrowserWindow({
+const WIDGET_W = 640;
+const WIDGET_H = 460;
+
+function loadRenderer(win, mode) {
+  if (devUrl) win.loadURL(mode ? `${devUrl}?mode=${mode}` : devUrl);
+  else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), mode ? { query: { mode } } : undefined);
+}
+
+function createMainWindow() {
+  if (mainWin && !mainWin.isDestroyed()) { mainWin.show(); mainWin.focus(); return mainWin; }
+  mainWin = new BrowserWindow({
     icon: iconPath,
     width: 1280,
     height: 860,
@@ -19,18 +32,64 @@ function createWindow() {
     backgroundColor: process.platform === 'darwin' ? '#00000000' : '#f2f2f4',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: { x: 14, y: 14 },
-    vibrancy: undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
     },
   });
+  loadRenderer(mainWin, null);
+  mainWin.on('closed', () => { mainWin = null; });
+  return mainWin;
+}
 
-  if (process.env.VITE_DEV_SERVER_URL) {
-    win.loadURL(process.env.VITE_DEV_SERVER_URL);
-  } else {
-    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
-  }
+/** The menu-bar popover: a frameless window with just the week panel, hidden when it loses focus. */
+function createWidget() {
+  widgetWin = new BrowserWindow({
+    width: WIDGET_W,
+    height: WIDGET_H,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      additionalArguments: ['--widget'],
+    },
+  });
+  loadRenderer(widgetWin, 'widget');
+  widgetWin.on('blur', () => { if (widgetWin && !widgetWin.webContents.isDevToolsOpened()) widgetWin.hide(); });
+  widgetWin.on('closed', () => { widgetWin = null; });
+  return widgetWin;
+}
+
+function toggleWidget(trayBounds) {
+  if (!widgetWin) createWidget();
+  if (widgetWin.isVisible()) { widgetWin.hide(); return; }
+  const display = screen.getDisplayNearestPoint({ x: trayBounds.x, y: trayBounds.y });
+  const area = display.workArea;
+  let x = Math.round(trayBounds.x + trayBounds.width / 2 - WIDGET_W / 2);
+  x = Math.max(area.x + 8, Math.min(x, area.x + area.width - WIDGET_W - 8));
+  const y = Math.round(trayBounds.y + trayBounds.height + 6);
+  widgetWin.setPosition(x, y, false);
+  widgetWin.show();
+  widgetWin.focus();
+  widgetWin.webContents.send('widget:shown');
+}
+
+function createTray() {
+  const img = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'trayTemplate.png'));
+  img.setTemplateImage(true);
+  tray = new Tray(img);
+  tray.setToolTip('Exponential — this week');
+  tray.on('click', (_e, bounds) => toggleWidget(bounds));
 }
 
 ipcMain.handle('data:load', () => {
@@ -41,9 +100,23 @@ ipcMain.handle('data:load', () => {
   }
 });
 
-ipcMain.handle('data:save', (_e, data) => {
+// Persist, then tell every other window so the widget and the main app stay in sync.
+ipcMain.handle('data:save', (e, data) => {
   fs.writeFileSync(dataFile(), JSON.stringify(data, null, 2));
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.webContents.id !== e.sender.id) w.webContents.send('data:changed', data);
+  }
 });
+
+ipcMain.on('widget:openMain', (_e, target) => {
+  const win = createMainWindow();
+  if (target) {
+    const send = () => win.webContents.send('open', target);
+    if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send); else send();
+  }
+  if (widgetWin) widgetWin.hide();
+});
+ipcMain.on('widget:close', () => { if (widgetWin) widgetWin.hide(); });
 
 ipcMain.handle('google:getConfig', () => google.getConfig());
 ipcMain.handle('google:setConfig', (_e, c) => google.setConfig(c));
@@ -55,12 +128,15 @@ ipcMain.handle('google:events', (_e, calendarId, from, to) => google.events(cale
 app.whenReady().then(() => {
   // In development the dock shows Electron's own icon unless we set ours.
   if (process.platform === 'darwin' && app.dock) app.dock.setIcon(iconPath);
-  createWindow();
+  createMainWindow();
+  createTray();
+  createWidget(); // pre-load so the first click is instant
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!mainWin) createMainWindow();
   });
 });
 
+// Closing the main window keeps the app (and its menu-bar widget) running on macOS.
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });

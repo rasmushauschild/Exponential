@@ -27,11 +27,12 @@ interface Props {
   onWeekChange: (monday: ISODate) => void;
   calendar: { enabled: boolean; available: boolean; events: CalendarEvent[]; note?: string };
   onToggleCalendar: () => void;
+  headExtra?: React.ReactNode; // e.g. the widget's "open app" button
 }
 
 /** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, editingId, onAdd, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, editingId, onAdd, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const readonly = selected !== me;
   const todayIdx = dayIndex(today) - dayIndex(week);
@@ -120,6 +121,7 @@ export function WeekPlan(props: Props) {
       <div className="panel-head">
         <div className="panel-title">Week {isoWeekNumber(week)}</div>
         <div className="panel-spacer" />
+        {headExtra}
         <button
           className={`pill toggle${calendar.enabled ? ' active' : ''}`}
           onClick={onToggleCalendar}
@@ -174,11 +176,7 @@ export function WeekPlan(props: Props) {
 
             {(
               <div className="wk-row wk-free">
-                <div className="wk-list">
-                  <button className="add-task" onClick={() => onAdd()}>
-                    <span className="plus">+</span> {readonly ? `Add task for ${shortName(people.find((p) => p.id === selected)?.name ?? '')}` : 'Add task'}
-                  </button>
-                </div>
+                <div className="wk-list" />
                 <div
                   className="wk-days ghost-zone"
                   onPointerMove={(e) => setGhost(dayAt(e.currentTarget, e.clientX))}
@@ -219,6 +217,10 @@ export function WeekPlan(props: Props) {
 
         {todayX !== null && <div className="week-today-line" style={{ left: todayX }} />}
       </div>
+
+      <button className="fab" onClick={() => onAdd()} title={readonly ? `Add a task for ${shortName(people.find((p) => p.id === selected)?.name ?? '')}` : 'Add a task (goes to your backlog)'}>
+        <span className="plus">+</span> Add task
+      </button>
     </>
   );
 }
@@ -244,6 +246,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
 }) {
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (editing) rowRef.current?.scrollIntoView({ block: 'nearest' }); }, [editing]);
   const [live, setLive] = useState<BlockDrag | null>(null);
   const [hoverCursor, setHoverCursor] = useState('grab');
   const daysRef = useRef<HTMLDivElement>(null);

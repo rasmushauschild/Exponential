@@ -61,7 +61,7 @@ next step (see below).
 | Week | Pick a teammate at the top right; only your own tasks are editable |
 | Week | Click a task's status dot: to do / in progress / needs review / completed / cancelled |
 | Week | Drag a task's block to another day, or drag either end to stretch it over several days |
-| Week | "+ Add task" creates a **backlog** task with no date: it shows faded at the bottom of every week until you click a day on its row to schedule it (or click a day in the empty area to create a dated task directly) |
+| Week | The floating **+ Add task** button (bottom right) creates a **backlog** task with no date: it shows faded at the bottom of every week until you click a day on its row to schedule it (or click a day in the empty area to create a dated task directly) |
 | Week | **Calendar** toggle shows Google Calendar events for the selected person |
 | Master plan | Hover a week near the bottom edge for its "Retro · Week N" pill; click it to open that week's retro |
 | Week | Swipe sideways on the trackpad to go to the previous/next week (the master plan band follows) |
@@ -73,6 +73,14 @@ next step (see below).
 | Details | Assign people to a project (avatars show on the bar); set a task's owner; when status is "Needs review", pick who reviews |
 | Inbox | Left sidebar: tasks added for you, review requests, owner hand-offs, changes to projects you're on |
 | Anywhere | ⌘Z / ⌘⇧Z (Ctrl on Windows) undo and redo — 100 steps |
+
+## Menu-bar widget (macOS)
+
+While the app is running, a chevron sits in the menu bar. Clicking it drops down the week
+panel on its own — same tasks, days, teammates, drag and status controls — with a fresh task
+ready to type into. **Open app** brings up the main window; clicking a task opens it there.
+Closing the main window keeps the app and the widget running. Edits in either window show up
+in the other immediately.
 
 ## Teams
 

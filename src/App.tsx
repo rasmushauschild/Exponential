@@ -4,8 +4,9 @@ import { Avatar, WeekPlan } from './WeekPlan';
 import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
 import { useData, uid, type GoogleConfig } from './store';
-import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Notification, Project, Retro, Task } from './types';
+import type { CalendarEvent, Data, Deadline, GoogleUser, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, shortName } from './types';
+import { addTask, nameOf, notify, patchTask, renameTask, reorderTask } from './taskOps';
 import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
@@ -69,27 +70,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo]);
 
-  const notify = (d: Data, n: Omit<Notification, 'id' | 'at' | 'read'>): Data =>
-    n.to === n.from ? d : { ...d, notifications: [...(d.notifications ?? []), { ...n, id: uid(), at: new Date().toISOString(), read: false }] };
-
-  const nameOf = (d: Data, id: string) => shortName(d.people.find((p) => p.id === id)?.name ?? 'Someone');
-
-  /** Task edits that someone else should hear about: new owner, review request. */
-  const updateTask = (id: string, patch: Partial<Task>, coalesce?: string) =>
-    update((d) => {
-      const before = d.tasks.find((t) => t.id === id);
-      if (!before) return d;
-      const after = { ...before, ...patch };
-      let next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) };
-      if (patch.personId && patch.personId !== before.personId) {
-        next = notify(next, { to: after.personId, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} handed you “${after.title}”`, ref: { kind: 'task', id } });
-        next = notify(next, { to: before.personId, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} moved “${after.title}” to ${nameOf(d, after.personId)}`, ref: { kind: 'task', id } });
-      }
-      if (after.status === 'review' && after.reviewerId && (after.reviewerId !== before.reviewerId || before.status !== 'review')) {
-        next = notify(next, { to: after.reviewerId, from: d.me, kind: 'review-requested', text: `${nameOf(d, d.me)} asked you to review “${after.title}”`, ref: { kind: 'task', id } });
-      }
-      return next;
-    }, coalesce);
+  const updateTask = (id: string, patch: Partial<Task>, coalesce?: string) => update((d) => patchTask(d, id, patch), coalesce);
 
   /** Project edits notify everyone assigned (except the editor). */
   const updateProject = (id: string, patch: Partial<Project>, coalesce?: string) =>
@@ -110,6 +91,9 @@ export default function App() {
       }
       return next;
     }, coalesce);
+
+  // The menu-bar widget can ask the main window to open a specific item.
+  useEffect(() => window.exponential?.onOpen((t) => { setView('plan'); setSelection(t as Selection); }), []);
 
   // Google: restore session on launch.
   useEffect(() => {
@@ -312,39 +296,15 @@ export default function App() {
               editingId={editingId ?? undefined}
               onWeekChange={setWeek}
               onAdd={(date) => {
-                const id = uid();
-                update((d) => {
-                  // new tasks go to the end of their day (or of the backlog)
-                  const order = d.tasks.filter((t) => t.personId === person && t.date === date).reduce((m, t) => Math.max(m, (t.order ?? 0) + 1), 0);
-                  return { ...d, tasks: [...d.tasks, { id, personId: person, title: 'New task', date, order, status: 'todo', createdBy: d.me } as Task] };
-                });
+                let id = '';
+                update((d) => { const r = addTask(d, person, date); id = r.id; return r.data; });
                 setEditingId(id);
               }}
-              onRename={(id, title) => {
-                setEditingId(null);
-                if (!title) update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }));
-                else update((d) => {
-                  const t0 = d.tasks.find((t) => t.id === id)!;
-                  const next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, title } : t)) };
-                  return t0.personId !== d.me
-                    ? notify(next, { to: t0.personId, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${title}” to your ${t0.date ? 'week' : 'backlog'}`, ref: { kind: 'task', id } })
-                    : next;
-                });
-              }}
+              onRename={(id, title) => { setEditingId(null); update((d) => renameTask(d, id, title)); }}
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
               onOpen={(t) => setSelection({ kind: 'task', id: t.id })}
-              onReorder={(id, delta) => update((d) => {
-                const t = d.tasks.find((x) => x.id === id)!;
-                const group = d.tasks.filter((x) => x.personId === t.personId && x.date === t.date) // undated tasks group together as the backlog
-                  .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
-                const from = group.findIndex((x) => x.id === id);
-                const to = Math.min(group.length - 1, Math.max(0, from + delta));
-                if (from === to) return d;
-                group.splice(to, 0, group.splice(from, 1)[0]);
-                const order = new Map(group.map((x, i) => [x.id, i]));
-                return { ...d, tasks: d.tasks.map((x) => (order.has(x.id) ? { ...x, order: order.get(x.id) } : x)) };
-              })}
+              onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
               calendar={{
                 enabled: calendarOn,
                 available: !!googleUser,

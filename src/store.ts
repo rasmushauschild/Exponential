@@ -12,6 +12,12 @@ declare global {
     exponential?: {
       load: () => Promise<unknown>;
       save: (data: unknown) => Promise<void>;
+      onChange: (cb: (data: unknown) => void) => () => void;
+      openMain: (target?: { kind: string; id: string }) => void;
+      closeWidget: () => void;
+      isWidget: boolean;
+      onWidgetShown: (cb: () => void) => () => void;
+      onOpen: (cb: (target: { kind: string; id: string }) => void) => () => void;
       platform: string;
       google: {
         getConfig: () => Promise<GoogleConfig | null>;
@@ -166,6 +172,14 @@ export function useData() {
 
   useEffect(() => {
     load().then((w) => { wsRef.current = w; setWs(w); });
+    // Another window (main app or menu-bar widget) saved: adopt its data, keep our current team.
+    return window.exponential?.onChange((raw) => {
+      const incoming = toWorkspace(raw);
+      const cur = wsRef.current?.current;
+      const next = cur && incoming.teams.some((t) => t.id === cur) ? { ...incoming, current: cur } : incoming;
+      wsRef.current = next;
+      setWs(next);
+    });
   }, []);
 
   const commitWs = (next: Workspace) => {

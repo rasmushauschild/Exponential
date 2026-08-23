@@ -245,7 +245,7 @@ img { display: block; -webkit-user-drag: none; }
 .wk-row { display: grid; grid-template-columns: minmax(170px, 34%) minmax(0, 1fr); align-items: center; min-height: 36px; flex: none; }
 .wk-rows > .wk-row.task, .wk-rows > .wk-row.event { flex: none; }
 .wk-header { min-height: 28px; margin-bottom: 4px; }
-.wk-rows { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; display: flex; flex-direction: column; }
+.wk-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .wk-rows::-webkit-scrollbar { width: 0; }
 .wk-list { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px; position: relative; height: 100%; }
 .wk-days { position: relative; height: 100%; display: grid; grid-template-columns: repeat(7, 1fr); min-height: 36px; }
@@ -336,6 +336,15 @@ img { display: block; -webkit-user-drag: none; }
 .add-task:hover { color: var(--text-2); }
 .add-task .plus { font-size: 17px; line-height: 14px; width: 18px; text-align: center; }
 .add-task input { flex: 1; min-width: 0; color: var(--text); }
+
+.fab {
+  position: absolute; right: 18px; bottom: 16px; z-index: 20; display: inline-flex; align-items: center; gap: 6px;
+  padding: 9px 16px 9px 13px; border-radius: 999px; background: var(--text); color: var(--bg); font-weight: 700;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); transition: transform 0.12s, opacity 0.15s;
+}
+.fab:hover { transform: translateY(-1px); }
+.fab .plus { font-size: 18px; line-height: 14px; }
+.wk-rows { padding-bottom: 56px; } /* keep the last rows clear of the floating button */
 
 .week-today-line { position: absolute; top: 8px; bottom: 14px; width: 2px; margin-left: -1px; background: var(--today); z-index: 5; pointer-events: none; border-radius: 2px; }
 
@@ -451,6 +460,20 @@ img { display: block; -webkit-user-drag: none; }
 .retro-config .add-task { padding: 6px 4px; }
 .team-title-input { background: transparent; border-radius: 10px; padding: 2px 8px; margin-left: -8px; user-select: text; width: auto; min-width: 120px; }
 .team-title-input:hover, .team-title-input:focus { background: var(--soft); }
+
+/* ─── Menu-bar widget ───────────────────────────────── */
+
+.widget-window, .widget-window body { background: transparent; }
+.widget-window #root { background: transparent; }
+.widget { height: 100%; padding: 8px; }
+.widget-panel { height: 100%; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12), 0 18px 50px rgba(0, 0, 0, 0.28); border-radius: 26px; }
+.widget .panel-head { -webkit-app-region: no-drag; padding: 18px 22px 8px; }
+.widget .panel-title { font-size: 20px; }
+.widget .arrow { font-size: 12px; margin-left: 2px; }
+.widget .pill.toggle, .widget .head-gap { display: none; }
+.widget .panel-head .pill { padding: 5px 10px 5px 5px; font-size: 13px; }
+.widget .panel-head .pill:not(.person) { padding-left: 10px; }
+.widget .panel-head { gap: 6px; }
 
 /* ─── Sheets ────────────────────────────────────────── */
 
