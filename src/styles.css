@@ -475,7 +475,7 @@ img { display: block; -webkit-user-drag: none; }
 .widget .panel-head { -webkit-app-region: no-drag; padding: 18px 22px 8px; }
 .widget .panel-title { font-size: 20px; }
 .widget .arrow { font-size: 12px; margin-left: 2px; }
-.widget .pill.toggle, .widget .head-gap { display: none; }
+.widget .pill.toggle, .widget .head-gap, .widget .pill.person { display: none; }
 .widget .panel-head .pill { padding: 5px 10px 5px 5px; font-size: 13px; }
 .widget .panel-head .pill:not(.person) { padding-left: 10px; }
 .widget .panel-head { gap: 6px; }

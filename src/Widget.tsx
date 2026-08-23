@@ -62,7 +62,7 @@ export default function Widget() {
     <div className="widget">
       <section className="panel widget-panel">
         <WeekPlan
-          people={data.people}
+          people={data.people.filter((p) => p.id === me)}
           me={me}
           selected={who}
           onSelect={setPerson}
