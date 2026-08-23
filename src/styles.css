@@ -338,12 +338,12 @@ img { display: block; -webkit-user-drag: none; }
 .add-task input { flex: 1; min-width: 0; color: var(--text); }
 
 .fab {
-  position: absolute; left: 18px; bottom: 16px; z-index: 20; display: inline-flex; align-items: center; gap: 6px;
-  padding: 9px 16px 9px 13px; border-radius: 999px; background: var(--text); color: var(--bg); font-weight: 700;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18); transition: transform 0.12s, opacity 0.15s;
+  position: absolute; left: 26px; bottom: 14px; z-index: 20; display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 10px; border-radius: 12px; color: var(--text-3); font-weight: 500;
+  background: var(--panel); transition: color 0.15s, background 0.15s;
 }
-.fab:hover { transform: translateY(-1px); }
-.fab .plus { font-size: 18px; line-height: 14px; }
+.fab:hover { color: var(--text-2); background: var(--ov-3); }
+.fab .plus { font-size: 17px; line-height: 14px; width: 18px; text-align: center; }
 .wk-rows { padding-bottom: 56px; } /* keep the last rows clear of the floating button */
 
 .week-today-line { position: absolute; top: 8px; bottom: 14px; width: 2px; margin-left: -1px; background: var(--today); z-index: 5; pointer-events: none; border-radius: 2px; }
