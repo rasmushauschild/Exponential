@@ -491,10 +491,10 @@ function PersonDropdown({ people, me, selected, onSelect }: { people: Person[]; 
       <button className="pill person active" onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setOpen((o) => (o ? null : r)); }}>
         {cur && <Avatar person={cur} />}
         {selected === me ? 'Me' : shortName(cur?.name ?? '')}
-        <span className="chev">⌄</span>
+        <ChevronIcon />
       </button>
       {open && createPortal(
-        <div className="status-menu" style={{ position: 'fixed', top: open.bottom + 6, left: Math.min(open.left, window.innerWidth - 230), minWidth: 200 }} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="status-menu person-menu" style={{ position: 'fixed', top: open.bottom + 6, right: Math.max(8, window.innerWidth - open.right), minWidth: 200 }} onPointerDown={(e) => e.stopPropagation()}>
           {ordered.map((p) => (
             <button key={p.id} className={p.id === selected ? 'current' : ''} onClick={() => { onSelect(p.id); setOpen(null); }}>
               <Avatar person={p} size={18} /> {p.id === me ? 'Me' : shortName(p.name)}
@@ -536,6 +536,14 @@ export function StatusDot({ status }: { status: Status }) {
       {status === 'progress' && <span style={{ width: 4, height: 4, borderRadius: 2, background: '#fff' }} />}
       {status === 'review' && <span style={{ width: 6, height: 6, borderRadius: 3, background: c }} />}
     </span>
+  );
+}
+
+function ChevronIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 2, opacity: 0.75 }}>
+      <path d="M6 9.5l6 6 6-6" />
+    </svg>
   );
 }
 

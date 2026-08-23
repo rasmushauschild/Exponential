@@ -167,7 +167,9 @@ img { display: block; -webkit-user-drag: none; }
 .pill.active { background: var(--text); color: var(--bg); }
 .pill.toggle.active { background: var(--accent); }
 .pill.person { padding-left: 6px; }
-.pill.person .chev { font-size: 13px; line-height: 8px; margin: -4px 0 0 2px; opacity: 0.7; }
+.person-menu { max-width: min(340px, 90vw); }
+.person-menu button { white-space: nowrap; }
+.person-menu button span:last-child, .person-menu button { overflow: hidden; text-overflow: ellipsis; }
 .pill.small { padding: 5px 10px; font-size: 13px; }
 
 .avatar { border-radius: 50%; object-fit: cover; flex: none; }
