@@ -26,6 +26,12 @@ export async function ensureSession(): Promise<string | null> {
   return res.data.user?.id ?? null;
 }
 
+/** Make sure my profile row exists (the sign-up trigger covers new users; this covers everything else). */
+export async function ensureProfile() {
+  const { error } = await supabase.rpc('ensure_profile');
+  if (error) throw error;
+}
+
 export async function signOutCloud() {
   await supabase.auth.signOut();
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CalendarEvent, Data, GoogleUser, ISODate, Project, Workspace } from './types';
 import { addDays, todayISO, weekStart } from './dates';
-import { createTeam as cloudCreateTeam, ensureSession, listMyTeams, loadTeam, persistDiff, subscribeTeam, type TeamSummary } from './cloud';
+import { createTeam as cloudCreateTeam, ensureProfile, ensureSession, listMyTeams, loadTeam, persistDiff, subscribeTeam, type TeamSummary } from './cloud';
 
 export interface GoogleConfig {
   clientId: string;
@@ -214,6 +214,7 @@ export function useData() {
   const connectCloud = useCallback(async () => {
     const me = await ensureSession();
     if (!me) return false;
+    await ensureProfile();
     let teams = await listMyTeams();
     if (teams.length === 0) { await cloudCreateTeam('My team'); teams = await listMyTeams(); }
     const saved = localStorage.getItem(CURRENT_TEAM_KEY);
