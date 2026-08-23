@@ -38,6 +38,7 @@ export function WeekPlan(props: Props) {
   const [todayX, setTodayX] = useState<number | null>(null);
   const [ghost, setGhost] = useState<number | null>(null);
   const [swipe, setSwipe] = useState({ x: 0, animate: false });
+  const [lift, setLift] = useState<{ id: string; dy: number; rowH: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = bodyRef.current;
@@ -87,6 +88,23 @@ export function WeekPlan(props: Props) {
   }, [onWeekChange]);
 
   const sorted = [...tasks].sort((a, b) => a.date.localeCompare(b.date) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
+
+  // While a row is lifted, same-day neighbours slide out of its way so the drop position is obvious.
+  const lifted = lift ? sorted.find((t) => t.id === lift.id) : undefined;
+  const group = lifted ? sorted.filter((t) => t.date === lifted.date) : [];
+  const liftIdx = lifted ? group.findIndex((t) => t.id === lifted.id) : -1;
+  const liftSteps = lift ? Math.min(group.length - 1 - liftIdx, Math.max(-liftIdx, Math.round(lift.dy / lift.rowH))) : 0;
+  const liftStepsRef = useRef(0); // read at drop time: the row's pointer handlers were bound before the drag began
+  liftStepsRef.current = liftSteps;
+  const rowOffset = (t: Task) => {
+    if (!lift) return 0;
+    if (t.id === lift.id) return Math.min((group.length - 1 - liftIdx) * lift.rowH, Math.max(-liftIdx * lift.rowH, lift.dy));
+    const j = group.findIndex((x) => x.id === t.id);
+    if (j < 0) return 0;
+    if (j > liftIdx && j <= liftIdx + liftSteps) return -lift.rowH;
+    if (j < liftIdx && j >= liftIdx + liftSteps) return lift.rowH;
+    return 0;
+  };
   const events = calendar.enabled ? calendar.events.filter((e) => days.includes(e.date)) : [];
 
   const dayAt = (el: HTMLElement, clientX: number) => {
@@ -143,7 +161,10 @@ export function WeekPlan(props: Props) {
                 onDelete={onDelete}
                 onOpen={onOpen}
                 onRename={onRename}
-                onReorder={onReorder}
+                offset={rowOffset(t)}
+                lifting={lift?.id === t.id}
+                onLift={(dy, rowH) => setLift({ id: t.id, dy, rowH })}
+                onDrop={() => { if (liftStepsRef.current !== 0) onReorder(t.id, liftStepsRef.current); setLift(null); }}
               />
             ))}
             {readonly && sorted.length === 0 && <div className="hint wk-empty">Nothing planned this week.</div>}
@@ -201,7 +222,7 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onRename, onReorder }: {
+function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onRename, offset, lifting, onLift, onDrop }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
@@ -213,10 +234,12 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   onDelete: Props['onDelete'];
   onOpen: Props['onOpen'];
   onRename: Props['onRename'];
-  onReorder: Props['onReorder'];
+  offset: number;
+  lifting: boolean;
+  onLift: (dy: number, rowH: number) => void;
+  onDrop: () => void;
 }) {
   const [menu, setMenu] = useState<false | 'down' | 'up'>(false);
-  const [lift, setLift] = useState<number | null>(null); // px while reordering vertically
   const rowRef = useRef<HTMLDivElement>(null);
   const [live, setLive] = useState<BlockDrag | null>(null);
   const [hoverCursor, setHoverCursor] = useState('grab');
@@ -266,24 +289,23 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     window.addEventListener('pointerup', up);
   };
 
-  // Vertical drag on the title reorders within the same day; a still click opens the task.
-  const onTitleDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
+  // Vertical drag anywhere on the row's list cell reorders it within its day; a still click opens the task.
+  const onRowDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || (e.target as HTMLElement).closest('.status-btn, .status-menu, .inline-name')) return;
     e.preventDefault();
     const startY = e.clientY;
     const rowH = rowRef.current?.offsetHeight ?? 36;
-    let moved = false, steps = 0;
+    let moved = false;
     const move = (ev: PointerEvent) => {
       const dy = ev.clientY - startY;
       if (Math.abs(dy) > 4) moved = true;
-      if (moved && !readonly) { setLift(dy); steps = Math.round(dy / rowH); }
+      if (moved && !readonly) onLift(dy, rowH);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
-      setLift(null);
       if (!moved) onOpen(task);
-      else if (steps !== 0) onReorder(task.id, steps);
+      else onDrop();
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -304,10 +326,10 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   return (
     <div
       ref={rowRef}
-      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}${lift !== null ? ' lifting' : ''}`}
-      style={lift !== null ? { transform: `translateY(${lift}px)` } : undefined}
+      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}`}
+      style={offset ? { transform: `translateY(${offset}px)` } : undefined}
     >
-      <div className="wk-list">
+      <div className="wk-list" onPointerDown={onRowDown} style={{ cursor: readonly ? 'default' : 'grab' }}>
         <button className="status-btn" title={STATUS_LABEL[task.status]}
           onClick={(e) => {
             if (readonly) return;
@@ -319,7 +341,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
         </button>
         {editing
           ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t) => onRename(task.id, t)} />
-          : <button className="task-title" onPointerDown={onTitleDown}>{task.title}</button>}
+          : <button className="task-title">{task.title}</button>}
         {creator && (
           <span className="from-chip" title={`Added by ${creator.name}`}>
             <Avatar person={creator} size={14} /> {creator.id === me ? 'you' : shortName(creator.name).split(' ')[0]}

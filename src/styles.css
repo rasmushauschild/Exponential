@@ -180,7 +180,8 @@ img { display: block; -webkit-user-drag: none; }
 
 .wk-row.task { border-radius: 14px; transition: background 0.15s; position: relative; }
 .wk-row.task:has(.status-menu) { z-index: 60; }
-.wk-row.task.lifting { z-index: 40; background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); transition: none; }
+.wk-row.task.lifting { z-index: 40; background: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); transition: none; cursor: grabbing; }
+.wk-row.task.shifted { transition: transform 0.15s ease-out; }
 .task-title { cursor: pointer; }
 .wk-row.task:hover, .wk-row.task.selected { background: rgba(0, 0, 0, 0.03); }
 .wk-row.done .task-title, .wk-row.cancelled .task-title { color: var(--text-3); }

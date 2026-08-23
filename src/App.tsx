@@ -9,7 +9,7 @@ import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
-const DEFAULT_PREFS = { split: 0.62, detailW: 340 };
+const DEFAULT_PREFS = { weekH: 400, detailW: 415 };
 const prefs: typeof DEFAULT_PREFS = (() => {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
 })();
@@ -20,14 +20,14 @@ export default function App() {
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
-  const [split, setSplit] = useState(() => prefs.split);
+  const [weekH, setWeekH] = useState(() => prefs.weekH);
   const [selection, setSelection] = useState<Selection | null>(null);
   const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [resizing, setResizing] = useState(false);
   const [detailW, setDetailW] = useState(() => prefs.detailW);
 
-  useEffect(() => { savePrefs({ split, detailW }); }, [split, detailW]);
+  useEffect(() => { savePrefs({ weekH, detailW }); }, [weekH, detailW]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -172,7 +172,7 @@ export default function App() {
   const onResizeDown = (e: React.PointerEvent) => {
     const rect = mainRef.current!.getBoundingClientRect();
     setResizing(true);
-    const move = (ev: PointerEvent) => setSplit(Math.min(0.85, Math.max(0.15, (ev.clientY - rect.top) / rect.height)));
+    const move = (ev: PointerEvent) => setWeekH(Math.min(rect.height - 200, Math.max(160, rect.bottom - ev.clientY - 7)));
     const up = () => {
       setResizing(false);
       window.removeEventListener('pointermove', move);
@@ -221,7 +221,7 @@ export default function App() {
 
       <div className={`main${detailOpen ? ' with-detail' : ''}`}>
         <div className="planners" ref={mainRef}>
-          <section className="panel" style={{ flex: `${split} 1 0` }}>
+          <section className="panel" style={{ flex: '1 1 0' }}>
             <div className="panel-head">
               <div className="panel-title">Master plan</div>
               <div className="panel-spacer" />
@@ -260,7 +260,7 @@ export default function App() {
 
           <div className={`resizer${resizing ? ' dragging' : ''}`} onPointerDown={onResizeDown} />
 
-          <section className="panel" style={{ flex: `${1 - split} 1 0` }}>
+          <section className="panel" style={{ flex: 'none', height: weekH }}>
             <WeekPlan
               people={data.people}
               me={data.me}
