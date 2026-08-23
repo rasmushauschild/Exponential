@@ -339,7 +339,7 @@ function StatusSelect({ value, reviewerId, people, onPick }: {
   useClickAway(!!open, '.status-select', () => setOpen(null));
   return (
     <div className="status-select">
-      <button className="pill small" onClick={(e) => setOpen((o) => (o ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()))}><StatusDot status={value} /> {STATUS_LABEL[value]}</button>
+      <button className="pill small" onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setOpen((o) => (o ? null : r)); }}><StatusDot status={value} /> {STATUS_LABEL[value]}</button>
       {open && <StatusMenu value={value} reviewerId={reviewerId} people={people} onPick={(s, r) => { onPick(s, r); setOpen(null); }} anchor={open} />}
     </div>
   );

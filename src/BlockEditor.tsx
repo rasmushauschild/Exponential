@@ -16,8 +16,7 @@ type Block =
   | { key: string; kind: 'task'; taskId: string };
 
 const TASK_RE = /^- \[( |x)\] ?(.*?)\s*<!--task:([0-9a-f-]{36})-->\s*$/i;
-let keyCounter = 0;
-const newKey = () => `b${++keyCounter}`;
+const newKey = () => `b${crypto.randomUUID().slice(0, 8)}`;
 
 export function parseBlocks(md: string): Block[] {
   const out: Block[] = [];

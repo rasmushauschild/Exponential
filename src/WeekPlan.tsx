@@ -488,7 +488,7 @@ function PersonDropdown({ people, me, selected, onSelect }: { people: Person[]; 
   if (people.length <= 1) return cur ? <span className="pill person active"><Avatar person={cur} /> Me</span> : null;
   return (
     <>
-      <button className="pill person active" onClick={(e) => setOpen((o) => (o ? null : (e.currentTarget as HTMLElement).getBoundingClientRect()))}>
+      <button className="pill person active" onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setOpen((o) => (o ? null : r)); }}>
         {cur && <Avatar person={cur} />}
         {selected === me ? 'Me' : shortName(cur?.name ?? '')}
         <span className="chev">⌄</span>
