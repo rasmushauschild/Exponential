@@ -39,12 +39,16 @@ img { display: block; -webkit-user-drag: none; }
   width: 212px; flex: none; display: flex; flex-direction: column;
   padding: 14px 14px 8px 14px; -webkit-app-region: drag;
 }
-.sidebar.mac { padding-top: 40px; }
+.sidebar { padding-top: 0; }
+.sidebar.mac { padding-top: 0; }
 .sidebar * { -webkit-app-region: no-drag; }
 .team-list {
-  background: var(--panel); border-radius: 22px; box-shadow: var(--shadow); padding: 8px; margin-bottom: 18px;
+  background: var(--panel); border-radius: var(--radius-xl); box-shadow: var(--shadow); padding: 10px; margin-bottom: 18px;
   display: flex; flex-direction: column; gap: 2px;
 }
+.sidebar.mac .team-list { padding-top: 40px; } /* room for the window's traffic lights */
+.team-row.add { display: none; }
+.team-list:hover .team-row.add, .team-list:focus-within .team-row.add { display: flex; }
 .team-row { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 14px; text-align: left; transition: background 0.15s; }
 .team-row:hover { background: var(--soft); }
 .team-row.current { background: var(--text); color: #fff; }
@@ -134,32 +138,32 @@ img { display: block; -webkit-user-drag: none; }
 .timeline.panning { cursor: grabbing; }
 .timeline.dragging-item { cursor: grabbing; }
 
-.tl-month { position: absolute; top: 0; font-size: 12px; font-weight: 600; color: var(--text-2); padding-left: 8px; white-space: nowrap; pointer-events: none; }
-.tl-week-tint { position: absolute; top: 6px; bottom: 10px; border-radius: 18px; background: rgba(0, 0, 0, 0.022); pointer-events: none; }
-.tl-day { position: absolute; top: 22px; font-size: 10px; color: var(--text-3); text-align: center; pointer-events: none; font-variant-numeric: tabular-nums; }
+.tl-month { position: absolute; top: 2px; font-size: 12px; font-weight: 700; color: var(--text); padding-left: 8px; white-space: nowrap; pointer-events: none; }
+.tl-week-tint { position: absolute; top: 44px; bottom: 10px; border-radius: 18px; background: rgba(0, 0, 0, 0.025); pointer-events: none; }
+.tl-day { position: absolute; top: 22px; font-size: 12px; font-weight: 500; color: var(--text-3); text-align: center; pointer-events: none; font-variant-numeric: tabular-nums; }
 .tl-day.weekend { color: #d1d1d6; }
 
 .week-band {
-  position: absolute; top: 6px; bottom: 10px; border-radius: 18px; background: rgba(10, 132, 255, 0.07);
+  position: absolute; top: 44px; bottom: 10px; border-radius: 18px; background: rgba(10, 132, 255, 0.07);
   cursor: ew-resize; transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1);
 }
 .week-band.no-anim { transition: background 0.15s; }
 .week-band.dragging { transition: background 0.15s, left 0.16s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .week-band:hover, .week-band.dragging { background: rgba(10, 132, 255, 0.12); }
 .week-label {
-  position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 11px; font-weight: 700; color: var(--text-3);
+  position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 12px; font-weight: 700; color: var(--text-3);
   white-space: nowrap; z-index: 6; padding: 3px 0; border-radius: 999px; transition: color 0.15s;
 }
+.week-label.hover { bottom: 20px; } /* hovered weeks: same baseline as the label inside the band */
 .week-label:hover { color: var(--text); }
 .week-label.current { color: var(--accent); }
 .week-label.current:hover { color: #0060c0; }
 
-.today-line { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--today); pointer-events: none; z-index: 5; }
-.today-line::before { content: 'Today'; position: absolute; top: 2px; left: 6px; font-size: 10px; font-weight: 700; color: var(--today); }
+.today-line { position: absolute; top: 44px; bottom: 10px; border-radius: 2px; width: 2px; margin-left: -1px; background: var(--today); pointer-events: none; z-index: 5; }
 
 .tl-project {
   position: absolute; height: 30px; display: flex; align-items: center; gap: 10px;
-  border-radius: 999px; padding: 0 12px; font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden;
+  border-radius: 999px; padding: 0 12px; font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden;
   background: #fff; color: var(--text);
   box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 55%, white), 0 1px 2px rgba(0, 0, 0, 0.04);
   transition: box-shadow 0.15s, background 0.15s;
@@ -181,7 +185,7 @@ img { display: block; -webkit-user-drag: none; }
   cursor: pointer; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--text); border-radius: 999px; padding-right: 8px;
 }
 .tl-deadline:hover, .tl-deadline.selected { background: rgba(255, 159, 10, 0.12); }
-.tl-deadline .star { width: 18px; height: 18px; flex: none; color: #ff9f0a; margin-left: 2px; }
+.tl-deadline .star { width: 16px; height: 16px; flex: none; color: #ff9f0a; margin-left: 3px; }
 .tl-deadline .label { opacity: 0.85; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ─── Week ──────────────────────────────────────────── */
@@ -314,8 +318,13 @@ img { display: block; -webkit-user-drag: none; }
 .prop { display: flex; align-items: center; gap: 12px; min-height: 32px; }
 .prop-label { width: 72px; flex: none; font-size: 13px; color: var(--text-3); font-weight: 600; }
 .prop-text { font-weight: 500; }
-.prop input[type='date'] { font-weight: 500; padding: 4px 8px; border-radius: 8px; margin-left: -8px; }
-.prop input[type='date']:hover { background: var(--soft); }
+.date-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--soft); font-weight: 600; font-size: 13px; color: var(--text-2); transition: background 0.15s; }
+.date-pill:hover { background: var(--soft-2); color: var(--text); }
+.date-pill .dash { color: var(--text-3); padding: 0 2px; }
+.date-pill input[type='date'] { font: inherit; color: inherit; background: transparent; padding: 0; width: auto; cursor: pointer; font-variant-numeric: tabular-nums; }
+.date-pill input[type='date']::-webkit-calendar-picker-indicator { display: none; }
+.date-pill input[type='date']::-webkit-datetime-edit { padding: 0; }
+.date-pill input[type='date']::-webkit-datetime-edit-fields-wrapper { padding: 0; }
 .swatches { display: flex; gap: 6px; }
 .swatch { width: 20px; height: 20px; border-radius: 50%; background: var(--pc); opacity: 0.75; transition: transform 0.12s, opacity 0.12s; }
 .swatch:hover { opacity: 1; transform: scale(1.1); }

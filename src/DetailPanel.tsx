@@ -89,10 +89,10 @@ export function DetailPanel(p: Props) {
         <div className="props">
           {project && (
             <>
-              <Prop label="Starts"><input type="date" value={project.start} max={project.end}
-                onChange={(e) => e.target.value && p.onUpdateProject(project.id, { start: e.target.value })} /></Prop>
-              <Prop label="Ends"><input type="date" value={project.end} min={project.start}
-                onChange={(e) => e.target.value && p.onUpdateProject(project.id, { end: e.target.value })} /></Prop>
+              <Prop label="Dates">
+                <DateRange start={project.start} end={project.end}
+                  onChange={(start, end) => p.onUpdateProject(project.id, { start, end })} />
+              </Prop>
               <Prop label="People">
                 <AssigneePicker people={people} me={me} assignees={project.assignees ?? []} onToggle={(id) => p.onToggleAssignee(project.id, id)} />
               </Prop>
@@ -121,18 +121,21 @@ export function DetailPanel(p: Props) {
                 <PersonSelect people={people} value={task.personId} me={me}
                   onChange={(id) => id && p.onUpdateTask(task.id, { personId: id })} />
               </Prop>
-              <Prop label="Starts"><input type="date" value={task.date} max={task.end}
-                onChange={(e) => e.target.value && p.onUpdateTask(task.id, { date: e.target.value })} /></Prop>
-              <Prop label="Ends"><input type="date" value={task.end ?? task.date} min={task.date}
-                onChange={(e) => e.target.value && p.onUpdateTask(task.id, { end: e.target.value === task.date ? undefined : e.target.value })} /></Prop>
+              <Prop label="Dates">
+                <DateRange start={task.date} end={task.end ?? task.date}
+                  onChange={(start, end) => p.onUpdateTask(task.id, { date: start, end: end === start ? undefined : end })} />
+              </Prop>
               {task.createdBy && task.createdBy !== task.personId && (
                 <Prop label="Added by"><span className="prop-text">{shortName(people.find((x) => x.id === task.createdBy)?.name ?? '')}</span></Prop>
               )}
             </>
           )}
           {deadline && (
-            <Prop label="Date"><input type="date" value={deadline.date}
-              onChange={(e) => e.target.value && p.onUpdateDeadline(deadline.id, { date: e.target.value })} /></Prop>
+            <Prop label="Date">
+              <span className="date-pill">
+                <input type="date" value={deadline.date} onChange={(e) => e.target.value && p.onUpdateDeadline(deadline.id, { date: e.target.value })} />
+              </span>
+            </Prop>
           )}
         </div>
 
@@ -247,6 +250,17 @@ function relTime(iso: string) {
 }
 
 /* ─── Shared bits ───────────────────────────────────── */
+
+/** One pill holding both ends of a range; moving the start past the end (or vice versa) drags the other along. */
+function DateRange({ start, end, onChange }: { start: string; end: string; onChange: (start: string, end: string) => void }) {
+  return (
+    <span className="date-pill">
+      <input type="date" value={start} onChange={(e) => { const v = e.target.value; if (v) onChange(v, v > end ? v : end); }} />
+      <span className="dash">–</span>
+      <input type="date" value={end} onChange={(e) => { const v = e.target.value; if (v) onChange(v < start ? v : start, v); }} />
+    </span>
+  );
+}
 
 function Prop({ label, children }: { label: string; children: React.ReactNode }) {
   return (

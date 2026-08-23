@@ -6,7 +6,7 @@ import { Avatar } from './WeekPlan';
 
 const ROW_H = 38;
 const DEADLINE_ROW_H = 30;
-const HEADER_H = 46;
+const HEADER_H = 44; // month + day labels; tints and the band start below this
 const RETRO_H = 30; // strip along the bottom that shows week labels / opens the retro
 const MIN_PPD = 4;
 const MAX_PPD = 90;
@@ -238,7 +238,7 @@ export function BigPlan(props: Props) {
     }
   }
   const days: number[] = [];
-  if (ppd >= 16) for (let d = firstDay; d <= lastDay; d++) days.push(d);
+  if (ppd >= 20) for (let d = firstDay; d <= lastDay; d++) days.push(d);
   // Every other week is tinted; parity is anchored to the calendar so zooming never swaps them.
   const weeks: number[] = [];
   for (let m = dayIndex(weekStart(fromDayIndex(firstDay))); m <= lastDay; m += 7) weeks.push(m);
@@ -265,7 +265,7 @@ export function BigPlan(props: Props) {
             {odd && <div className="tl-week-tint" style={{ left: (m - origin) * ppd, width: ppd * 7 }} />}
             {hovered && m !== dayIndex(week) && ppd * 7 >= 70 && (
               <button
-                className="week-label"
+                className="week-label hover"
                 style={{ left: (m - origin) * ppd, width: ppd * 7 }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => onOpenRetro(fromDayIndex(m))}
@@ -287,7 +287,7 @@ export function BigPlan(props: Props) {
         const wk = (d + 3) % 7 >= 5;
         return (
           <div key={d} className={`tl-day${wk ? ' weekend' : ''}`} style={{ left: (d - origin) * ppd, width: ppd }}>
-            {ppd >= 34 ? `${weekdayShort(iso)[0]} ${dayOfMonth(iso)}` : dayOfMonth(iso)}
+            {ppd >= 40 ? `${weekdayShort(iso)[0]} ${dayOfMonth(iso)}` : dayOfMonth(iso)}
           </div>
         );
       })}

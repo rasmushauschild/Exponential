@@ -13,7 +13,7 @@ function createWindow() {
     minHeight: 600,
     backgroundColor: '#f3f3f5',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-    trafficLightPosition: { x: 16, y: 16 },
+    trafficLightPosition: { x: 26, y: 24 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
