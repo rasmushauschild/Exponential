@@ -230,17 +230,15 @@ export default function App() {
             <span className="team-name">New team</span>
           </button>
         </div>
-        <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><Icon d="M4 5h16v4H4zM4 11h10v4H4zM4 17h7v2H4z" /> <span className="nav-text">Plan</span></button>
+        <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><PlanIcon /> <span className="nav-text">Plan</span></button>
         <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
-          <Icon d="M4 6h16v12H4zM4 6l8 7 8-7" /> <span className="nav-text">Inbox</span>
+          <InboxIcon /> <span className="nav-text">Inbox</span>
           {unread > 0 && <span className="badge">{unread}</span>}
         </button>
 
         <div className="sidebar-bottom">
           <button className="nav-item theme-toggle" onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            {theme === 'dark'
-              ? <Icon d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4M12 8a4 4 0 100 8 4 4 0 000-8z" />
-              : <Icon d="M20 14.5A8 8 0 119.5 4a6.5 6.5 0 0010.5 10.5z" />}
+            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             <span className="nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
           </button>
           {googleUser ? (
@@ -435,6 +433,41 @@ export function TeamMark({ team, size = 30 }: { team: { name: string; icon?: str
     : <span className="team-mark" style={style}>{team.name.trim()[0]?.toUpperCase()}</span>;
 }
 
+const ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+function PlanIcon() {
+  return (
+    <svg {...ICON} fill="currentColor" stroke="none">
+      <rect x="3" y="5" width="12" height="3.6" rx="1.8" />
+      <rect x="7.5" y="10.2" width="13.5" height="3.6" rx="1.8" />
+      <rect x="4.5" y="15.4" width="9" height="3.6" rx="1.8" />
+    </svg>
+  );
+}
+function InboxIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M4.5 13.5l1.8-6.2A1.8 1.8 0 0 1 8 6h8a1.8 1.8 0 0 1 1.7 1.3l1.8 6.2V17a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2z" />
+      <path d="M4.5 13.5h4.2a3.3 3.3 0 0 0 6.6 0h4.2" />
+    </svg>
+  );
+}
+function MoonIcon() {
+  return (
+    <svg {...ICON}>
+      <path d="M19.5 14.8A7.8 7.8 0 0 1 9.2 4.5a8 8 0 1 0 10.3 10.3z" />
+    </svg>
+  );
+}
+function SunIcon() {
+  return (
+    <svg {...ICON}>
+      <circle cx="12" cy="12" r="3.6" />
+      <path d="M12 3.5v1.8M12 18.7v1.8M3.5 12h1.8M18.7 12h1.8M6 6l1.3 1.3M16.7 16.7L18 18M6 18l1.3-1.3M16.7 7.3L18 6" />
+    </svg>
+  );
+}
+
 function CogIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -444,13 +477,6 @@ function CogIcon() {
   );
 }
 
-function Icon({ d }: { d: string }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d={d} />
-    </svg>
-  );
-}
 
 function GoogleG() {
   return (
