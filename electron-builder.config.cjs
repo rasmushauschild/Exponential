@@ -9,7 +9,8 @@ module.exports = {
   directories: { output: 'release', buildResources: 'build' },
   publish: [{ provider: 'github', owner: 'rasmushauschild', repo: 'Exponential' }],
   mac: {
-    target: [{ target: 'dmg', arch: ['arm64', 'x64'] }, { target: 'zip', arch: ['arm64', 'x64'] }],
+    // arm64 only. The zip target must stay: electron-updater on macOS updates from the zip, not the dmg.
+    target: [{ target: 'dmg', arch: ['arm64'] }, { target: 'zip', arch: ['arm64'] }],
     category: 'public.app-category.productivity',
     icon: 'build/icon.icns',
     hardenedRuntime: true,
@@ -20,6 +21,6 @@ module.exports = {
     extraResources: [{ from: 'build/Assets.car', to: 'Assets.car' }],
     notarize,
   },
-  dmg: { sign: false },
+  dmg: { sign: false, writeUpdateInfo: false },
   win: { target: ['nsis'], icon: 'build/icon.png' },
 };

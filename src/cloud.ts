@@ -176,8 +176,13 @@ export async function persistDiff(prev: Data, next: Data) {
   if (rt.upsert.length) ops.push(run('retros', supabase.from('retros').upsert(rt.upsert.map((r) => fromRetro(teamId, r)), { onConflict: 'team_id,week' })));
 
   const nt = diff(prev.notifications ?? [], next.notifications ?? []);
-  const realNotifs = nt.upsert.filter((n) => !isPending(n.to));
-  if (realNotifs.length) ops.push(run('notifications', supabase.from('notifications').upsert(realNotifs.map((n) => fromNotification(teamId, n)))));
+  // Upserts would hit the UPDATE policy (own rows only), so: plain inserts for new notifications
+  // (any member may notify a teammate), updates only for rows I already have (marking mine read).
+  const prevIds = new Set((prev.notifications ?? []).map((n) => n.id));
+  const fresh = nt.upsert.filter((n) => !prevIds.has(n.id) && !isPending(n.to));
+  const changed = nt.upsert.filter((n) => prevIds.has(n.id) && !isPending(n.to));
+  if (fresh.length) ops.push(run('notifications', supabase.from('notifications').insert(fresh.map((n) => fromNotification(teamId, n)))));
+  for (const n of changed) ops.push(run('notifications-update', supabase.from('notifications').update({ read: n.read }).eq('id', n.id)));
   if (nt.remove.length) ops.push(run('notifications-del', supabase.from('notifications').delete().in('id', nt.remove)));
 
   if (prev.name !== next.name || prev.icon !== next.icon || JSON.stringify(prev.retroFields) !== JSON.stringify(next.retroFields)) {
