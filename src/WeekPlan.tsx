@@ -4,6 +4,7 @@ import type { CalendarEvent, ISODate, Person, Status, Task } from './types';
 import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, shortName } from './types';
 import { addDays, dayIndex, dayOfMonth, isoWeekNumber, weekdayShort } from './dates';
 import { InlineName } from './BigPlan';
+import { confettiBurst } from './confetti';
 
 const EDGE = 8;
 const SWIPE_TRIGGER = 120; // accumulated px of horizontal scroll that flips the week
@@ -453,11 +454,16 @@ export function StatusMenu({ value, reviewerId, people, onPick, onDelete, onDeny
   const menuH = 44 * 5 + (onDelete || onDeny ? 50 : 0) + 12;
   const up = anchor.bottom + menuH > window.innerHeight - 8;
   const style: React.CSSProperties = { position: 'fixed', left: Math.min(anchor.left, window.innerWidth - 420), ...(up ? { bottom: window.innerHeight - anchor.top + 6 } : { top: anchor.bottom + 6 }) };
+  // Completing a task pops a little confetti from the status dot the menu was opened from.
+  const pick = (s: Status, reviewerId?: string) => {
+    if (s === 'done' && value !== 'done') confettiBurst(anchor.left + anchor.width / 2, anchor.top + anchor.height / 2);
+    onPick(s, reviewerId);
+  };
   return createPortal(
     <div className="status-menu" style={style} onPointerDown={(e) => e.stopPropagation()}>
       {STATUS_ORDER.map((s) => (
         <div key={s} className="status-item" onPointerEnter={() => setSub(s === 'review')}>
-          <button className={s === value ? 'current' : ''} onClick={() => onPick(s)}>
+          <button className={s === value ? 'current' : ''} onClick={() => pick(s)}>
             <StatusDot status={s} /> {STATUS_LABEL[s]}
             {s === 'review' && <span className="chev">›</span>}
           </button>
