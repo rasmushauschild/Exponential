@@ -237,7 +237,8 @@ img { display: block; -webkit-user-drag: none; }
 .tl-project::before { content: ''; position: absolute; inset: 0; background: var(--pc); opacity: 0.07; pointer-events: none; }
 .tl-project:hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 75%, var(--surface)), 0 2px 8px var(--ov-6); }
 .tl-project.selected { box-shadow: inset 0 0 0 2px var(--pc), 0 2px 8px var(--ov-6); }
-.tl-project.live { box-shadow: inset 0 0 0 2px var(--pc), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; }
+/* left/width/top ease so day and lane snaps glide; the base class must NOT transition position (panning). */
+.tl-project.live { box-shadow: inset 0 0 0 2px var(--pc), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; transition: box-shadow 0.15s, background 0.15s, left 0.12s ease-out, width 0.12s ease-out, top 0.12s ease-out; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
 .bar-avatars { display: inline-flex; flex: none; }
@@ -254,6 +255,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-deadline.ghost { opacity: 0.4; pointer-events: none; }
 .tl-deadline .inline-name { width: 140px; font-size: 12px; }
 .tl-deadline.live .dot { transform: scale(1.2); }
+.tl-deadline.live { transition: left 0.12s ease-out; }
 .tl-deadline .label { opacity: 0.85; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* ─── Week ──────────────────────────────────────────── */
@@ -311,7 +313,8 @@ img { display: block; -webkit-user-drag: none; }
 }
 .wk-block::before { content: ''; position: absolute; inset: 0; background: var(--sc); opacity: 0.16; pointer-events: none; }
 .wk-block:not(.ev) { top: 9px; bottom: 9px; }
-.wk-block.live { transition: none; box-shadow: inset 0 0 0 2px var(--sc), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
+/* Dragging eases between day snaps, like the hover ghost does. */
+.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 2px var(--sc), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
 .wk-row.done .wk-block, .wk-row.cancelled .wk-block { color: var(--text-2); }
 
 .wk-block.ev { --sc: #8e8e93; color: var(--text-2); font-weight: 500; }
