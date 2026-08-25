@@ -72,6 +72,7 @@ export function WeekPlan(props: Props) {
     let acc = 0, locked = false, lockDir = 0, last = 0, prevAbs = 0;
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      if (el.scrollWidth > el.clientWidth + 1) return; // too narrow: sideways wheel scrolls instead of flipping weeks
       e.preventDefault();
       const now = performance.now();
       const abs = Math.abs(e.deltaX);

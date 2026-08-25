@@ -111,15 +111,20 @@ export default function App() {
       const el = document.activeElement as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
-      if ((e.key === 'Backspace' || e.key === 'Delete') && multi.size) {
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        // The multi-selection wins; otherwise whatever is open in the side panel gets deleted.
+        const ids = multi.size ? multi
+          : selection && ['project', 'task', 'deadline'].includes(selection.kind) ? new Set([selection.id])
+          : null;
+        if (!ids) return;
         e.preventDefault();
         update((d) => ({
           ...d,
-          projects: d.projects.filter((p) => !multi.has(p.id)),
-          deadlines: d.deadlines.filter((x) => !multi.has(x.id)),
-          tasks: d.tasks.filter((t) => !multi.has(t.id)),
+          projects: d.projects.filter((p) => !ids.has(p.id)),
+          deadlines: d.deadlines.filter((x) => !ids.has(x.id)),
+          tasks: d.tasks.filter((t) => !ids.has(t.id)),
         }));
-        if (selection && multi.has(selection.id)) setSelection(null);
+        if (selection && ids.has(selection.id)) setSelection(null);
         setMulti(new Set());
       }
       if (e.key === 'Escape' && multi.size) setMulti(new Set());
@@ -127,6 +132,12 @@ export default function App() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo, multi, selection, update]);
+
+  /** Plain click on a single item: the multi-selection gives way to it. */
+  const open = (kind: Selection['kind'], id: string) => {
+    setMulti((m) => (m.size ? new Set<string>() : m));
+    setSelection({ kind, id } as Selection);
+  };
 
   const updateTask = (id: string, patch: Partial<Task>, coalesce?: string) => update((d) => patchTask(d, id, patch), coalesce);
 
@@ -391,8 +402,8 @@ export default function App() {
               onToggleSelect={toggleSelect}
               editingId={editingId ?? undefined}
               onWeekChange={setWeek}
-              onOpenProject={(p) => setSelection({ kind: 'project', id: p.id })}
-              onOpenDeadline={(d) => setSelection({ kind: 'deadline', id: d.id })}
+              onOpenProject={(p) => open('project', p.id)}
+              onOpenDeadline={(d) => open('deadline', d.id)}
               onMoveProject={(id, patch) => updateProject(id, patch)}
               onOpenRetro={(monday) => setSelection({ kind: 'retro', id: monday })}
               onOpenGroup={(g) => { setEditGroup(g); setSheet('group'); }}
@@ -471,7 +482,7 @@ export default function App() {
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
               onDeny={(id) => update((d) => denyReview(d, id))}
-              onOpen={(t) => setSelection({ kind: 'task', id: t.id })}
+              onOpen={(t) => open('task', t.id)}
               onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
               calendar={{
                 enabled: calendarOn,

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, nativeImage, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
@@ -11,6 +11,18 @@ const devUrl = process.env.VITE_DEV_SERVER_URL;
 let mainWin = null;
 let widgetWin = null;
 let tray = null;
+let reallyQuit = false; // ⌘Q only closes the main window; the tray's Quit (and the updater) set this
+
+/* ── UI zoom: our own factor, applied to the main window and persisted, so a stray
+   pinch/zoom never sticks someone's app at a weird size. ⌘+ / ⌘- / ⌘0 adjust it. ── */
+const zoomFile = () => path.join(app.getPath('userData'), 'zoom.json');
+let zoomFactor = 1;
+try { zoomFactor = JSON.parse(fs.readFileSync(zoomFile(), 'utf8')).factor || 1; } catch { /* default */ }
+function setZoom(f) {
+  zoomFactor = Math.min(1.6, Math.max(0.7, Math.round(f * 10) / 10));
+  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.setZoomFactor(zoomFactor);
+  try { fs.writeFileSync(zoomFile(), JSON.stringify({ factor: zoomFactor })); } catch { /* ignore */ }
+}
 
 const WIDGET_W = 640;
 const WIDGET_H = 460;
@@ -21,11 +33,38 @@ function loadRenderer(win, mode) {
     if (/^https?:/i.test(url)) shell.openExternal(url);
     return { action: 'deny' };
   });
+  // A fixed, per-app zoom: no pinch zoom, and any zoom Chromium remembered per-origin is overridden.
+  win.webContents.on('did-finish-load', () => {
+    win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
+    win.webContents.setZoomFactor(mode === 'widget' ? 1 : zoomFactor);
+  });
   if (devUrl) win.loadURL(mode ? `${devUrl}?mode=${mode}` : devUrl);
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), mode ? { query: { mode } } : undefined);
 }
 
+/** Standard menus, but zoom is ours (persisted factor instead of Chromium's per-origin memory). */
+function buildMenu() {
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => setZoom(zoomFactor + 0.1) },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: () => setZoom(zoomFactor + 0.1) },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => setZoom(zoomFactor - 0.1) },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => setZoom(1) },
+        { type: 'separator' },
+        { role: 'togglefullscreen' },
+      ],
+    },
+    { role: 'windowMenu' },
+  ]));
+}
+
 function createMainWindow() {
+  if (process.platform === 'darwin' && app.dock) { app.dock.show(); }
   if (mainWin && !mainWin.isDestroyed()) { mainWin.show(); mainWin.focus(); return mainWin; }
   mainWin = new BrowserWindow({
     icon: iconPath,
@@ -106,6 +145,12 @@ function createTray() {
   tray = new Tray(img);
   tray.setToolTip('Exponential — this week');
   tray.on('click', (_e, bounds) => toggleWidget(bounds));
+  // ⌘Q keeps the widget alive, so the tray is where the app can really be quit.
+  tray.on('right-click', () => tray.popUpContextMenu(Menu.buildFromTemplate([
+    { label: 'Open Exponential', click: () => createMainWindow() },
+    { type: 'separator' },
+    { label: 'Quit Exponential', click: () => { reallyQuit = true; app.quit(); } },
+  ])));
 }
 
 ipcMain.handle('data:load', () => {
@@ -163,11 +208,12 @@ function setupUpdates() {
   setTimeout(check, 8_000);
   setInterval(check, 2 * 60 * 60 * 1000);
 }
-ipcMain.on('update:install', () => { if (app.isPackaged) autoUpdater.quitAndInstall(); });
+ipcMain.on('update:install', () => { if (app.isPackaged) { reallyQuit = true; autoUpdater.quitAndInstall(); } });
 ipcMain.on('update:check', () => { if (app.isPackaged) autoUpdater.checkForUpdates().catch(() => {}); });
 ipcMain.handle('app:version', () => app.getVersion());
 
 app.whenReady().then(() => {
+  buildMenu();
   setupUpdates();
   // In development the dock shows Electron's own icon unless we set ours.
   if (process.platform === 'darwin' && app.dock) app.dock.setIcon(iconPath);
@@ -175,8 +221,18 @@ app.whenReady().then(() => {
   createTray();
   createWidget(); // pre-load so the first click is instant
   app.on('activate', () => {
-    if (!mainWin) createMainWindow();
+    createMainWindow();
   });
+});
+
+// ⌘Q (and dock → Quit) closes the main window and steps out of the Dock; the menu-bar
+// widget keeps running. Quitting for real happens from the tray menu or the updater.
+app.on('before-quit', (e) => {
+  if (process.platform !== 'darwin' || reallyQuit) return;
+  e.preventDefault();
+  if (mainWin && !mainWin.isDestroyed()) mainWin.close();
+  if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide();
+  app.dock?.hide();
 });
 
 // Closing the main window keeps the app (and its menu-bar widget) running on macOS.
