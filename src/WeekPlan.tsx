@@ -132,6 +132,45 @@ export function WeekPlan(props: Props) {
     return 0;
   };
   const events = calendar.enabled ? calendar.events.filter((e) => days.includes(e.date)) : [];
+  // The next upcoming event is pinned as an overlay on the bottom row while its real row is
+  // scrolled below the fold; once its row comes into view the overlay yields to it.
+  const nextEventId = (() => {
+    if (!events.length) return null;
+    const nowT = new Date().toTimeString().slice(0, 5);
+    const sortedEv = [...events].sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? '').localeCompare(b.start ?? ''));
+    return sortedEv.find((e) => e.date > today || (e.date === today && (e.allDay || !e.start || e.start >= nowT)))?.id ?? null;
+  })();
+  const nextEvent = events.find((e) => e.id === nextEventId);
+  const nextEvRowRef = useRef<HTMLDivElement>(null);
+  const [pinEvent, setPinEvent] = useState(false);
+  useEffect(() => {
+    const rows = bodyRef.current?.querySelector<HTMLElement>('.wk-rows');
+    if (!rows || !nextEventId) { setPinEvent(false); return; }
+    const check = () => {
+      const row = nextEvRowRef.current;
+      if (!row) return setPinEvent(false);
+      setPinEvent(row.getBoundingClientRect().bottom > rows.getBoundingClientRect().bottom + 1);
+    };
+    check();
+    rows.addEventListener('scroll', check, { passive: true });
+    const ro = new ResizeObserver(check);
+    ro.observe(rows);
+    return () => { rows.removeEventListener('scroll', check); ro.disconnect(); };
+  }, [nextEventId, tasks, week, calendar.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const eventRowInner = (e: CalendarEvent) => (
+    <>
+      <div className="wk-list">
+        <span className="ev-time">{e.allDay ? 'All day' : e.start}</span>
+        <span className="ev-title">{e.title}</span>
+      </div>
+      <div className="wk-days">
+        <div className="wk-block ev" style={{ left: `${(days.indexOf(e.date) / 7) * 100}%`, width: `calc(100% / 7 - 6px)` }}>
+          {!e.allDay && <span>{e.start}</span>} {e.title}
+        </div>
+      </div>
+    </>
+  );
 
   const dayAt = (el: HTMLElement, clientX: number) => {
     const r = el.getBoundingClientRect();
@@ -225,16 +264,8 @@ export function WeekPlan(props: Props) {
                   {calendar.note && <span className="wk-note"> · {calendar.note}</span>}
                 </div>
                 {events.map((e) => (
-                  <div key={e.id} className="wk-row event">
-                    <div className="wk-list">
-                      <span className="ev-time">{e.allDay ? 'All day' : e.start}</span>
-                      <span className="ev-title">{e.title}</span>
-                    </div>
-                    <div className="wk-days">
-                      <div className="wk-block ev" style={{ left: `${(days.indexOf(e.date) / 7) * 100}%`, width: `calc(100% / 7 - 6px)` }}>
-                        {!e.allDay && <span>{e.start}</span>} {e.title}
-                      </div>
-                    </div>
+                  <div key={e.id} className="wk-row event" ref={e.id === nextEventId ? nextEvRowRef : undefined}>
+                    {eventRowInner(e)}
                   </div>
                 ))}
                 {events.length === 0 && !calendar.note && <div className="hint wk-empty">No events this week.</div>}
@@ -244,6 +275,9 @@ export function WeekPlan(props: Props) {
         </div>
 
         {todayX !== null && <div className="week-today-line" style={{ left: todayX }} />}
+        {pinEvent && nextEvent && (
+          <div className="wk-row event pinned">{eventRowInner(nextEvent)}</div>
+        )}
       </div>
 
       <button className="fab" onClick={() => onAdd()} title={readonly ? `Add a task for ${shortName(people.find((p) => p.id === selected)?.name ?? '')}` : 'Add a task (goes to your backlog)'}>

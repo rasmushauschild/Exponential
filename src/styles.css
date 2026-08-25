@@ -252,7 +252,7 @@ img { display: block; -webkit-user-drag: none; }
 }
 .tl-deadline:hover, .tl-deadline.selected { background: var(--ov-5); }
 .tl-deadline .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text); flex: none; }
-.tl-deadline.ghost { opacity: 0.4; pointer-events: none; }
+.tl-deadline.ghost { opacity: 0.4; pointer-events: none; transition: left 0.12s ease-out; }
 .tl-deadline .inline-name { width: 140px; font-size: 12px; }
 .tl-deadline.live .dot { transform: scale(1.2); }
 .tl-deadline.live { transition: left 0.12s ease-out; }
@@ -267,7 +267,7 @@ img { display: block; -webkit-user-drag: none; }
 .wk-free .wk-days { height: 100%; min-height: 36px; cursor: copy; }
 .ghost-zone .wk-block.ghost { top: 9px; bottom: auto; height: 18px; }
 .wk-block.ghost, .tl-project.ghost { opacity: 0.45; pointer-events: none; --sc: var(--accent); --pc: var(--accent); color: var(--accent); }
-.tl-project.ghost { box-shadow: inset 0 0 0 1.5px var(--pc); z-index: 1; }
+.tl-project.ghost { box-shadow: inset 0 0 0 1.5px var(--pc); z-index: 1; transition: left 0.12s ease-out, top 0.12s ease-out; }
 .wk-block.cut-l { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
 .wk-block.cut-r { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 .inline-name { flex: 1; min-width: 0; font-weight: 600; color: var(--text); background: transparent; user-select: text; }
@@ -317,6 +317,11 @@ img { display: block; -webkit-user-drag: none; }
 .wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 2px var(--sc), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
 .wk-row.done .wk-block, .wk-row.cancelled .wk-block { color: var(--text-2); }
 
+/* The next upcoming event rides the bottom edge while its real row is below the fold; the
+   overlay hides the moment the real row scrolls into view, so it appears to fall into place. */
+.wk-row.event.pinned { position: absolute; left: 14px; right: 18px; bottom: 14px; z-index: 6; pointer-events: none; }
+.wk-row.event.pinned .wk-list { visibility: hidden; } /* only the day-positioned block overlays; the label appears when the real row lands */
+.wk-row.event.pinned .wk-block { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 70%, var(--surface)), 0 4px 14px var(--ov-18); }
 .wk-block.ev { --sc: #8e8e93; color: var(--text-2); font-weight: 500; }
 .wk-block.ev span { font-weight: 700; margin-right: 5px; color: var(--text); }
 .wk-section { font-size: 12px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; padding: 14px 12px 6px; }
