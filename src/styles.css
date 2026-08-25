@@ -271,7 +271,8 @@ img { display: block; -webkit-user-drag: none; }
 .inline-name { flex: 1; min-width: 0; font-weight: 600; color: var(--text); background: transparent; user-select: text; }
 .inline-name::placeholder { color: var(--text-3); font-weight: 500; }
 
-.wk-body { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; padding: 0 18px 14px 14px; overflow-x: auto; }
+.wk-body { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; padding: 0 18px 14px 14px; overflow-x: hidden; }
+.wk-body.narrow { overflow-x: auto; }
 .wk-row { display: grid; grid-template-columns: minmax(170px, 34%) minmax(0, 1fr); align-items: center; min-height: 36px; flex: none; }
 .wk-rows > .wk-row.task, .wk-rows > .wk-row.event { flex: none; }
 .wk-header { min-height: 28px; margin-bottom: 4px; }

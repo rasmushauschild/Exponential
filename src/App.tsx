@@ -75,10 +75,25 @@ export default function App() {
     return () => window.removeEventListener('pointerdown', down);
   }, [unlocked]);
 
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => prefs.theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+  // Theme follows the system by default ('' = auto, live); toggling to the opposite of the system
+  // is an explicit override, toggling back to what the system shows returns to following it.
+  const [themePref, setThemePref] = useState<'' | 'light' | 'dark'>(prefs.theme);
+  const [sysDark, setSysDark] = useState(() => window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mq) return;
+    const h = () => setSysDark(mq.matches);
+    mq.addEventListener('change', h);
+    return () => mq.removeEventListener('change', h);
+  }, []);
+  const theme: 'light' | 'dark' = themePref || (sysDark ? 'dark' : 'light');
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setThemePref(next === (sysDark ? 'dark' : 'light') ? '' : next);
+  };
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const [calendarOn, setCalendarOn] = useState(() => prefs.calendar);
-  useEffect(() => { savePrefs({ weekH, detailW, theme, calendar: calendarOn }); }, [weekH, detailW, theme, calendarOn]);
+  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn }); }, [weekH, detailW, themePref, calendarOn]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -345,7 +360,7 @@ export default function App() {
               <UpdateIcon /> <span className="nav-text">Updating… {updateInfo.percent ?? 0}%</span>
             </div>
           )}
-          <button className="nav-item theme-toggle" onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+          <button className="nav-item theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
             {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
             <span className="nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
           </button>

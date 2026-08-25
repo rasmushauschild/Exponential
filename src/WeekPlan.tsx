@@ -44,6 +44,11 @@ export function WeekPlan(props: Props) {
   const todayIdx = dayIndex(today) - dayIndex(week);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [todayX, setTodayX] = useState<number | null>(null);
+  // Sideways scrolling only exists when the panel is genuinely too narrow; otherwise the body is
+  // overflow-hidden so the swipe animation's transform can never leave a few stray scrollable pixels.
+  const [narrow, setNarrow] = useState(false);
+  const narrowRef = useRef(false);
+  narrowRef.current = narrow;
   const [ghost, setGhost] = useState<number | null>(null);
   const [swipe, setSwipe] = useState({ x: 0, animate: false });
   const [lift, setLift] = useState<{ id: string; dy: number; rowH: number } | null>(null);
@@ -52,6 +57,7 @@ export function WeekPlan(props: Props) {
     const el = bodyRef.current;
     if (!el) return;
     const compute = () => {
+      setNarrow(el.clientWidth < 600); // .wk-swipe min-width 560 + body side padding
       if (todayIdx < 0 || todayIdx > 6) return setTodayX(null);
       const tl = el.querySelector<HTMLElement>('.wk-days');
       if (!tl) return;
@@ -72,7 +78,7 @@ export function WeekPlan(props: Props) {
     let acc = 0, locked = false, lockDir = 0, last = 0, prevAbs = 0;
     const onWheel = (e: WheelEvent) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      if (el.scrollWidth > el.clientWidth + 1) return; // too narrow: sideways wheel scrolls instead of flipping weeks
+      if (narrowRef.current) return; // too narrow: sideways wheel scrolls instead of flipping weeks
       e.preventDefault();
       const now = performance.now();
       const abs = Math.abs(e.deltaX);
@@ -145,7 +151,7 @@ export function WeekPlan(props: Props) {
         <PersonDropdown people={people} me={me} selected={selected} onSelect={onSelect} />
       </div>
 
-      <div className="wk-body" ref={bodyRef}>
+      <div className={`wk-body${narrow ? ' narrow' : ''}`} ref={bodyRef}>
         <div className="wk-swipe" style={{ transform: `translateX(${swipe.x}px)`, transition: swipe.animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none' }}>
           <div className="wk-row wk-header">
             <div className="wk-list">
@@ -267,8 +273,17 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
   onDrop: () => void;
 }) {
   const [menu, setMenu] = useState<DOMRect | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null); // right-click menu
   const rowRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (editing) rowRef.current?.scrollIntoView({ block: 'nearest' }); }, [editing]);
+  useEffect(() => {
+    if (!ctx) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.ctx-menu')) setCtx(null); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtx(null); };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', key); };
+  }, [ctx]);
   const [live, setLive] = useState<BlockDrag | null>(null);
   const [hoverCursor, setHoverCursor] = useState('grab');
   const daysRef = useRef<HTMLDivElement>(null);
@@ -367,6 +382,7 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
       ref={rowRef}
       className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator || reviewRow ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
       style={offset ? { transform: `translateY(${offset}px)` } : undefined}
+      onContextMenu={(e) => { if (readonly) return; e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
     >
       <div className="wk-list" onPointerDown={onRowDown} style={{ cursor: readonly ? 'default' : 'grab' }}>
         <button className="status-btn" title={STATUS_LABEL[task.status]}
@@ -418,6 +434,14 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
         {backlog && scheduleGhost !== null && (
           <div className="wk-block ghost" style={{ left: `${(scheduleGhost / 7) * 100}%`, width: `calc(100% / 7 - 6px)` }} />
         )}
+        {ctx && createPortal(
+          <div className="status-menu ctx-menu" style={{ position: 'fixed', left: Math.min(ctx.x, window.innerWidth - 180), top: Math.min(ctx.y, window.innerHeight - 52) }} onPointerDown={(e) => e.stopPropagation()}>
+            {reviewRow
+              ? (onDeny && <button className="danger" onClick={() => { setCtx(null); onDeny(task.id); }}>Deny</button>)
+              : <button className="danger" onClick={() => { setCtx(null); onDelete(task.id); }}>Delete</button>}
+          </div>,
+          document.body,
+        )}
         {!backlog && ve >= vs && (
           <div
             className={`wk-block${live ? ' live' : ''}${s < 0 ? ' cut-l' : ''}${en > 6 ? ' cut-r' : ''}`}
@@ -454,7 +478,14 @@ export function StatusMenu({ value, reviewerId, people, onPick, onDelete, onDeny
   const [sub, setSub] = useState(false);
   const menuH = 44 * 5 + (onDelete || onDeny ? 50 : 0) + 12;
   const up = anchor.bottom + menuH > window.innerHeight - 8;
-  const style: React.CSSProperties = { position: 'fixed', left: Math.min(anchor.left, window.innerWidth - 420), ...(up ? { bottom: window.innerHeight - anchor.top + 6 } : { top: anchor.bottom + 6 }) };
+  // In a very short window (the widget) even the flipped menu can't fit: pin it and scroll inside.
+  const cramped = menuH > window.innerHeight - 16;
+  const style: React.CSSProperties = {
+    position: 'fixed',
+    left: Math.min(anchor.left, window.innerWidth - 420),
+    maxHeight: window.innerHeight - 16,
+    ...(cramped ? { top: 8, overflowY: 'auto' } : up ? { bottom: window.innerHeight - anchor.top + 6 } : { top: anchor.bottom + 6 }),
+  };
   // Completing a task pops a little confetti from the status dot the menu was opened from.
   const pick = (s: Status, reviewerId?: string) => {
     if (s === 'done' && value !== 'done') confettiBurst(anchor.left + anchor.width / 2, anchor.top + anchor.height / 2);
@@ -530,7 +561,7 @@ function PersonDropdown({ people, me, selected, onSelect }: { people: Person[]; 
         <ChevronIcon />
       </button>
       {open && createPortal(
-        <div className="status-menu person-menu" style={{ position: 'fixed', top: open.bottom + 6, right: Math.max(8, window.innerWidth - open.right), minWidth: 200 }} onPointerDown={(e) => e.stopPropagation()}>
+        <div className="status-menu person-menu" style={{ position: 'fixed', top: open.bottom + 6, right: Math.max(8, window.innerWidth - open.right), minWidth: 200, maxHeight: Math.max(120, window.innerHeight - open.bottom - 14) }} onPointerDown={(e) => e.stopPropagation()}>
           {ordered.map((p) => (
             <button key={p.id} className={p.id === selected ? 'current' : ''} onClick={() => { onSelect(p.id); setOpen(null); }}>
               <Avatar person={p} size={18} /> {p.id === me ? 'Me' : shortName(p.name)}

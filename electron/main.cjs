@@ -14,13 +14,27 @@ let tray = null;
 let reallyQuit = false; // ⌘Q only closes the main window; the tray's Quit (and the updater) set this
 
 /* ── UI zoom: our own factor, applied to the main window and persisted, so a stray
-   pinch/zoom never sticks someone's app at a weird size. ⌘+ / ⌘- / ⌘0 adjust it. ── */
+   pinch/zoom never sticks someone's app at a weird size. ⌘+ / ⌘- / ⌘0 adjust it.
+   On top of that, macOS "display scaling" (Larger Text ⋯ More Space) is compensated:
+   a MacBook panel's logical width shrinks as the user zooms the system in, so scaling
+   our UI by logicalWidth/1512 keeps it the same physical size on every setting. ── */
 const zoomFile = () => path.join(app.getPath('userData'), 'zoom.json');
 let zoomFactor = 1;
 try { zoomFactor = JSON.parse(fs.readFileSync(zoomFile(), 'utf8')).factor || 1; } catch { /* default */ }
+function displayZoom() {
+  if (process.platform !== 'darwin') return 1;
+  try {
+    const d = mainWin && !mainWin.isDestroyed() ? screen.getDisplayMatching(mainWin.getBounds()) : screen.getPrimaryDisplay();
+    if (!d.internal) return 1; // external monitors: logical size varies with hardware, not a zoom choice
+    return Math.min(1.3, Math.max(0.7, Math.round((d.workAreaSize.width / 1512) * 20) / 20));
+  } catch { return 1; }
+}
+function applyZoom() {
+  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.setZoomFactor(zoomFactor * displayZoom());
+}
 function setZoom(f) {
   zoomFactor = Math.min(1.6, Math.max(0.7, Math.round(f * 10) / 10));
-  if (mainWin && !mainWin.isDestroyed()) mainWin.webContents.setZoomFactor(zoomFactor);
+  applyZoom();
   try { fs.writeFileSync(zoomFile(), JSON.stringify({ factor: zoomFactor })); } catch { /* ignore */ }
 }
 
@@ -36,7 +50,8 @@ function loadRenderer(win, mode) {
   // A fixed, per-app zoom: no pinch zoom, and any zoom Chromium remembered per-origin is overridden.
   win.webContents.on('did-finish-load', () => {
     win.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {});
-    win.webContents.setZoomFactor(mode === 'widget' ? 1 : zoomFactor);
+    if (mode === 'widget') win.webContents.setZoomFactor(1);
+    else applyZoom();
   });
   if (devUrl) win.loadURL(mode ? `${devUrl}?mode=${mode}` : devUrl);
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), mode ? { query: { mode } } : undefined);
@@ -83,6 +98,7 @@ function createMainWindow() {
     },
   });
   loadRenderer(mainWin, null);
+  mainWin.on('moved', applyZoom); // moving to a display with different scaling re-fits the UI
   mainWin.on('closed', () => { mainWin = null; });
   return mainWin;
 }
@@ -215,6 +231,7 @@ ipcMain.handle('app:version', () => app.getVersion());
 app.whenReady().then(() => {
   buildMenu();
   setupUpdates();
+  screen.on('display-metrics-changed', applyZoom); // e.g. the user changes macOS display scaling
   // In development the dock shows Electron's own icon unless we set ours.
   if (process.platform === 'darwin' && app.dock) app.dock.setIcon(iconPath);
   createMainWindow();
