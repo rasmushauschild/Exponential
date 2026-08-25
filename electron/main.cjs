@@ -19,8 +19,9 @@ let reallyQuit = false; // ⌘Q only closes the main window; the tray's Quit (an
    a MacBook panel's logical width shrinks as the user zooms the system in, so scaling
    our UI by logicalWidth/1512 keeps it the same physical size on every setting. ── */
 const zoomFile = () => path.join(app.getPath('userData'), 'zoom.json');
-let zoomFactor = 1;
-try { zoomFactor = JSON.parse(fs.readFileSync(zoomFile(), 'utf8')).factor || 1; } catch { /* default */ }
+const DEFAULT_ZOOM = 0.8;
+let zoomFactor = DEFAULT_ZOOM;
+try { zoomFactor = JSON.parse(fs.readFileSync(zoomFile(), 'utf8')).factor || DEFAULT_ZOOM; } catch { /* default */ }
 function displayZoom() {
   if (process.platform !== 'darwin') return 1;
   try {
@@ -69,7 +70,7 @@ function buildMenu() {
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => setZoom(zoomFactor + 0.1) },
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: () => setZoom(zoomFactor + 0.1) },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => setZoom(zoomFactor - 0.1) },
-        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => setZoom(1) },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: () => setZoom(DEFAULT_ZOOM) },
         { type: 'separator' },
         { role: 'togglefullscreen' },
       ],
