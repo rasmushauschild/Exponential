@@ -137,8 +137,16 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     const el = e.currentTarget;
     if (e.key === 'Enter') {
       e.preventDefault();
-      const id = createTask('');
-      insertAt(i + 1, { key: newKey(), kind: 'task', taskId: id });
+      if (el.value === '') {
+        // Enter on an empty task turns it back into plain text instead of chaining another task.
+        const b = blocks[i] as Extract<Block, { kind: 'task' }>;
+        commit(blocks.map((x, j) => (j === i ? { key: newKey(), kind: 'p', text: '' } as Block : x)));
+        onDeleteTask(b.taskId);
+        setFocus({ index: i, caret: 'start' });
+      } else {
+        const id = createTask('');
+        insertAt(i + 1, { key: newKey(), kind: 'task', taskId: id });
+      }
     } else if (e.key === 'Backspace' && el.value === '' ) { e.preventDefault(); removeAt(i); }
     else if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); setFocus({ index: i - 1, caret: 'end' }); }
     else if (e.key === 'ArrowDown' && i < blocks.length - 1) { e.preventDefault(); setFocus({ index: i + 1, caret: 'end' }); }
