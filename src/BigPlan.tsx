@@ -19,6 +19,8 @@ interface Props {
   groups: Group[];
   deadlines: Deadline[];
   people: Person[];
+  locked: boolean; // read-only: open and navigate, but no creating or moving
+  onAddGroup: () => void;
   today: ISODate;
   week: ISODate;
   selectedId?: string;
@@ -47,7 +49,7 @@ type Section = { groupId?: string; name: string; color: string; headerTop: numbe
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, groups, deadlines, people, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
+  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -73,7 +75,8 @@ export function BigPlan(props: Props) {
     for (const gid of keys) {
       const inGroup = projects.filter((p) => (p.groupId ?? undefined) === gid || (gid === undefined && (!p.groupId || !groups.some((g) => g.id === p.groupId))));
       const g = ordered.find((x) => x.id === gid);
-      const showHeader = groups.length > 0;
+      // Unlocked, the ungrouped section's label doubles as the "Add group" button, so it must exist even with no groups.
+      const showHeader = groups.length > 0 || !locked;
       const headerTop = y;
       if (showHeader) y += GROUP_H;
       // Compact: no spare lane (only the last, ungrouped section keeps one). Dropping a project onto a
@@ -162,7 +165,7 @@ export function BigPlan(props: Props) {
     const yc = clientY - rect.top + scrollY;
     for (const sec of sections) {
       if (yc >= sec.laneTop && yc < sec.laneTop + sec.lanes * ROW_H) return { day, lane: Math.floor((yc - sec.laneTop) / ROW_H), groupId: sec.groupId };
-      if (groups.length > 0 && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId }; // label row = append to this group
+      if ((groups.length > 0 || !locked) && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId }; // label row = append to this group
     }
     return { day, lane: -2, groupId: undefined as string | undefined };
   };
@@ -184,7 +187,7 @@ export function BigPlan(props: Props) {
       },
       (ev) => {
         setPanning(false);
-        if (moved || inRetroStrip(ev.clientY)) return;
+        if (locked || moved || inRetroStrip(ev.clientY)) return;
         const { day, lane, groupId } = slotAt(ev.clientX, ev.clientY);
         if (inDeadlineRow(ev.clientY)) onCreateDeadline(fromDayIndex(day));
         else if (lane >= 0) onCreateProject(fromDayIndex(day), lane, groupId);
@@ -196,7 +199,7 @@ export function BigPlan(props: Props) {
     if (drag || dlDrag || panning || bandDrag) return;
     const { day, lane, groupId } = slotAt(e.clientX, e.clientY);
     setHoverWeek(dayIndex(weekStart(fromDayIndex(day))));
-    if (!isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); return; }
+    if (locked || !isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); return; }
     if (inDeadlineRow(e.clientY)) { setGhost({ day, lane: -1 }); return; } // lane -1 = deadline row
     setGhost(lane >= 0 ? { day, lane, groupId } : null);
   };
@@ -215,8 +218,22 @@ export function BigPlan(props: Props) {
     }, () => setBandDrag(false));
   };
 
+  /** Locked: a still click opens (or modifier-toggles) the item; any drag does nothing. */
+  const clickOnly = (e: React.PointerEvent, open: () => void, toggle: () => void) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const startX = e.clientX, startY = e.clientY;
+    const multi = e.metaKey || e.shiftKey || e.ctrlKey;
+    let moved = false;
+    track(
+      (ev) => { if (Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3) moved = true; },
+      () => { if (!moved) { if (multi) toggle(); else open(); } },
+    );
+  };
+
   const onProjectDown = (e: React.PointerEvent, p: Project) => {
     if (e.button !== 0 || (e.target as HTMLElement).tagName === 'INPUT') return;
+    if (locked) { clickOnly(e, () => onOpenProject(p), () => onToggleSelect(p.id)); return; }
     e.stopPropagation();
     e.preventDefault();
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -253,6 +270,7 @@ export function BigPlan(props: Props) {
 
   const onDeadlineDown = (e: React.PointerEvent, d: Deadline) => {
     if (e.button !== 0 || (e.target as HTMLElement).tagName === 'INPUT') return;
+    if (locked) { clickOnly(e, () => onOpenDeadline(d), () => onToggleSelect(d.id)); return; }
     e.stopPropagation();
     e.preventDefault();
     const startX = e.clientX;
@@ -275,6 +293,7 @@ export function BigPlan(props: Props) {
   };
 
   const onProjectHover = (e: React.PointerEvent) => {
+    if (locked) { setHoverCursor('pointer'); return; }
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const local = e.clientX - bar.left;
     setHoverCursor(local < EDGE || bar.width - local < EDGE ? 'ew-resize' : 'grab');
@@ -399,10 +418,13 @@ export function BigPlan(props: Props) {
           New project
         </div>
       )}
-      {sections.map((sec) => groups.length > 0 && (
-        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}`} style={{ top: sec.headerTop - projectTop + 6 - scrollY }}
-          onPointerDown={(e) => e.stopPropagation()} onClick={() => { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); }}>
-          <span className="dot" style={{ background: sec.color }} /> {sec.name}
+      {sections.map((sec) => (groups.length > 0 || !locked) && (
+        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}`} style={{ top: sec.headerTop - projectTop + 6 - scrollY }}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); else if (!locked) onAddGroup(); }}>
+          {sec.groupId || locked
+            ? <><span className="dot" style={{ background: sec.color }} /> {sec.name}</>
+            : <>+ Add group</>}
         </button>
       ))}
       {projects.map((p) => {
@@ -425,7 +447,7 @@ export function BigPlan(props: Props) {
               top: sec.laneTop - projectTop + 6 + lane * ROW_H - scrollY,
               ['--pc' as string]: color,
               paddingLeft: Math.max(12, Math.min(w - 12, 12 - left)),
-              cursor: live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
+              cursor: locked ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
             }}
             onPointerDown={(e) => onProjectDown(e, p)}
             onPointerMove={onProjectHover}

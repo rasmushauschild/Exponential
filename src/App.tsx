@@ -36,7 +36,10 @@ export default function App() {
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [weekH, setWeekH] = useState(() => prefs.weekH);
   const [selection, setSelection] = useState<Selection | null>(null);
-  const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | 'new-team' | 'group' | null>(null);
+  const [sheet, setSheet] = useState<'settings' | 'new-team' | 'group' | null>(null);
+  // The master plan is read-only until unlocked; it locks itself again when attention moves elsewhere.
+  const [unlocked, setUnlocked] = useState(false);
+  const planSecRef = useRef<HTMLElement>(null);
   const [editGroup, setEditGroup] = useState<Group | null>(null); // group being edited in the group sheet
   const [editingId, setEditingId] = useState<string | null>(null);
   const editingNew = useRef(false); // fresh task (Enter chains another) vs a double-click rename (Enter just commits)
@@ -58,6 +61,19 @@ export default function App() {
     prevOpenKind.current = openKind;
     if (wasOpen !== isOpen) setSlotAnimating(true);
   }, [openKind]);
+
+  // Opening anything (project, deadline, retro…) or clicking outside the master plan locks it again.
+  useEffect(() => { if (selection) setUnlocked(false); }, [selection]);
+  useEffect(() => {
+    if (!unlocked) return;
+    const down = (e: PointerEvent) => {
+      const t = e.target as HTMLElement;
+      if (planSecRef.current?.contains(t) || t.closest('.backdrop, .status-menu')) return;
+      setUnlocked(false);
+    };
+    window.addEventListener('pointerdown', down);
+    return () => window.removeEventListener('pointerdown', down);
+  }, [unlocked]);
 
   const [theme, setTheme] = useState<'light' | 'dark'>(() => prefs.theme || (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
@@ -348,15 +364,17 @@ export default function App() {
           />
         )}
         <div className="planners" ref={mainRef} style={view === 'team' ? { display: 'none' } : undefined}>
-          <section className="panel" style={{ flex: '1 1 0' }}>
+          <section className="panel" style={{ flex: '1 1 0' }} ref={planSecRef}>
             <div className="panel-head">
               <div className="panel-title">Master plan</div>
               <div className="panel-spacer" />
               {!isThisWeek && <button className="pill" onClick={() => setWeek(weekStart(today))}>Back to this week</button>}
-              <button className="pill" onClick={() => { setEditGroup(null); setSheet('group'); }}>+ Group</button>
-              <button className="pill" onClick={() => setSheet('project')}>+ Project</button>
-              <button className="pill" onClick={() => setSheet('deadline')}>
-+<span className="dot-icon" />Deadline
+              <button
+                className={`pill toggle${unlocked ? ' active' : ''}`}
+                onClick={() => setUnlocked((v) => !v)}
+                title={unlocked ? 'Lock the master plan' : 'Unlock to add and move projects, deadlines and groups'}
+              >
+                <LockIcon open={unlocked} /> {unlocked ? 'Unlocked' : 'Unlock'}
               </button>
             </div>
             <BigPlan
@@ -364,6 +382,8 @@ export default function App() {
               groups={data.groups ?? []}
               deadlines={data.deadlines}
               people={data.people}
+              locked={!unlocked}
+              onAddGroup={() => { setEditGroup(null); setSheet('group'); }}
               today={today}
               week={week}
               selectedId={selection?.id}
@@ -525,30 +545,6 @@ export default function App() {
       </div>
 
       {saveError && <div className="toast error-toast">{saveError}</div>}
-      {sheet === 'project' && (
-        <NewProjectSheet
-          defaultStart={week}
-          nextLane={data.projects.reduce((m, p) => Math.max(m, p.lane + 1), 0)}
-          onClose={() => setSheet(null)}
-          onCreate={(p) => { update((d) => ({ ...d, projects: [...d.projects, p] })); setSelection({ kind: 'project', id: p.id }); }}
-        />
-      )}
-      {sheet === 'deadline' && (
-        <NewDeadlineSheet
-          defaultDate={today}
-          onClose={() => setSheet(null)}
-          onCreate={(dl) => { update((d) => ({ ...d, deadlines: [...d.deadlines, dl] })); setSelection({ kind: 'deadline', id: dl.id }); }}
-        />
-      )}
-      {sheet === 'group' && (
-        <GroupSheet
-          group={editGroup}
-          onClose={() => setSheet(null)}
-          onSave={(g) => update((d) => ({ ...d, groups: editGroup ? (d.groups ?? []).map((x) => (x.id === g.id ? g : x)) : [...(d.groups ?? []), g] }))}
-          onDelete={(id) => update((d) => ({ ...d, groups: (d.groups ?? []).filter((x) => x.id !== id), projects: d.projects.map((p) => (p.groupId === id ? { ...p, groupId: undefined } : p)) }))}
-          nextSort={(data.groups ?? []).reduce((m, g) => Math.max(m, g.sort + 1), 0)}
-        />
-      )}
       {sheet === 'group' && (
         <GroupSheet
           group={editGroup}
@@ -620,6 +616,15 @@ function SunIcon() {
   );
 }
 
+function LockIcon({ open }: { open?: boolean }) {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4.5" y="10.5" width="15" height="10" rx="3.5" />
+      {open ? <path d="M8.5 10.5V7a3.5 3.5 0 0 1 6.8-1.2" /> : <path d="M8.5 10.5V7a3.5 3.5 0 0 1 7 0v3.5" />}
+    </svg>
+  );
+}
+
 function UpdateIcon() {
   return (
     <svg {...ICON}>
@@ -666,31 +671,6 @@ function SheetShell({ title, children, onClose, wide }: { title: string; childre
   );
 }
 
-function NewProjectSheet({ defaultStart, nextLane, onClose, onCreate }: {
-  defaultStart: ISODate; nextLane: number; onClose: () => void; onCreate: (p: Project) => void;
-}) {
-  const [name, setName] = useState('');
-  const [start, setStart] = useState(defaultStart);
-  const [end, setEnd] = useState(addDays(defaultStart, 27));
-  const valid = name.trim() && start && end && end >= start;
-  const submit = () => { if (!valid) return; onCreate({ id: uid(), name: name.trim(), start, end, lane: nextLane }); onClose(); };
-  return (
-    <SheetShell title="New project" onClose={onClose}>
-      <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <div className="field"><label>Name</label><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="What is it?" /></div>
-        <div className="row">
-          <div className="field"><label>Starts</label><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></div>
-          <div className="field"><label>Ends</label><input type="date" value={end} onChange={(e) => setEnd(e.target.value)} /></div>
-        </div>
-        <div className="sheet-actions">
-          <button type="submit" className="btn primary" disabled={!valid}>Add project</button>
-          <button type="button" className="btn" onClick={onClose}>Cancel</button>
-        </div>
-      </form>
-    </SheetShell>
-  );
-}
-
 function GroupSheet({ group, onClose, onSave, onDelete, nextSort }: {
   group: Group | null; onClose: () => void; onSave: (g: Group) => void; onDelete: (id: string) => void; nextSort: number;
 }) {
@@ -729,25 +709,6 @@ function NewTeamSheet({ onClose, onCreate }: { onClose: () => void; onCreate: (n
         <p className="muted">You'll be its first moderator. Add people from the Team page.</p>
         <div className="sheet-actions">
           <button type="submit" className="btn primary" disabled={!name.trim()}>Create team</button>
-          <button type="button" className="btn" onClick={onClose}>Cancel</button>
-        </div>
-      </form>
-    </SheetShell>
-  );
-}
-
-function NewDeadlineSheet({ defaultDate, onClose, onCreate }: { defaultDate: ISODate; onClose: () => void; onCreate: (d: Deadline) => void }) {
-  const [name, setName] = useState('');
-  const [date, setDate] = useState(defaultDate);
-  const valid = name.trim() && date;
-  const submit = () => { if (!valid) return; onCreate({ id: uid(), name: name.trim(), date }); onClose(); };
-  return (
-    <SheetShell title="New deadline" onClose={onClose}>
-      <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
-        <div className="field"><label>Name</label><input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="What has to be done?" /></div>
-        <div className="field"><label>Date</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
-        <div className="sheet-actions">
-          <button type="submit" className="btn primary" disabled={!valid}>Add deadline</button>
           <button type="button" className="btn" onClick={onClose}>Cancel</button>
         </div>
       </form>
