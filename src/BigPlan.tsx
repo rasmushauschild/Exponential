@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Deadline, Group, ISODate, Person, Project } from './types';
 import { NO_GROUP_COLOR } from './types';
 import { dayIndex, dayOfMonth, formatShort, fromDayIndex, isoWeekNumber, monthShort, weekStart, weekdayShort } from './dates';
@@ -31,10 +32,13 @@ interface Props {
   onOpenProject: (p: Project) => void;
   onOpenDeadline: (d: Deadline) => void;
   onMoveProject: (id: string, patch: Pick<Project, 'start' | 'end' | 'lane' | 'groupId'>) => void;
+  onMoveMany: (ids: string[], deltaDays: number) => void; // shift a multi-selection in time
+  onDeleteProject: (id: string) => void;
   onOpenGroup: (g: Group) => void;
   onMoveDeadline: (id: string, date: ISODate) => void;
   onCreateProject: (start: ISODate, lane: number, groupId?: string) => void;
   onRename: (id: string, name: string) => void;
+  onStartRename: (id: string) => void; // double-click on a bar
   onOpenRetro: (monday: ISODate) => void;
   onCreateDeadline: (date: ISODate) => void;
   onRenameDeadline: (id: string, name: string) => void;
@@ -44,12 +48,12 @@ export function projectColor(p: Project, groups: Group[]) {
   return groups.find((g) => g.id === p.groupId)?.color ?? NO_GROUP_COLOR;
 }
 
-type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: number; lane: number; groupId?: string; moved: boolean };
+type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: number; lane: number; groupId?: string; moved: boolean; dd?: number; ids?: string[] };
 type Section = { groupId?: string; name: string; color: string; headerTop: number; laneTop: number; lanes: number };
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveDeadline, onCreateProject, onRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
+  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -60,6 +64,7 @@ export function BigPlan(props: Props) {
   const [bandDrag, setBandDrag] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [dlDrag, setDlDrag] = useState<{ id: string; date: number } | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; id: string } | null>(null); // right-click menu on a bar
   const [hoverCursor, setHoverCursor] = useState<string>('');
   const [ghost, setGhost] = useState<{ day: number; lane: number; groupId?: string } | null>(null);
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
@@ -236,13 +241,16 @@ export function BigPlan(props: Props) {
     if (locked) { clickOnly(e, () => onOpenProject(p), () => onToggleSelect(p.id)); return; }
     e.stopPropagation();
     e.preventDefault();
+    // Dragging a bar that's part of the multi-selection moves the whole selection in time.
+    const groupSel = selectedIds?.has(p.id) ? projects.filter((x) => selectedIds.has(x.id)).map((x) => x.id) : [];
+    const asGroup = groupSel.length > 1;
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const local = e.clientX - bar.left;
-    const mode: Drag['mode'] = local < EDGE ? 'start' : bar.width - local < EDGE ? 'end' : 'move';
+    const mode: Drag['mode'] = asGroup ? 'move' : local < EDGE ? 'start' : bar.width - local < EDGE ? 'end' : 'move';
     const s0 = dayIndex(p.start), e0 = dayIndex(p.end), lane0 = p.lane;
     const startX = e.clientX, startY = e.clientY;
     const multi = e.metaKey || e.shiftKey || e.ctrlKey;
-    const d: Drag = { id: p.id, mode, start: s0, end: e0, lane: lane0, groupId: p.groupId, moved: false };
+    const d: Drag = { id: p.id, mode, start: s0, end: e0, lane: lane0, groupId: p.groupId, moved: false, dd: 0, ids: asGroup ? groupSel : undefined };
     setDrag(d);
     let latest = d;
     const grabOffset = startY - (ref.current!.getBoundingClientRect().top + sectionOf(p.groupId).laneTop + lane0 * ROW_H - scrollY); // where in the row the bar was grabbed
@@ -250,11 +258,12 @@ export function BigPlan(props: Props) {
       (ev) => {
         const dd = Math.round((ev.clientX - startX) / ppd);
         const moved = latest.moved || Math.abs(ev.clientX - startX) > 3 || Math.abs(ev.clientY - startY) > 3;
-        if (mode === 'move') {
+        if (asGroup) latest = { ...d, start: s0 + dd, end: e0 + dd, moved, dd };
+        else if (mode === 'move') {
           const slot = slotAt(ev.clientX, ev.clientY - grabOffset + ROW_H / 2);
           const lane = slot.lane >= 0 ? slot.lane : latest.lane;
           const groupId = slot.lane >= 0 ? slot.groupId : latest.groupId;
-          latest = { ...d, start: s0 + dd, end: e0 + dd, lane, groupId, moved };
+          latest = { ...d, start: s0 + dd, end: e0 + dd, lane, groupId, moved, dd };
         }
         else if (mode === 'start') latest = { ...d, start: Math.min(s0 + dd, e0), moved };
         else latest = { ...d, end: Math.max(e0 + dd, s0), moved };
@@ -263,6 +272,7 @@ export function BigPlan(props: Props) {
       () => {
         setDrag(null);
         if (!latest.moved) { if (multi) onToggleSelect(p.id); else onOpenProject(p); }
+        else if (asGroup) { if (latest.dd) onMoveMany(groupSel, latest.dd); }
         else onMoveProject(p.id, { start: fromDayIndex(latest.start), end: fromDayIndex(latest.end), lane: latest.lane, groupId: latest.groupId });
       },
     );
@@ -291,6 +301,15 @@ export function BigPlan(props: Props) {
       },
     );
   };
+
+  useEffect(() => {
+    if (!ctx) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.ctx-menu')) setCtx(null); };
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setCtx(null); };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('pointerdown', close); window.removeEventListener('keydown', key); };
+  }, [ctx]);
 
   const onProjectHover = (e: React.PointerEvent) => {
     if (locked) { setHoverCursor('pointer'); return; }
@@ -429,8 +448,10 @@ export function BigPlan(props: Props) {
       ))}
       {projects.map((p) => {
         const live = drag?.id === p.id ? drag : null;
-        const s = live ? live.start : dayIndex(p.start);
-        const en = live ? live.end : dayIndex(p.end);
+        // Bars in the dragged multi-selection follow the grabbed one in time.
+        const follow = !live && drag?.ids?.includes(p.id) ? drag.dd ?? 0 : 0;
+        const s = live ? live.start : dayIndex(p.start) + follow;
+        const en = live ? live.end : dayIndex(p.end) + follow;
         const lane = live ? live.lane : p.lane;
         const sec = sectionOf(live ? live.groupId : p.groupId);
         const left = (s - origin) * ppd;
@@ -440,7 +461,7 @@ export function BigPlan(props: Props) {
         return (
           <div
             key={p.id}
-            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live ? ' live' : ''}`}
+            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}`}
             style={{
               left,
               width: w,
@@ -451,6 +472,8 @@ export function BigPlan(props: Props) {
             }}
             onPointerDown={(e) => onProjectDown(e, p)}
             onPointerMove={onProjectHover}
+            onDoubleClick={(e) => { if (!locked) { e.stopPropagation(); onStartRename(p.id); } }}
+            onContextMenu={(e) => { if (locked) return; e.preventDefault(); e.stopPropagation(); setCtx({ x: e.clientX, y: e.clientY, id: p.id }); }}
             title={`${p.name} · ${formatShort(p.start)} – ${formatShort(p.end)}`}
           >
             {editing ? <InlineName initial={p.name} onDone={(name) => onRename(p.id, name)} /> : <span className="tl-project-name">{p.name}</span>}
@@ -471,6 +494,12 @@ export function BigPlan(props: Props) {
 
       <div className="today-line" style={{ left: x(today) + ppd / 2 }} />
 
+      {ctx && createPortal(
+        <div className="status-menu ctx-menu" style={{ position: 'fixed', left: Math.min(ctx.x, window.innerWidth - 180), top: Math.min(ctx.y, window.innerHeight - 52) }} onPointerDown={(e) => e.stopPropagation()}>
+          <button className="danger" onClick={() => { onDeleteProject(ctx.id); setCtx(null); }}>Delete</button>
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }

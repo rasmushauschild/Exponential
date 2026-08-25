@@ -62,8 +62,8 @@ export default function App() {
     if (wasOpen !== isOpen) setSlotAnimating(true);
   }, [openKind]);
 
-  // Opening anything (project, deadline, retro…) or clicking outside the master plan locks it again.
-  useEffect(() => { if (selection) setUnlocked(false); }, [selection]);
+  // Doing something elsewhere (side panel, week view, sidebar) locks the master plan again;
+  // merely opening a project or deadline from within the plan keeps it unlocked.
   useEffect(() => {
     if (!unlocked) return;
     const down = (e: PointerEvent) => {
@@ -400,6 +400,7 @@ export default function App() {
               onCreateDeadline={(date) => {
                 const id = uid();
                 update((d) => ({ ...d, deadlines: [...d.deadlines, { id, name: 'New deadline', date }] }));
+                editingNew.current = true;
                 setEditingId(id);
               }}
               onRenameDeadline={(id, name) => {
@@ -410,12 +411,21 @@ export default function App() {
               onCreateProject={(start, lane, groupId) => {
                 const id = uid();
                 update((d) => ({ ...d, projects: [...d.projects, { id, name: 'New project', start, end: addDays(start, 6), lane, groupId }] }));
+                editingNew.current = true;
                 setEditingId(id);
               }}
+              onStartRename={(id) => { editingNew.current = false; setEditingId(id); }}
               onRename={(id, name) => {
                 setEditingId(null);
-                if (!name) update((d) => ({ ...d, projects: d.projects.filter((p) => p.id !== id) }));
-                else update((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, name } : p)) }));
+                // An empty name removes a freshly created project but keeps the old name on a rename.
+                if (!name) { if (editingNew.current) update((d) => ({ ...d, projects: d.projects.filter((p) => p.id !== id) })); return; }
+                update((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, name } : p)) }));
+              }}
+              onMoveMany={(ids, dd) => update((d) => ({ ...d, projects: d.projects.map((p) => (ids.includes(p.id) ? { ...p, start: addDays(p.start, dd), end: addDays(p.end, dd) } : p)) }))}
+              onDeleteProject={(id) => {
+                update((d) => ({ ...d, projects: d.projects.filter((p) => p.id !== id) }));
+                if (selection?.id === id) setSelection(null);
+                setMulti((m) => { if (!m.has(id)) return m; const n = new Set(m); n.delete(id); return n; });
               }}
             />
           </section>
