@@ -4,7 +4,7 @@ import { Avatar, WeekPlan } from './WeekPlan';
 import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
 import logoUrl from '../build/icon.png';
-import { useData, uid, type GoogleConfig } from './store';
+import { useData, useSystemNotifications, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, renameTask, reorderTask, unclaimTask } from './taskOps';
@@ -178,6 +178,7 @@ export default function App() {
 
   // The menu-bar widget can ask the main window to open a specific item.
   useEffect(() => window.exponential?.onOpen((t) => { setView('plan'); setSelection(t as Selection); }), []);
+  useSystemNotifications(data);
 
   // Google: restore session on launch.
   useEffect(() => {

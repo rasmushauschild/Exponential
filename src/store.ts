@@ -25,6 +25,7 @@ declare global {
       onOpen: (cb: (target: { kind: string; id: string }) => void) => () => void;
       pingCloud?: () => void;
       onCloudPing?: (cb: () => void) => () => void;
+      notify?: (p: { id: string; title: string; body: string; ref?: { kind: string; id: string } }) => void;
       platform: string;
       google: {
         getConfig: () => Promise<GoogleConfig | null>;
@@ -42,6 +43,30 @@ declare global {
 }
 
 export const uid = () => crypto.randomUUID();
+
+/**
+ * Anything new that lands in my inbox becomes a system notification — even while the app is open.
+ * Both windows run this; the main process dedupes by id, so it fires once regardless.
+ * The first sight of a team's data only seeds the ledger (no blast of old notifications on launch).
+ */
+export function useSystemNotifications(data: Data | null) {
+  const seen = useRef<Set<string> | null>(null);
+  const teamRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!data || !window.exponential?.notify) return;
+    const mine = (data.notifications ?? []).filter((n) => n.to === data.me);
+    if (seen.current === null || teamRef.current !== data.id) {
+      teamRef.current = data.id;
+      seen.current = new Set(mine.map((n) => n.id));
+      return;
+    }
+    for (const n of mine) {
+      if (seen.current.has(n.id)) continue;
+      seen.current.add(n.id);
+      window.exponential.notify({ id: n.id, title: 'Exponential', body: n.text, ref: n.ref });
+    }
+  }, [data]);
+}
 
 function seed(): Data {
   const today = todayISO();

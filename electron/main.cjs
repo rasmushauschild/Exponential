@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Notification, Tray, nativeImage, screen, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
@@ -184,6 +184,24 @@ ipcMain.handle('data:save', (e, data) => {
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.webContents.id !== e.sender.id) w.webContents.send('data:changed', data);
   }
+});
+
+// System notifications for the inbox. Both renderers (main + widget) report what they see,
+// so dedupe by notification id here; clicking one opens the referenced item in the main window.
+const notifiedIds = new Set();
+ipcMain.on('notify', (_e, { id, title, body, ref }) => {
+  if (!id || notifiedIds.has(id) || !Notification.isSupported()) return;
+  notifiedIds.add(id);
+  if (notifiedIds.size > 1000) notifiedIds.delete(notifiedIds.values().next().value);
+  const n = new Notification({ title: title || 'Exponential', body: body || '' });
+  n.on('click', () => {
+    const win = createMainWindow();
+    if (ref) {
+      const send = () => win.webContents.send('open', ref);
+      if (win.webContents.isLoading()) win.webContents.once('did-finish-load', send); else send();
+    }
+  });
+  n.show();
 });
 
 // Cloud mode: a window that just wrote tells the others so they reload right away

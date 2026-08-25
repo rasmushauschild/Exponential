@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { WeekPlan } from './WeekPlan';
-import { useData } from './store';
+import { useData, useSystemNotifications } from './store';
 import type { CalendarEvent } from './types';
 import { addTask, completeReview, denyReview, patchTask, renameTask, reorderTask } from './taskOps';
 import { todayISO, weekStart } from './dates';
@@ -9,6 +9,7 @@ import { todayISO, weekStart } from './dates';
 export default function Widget() {
   const { data, update, connectCloud } = useData();
   useEffect(() => { connectCloud().catch((e) => console.error('[widget] cloud', e)); }, [connectCloud]);
+  useSystemNotifications(data);
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [person, setPerson] = useState<string | null>(null);
