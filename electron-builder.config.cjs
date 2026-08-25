@@ -22,5 +22,6 @@ module.exports = {
     notarize,
   },
   dmg: { sign: false, writeUpdateInfo: false },
-  win: { target: ['nsis'], icon: 'build/icon.png' },
+  // x64 explicitly: building on Apple Silicon otherwise defaults to a Windows arm64 build.
+  win: { target: [{ target: 'nsis', arch: ['x64'] }], icon: 'build/icon.png' },
 };
