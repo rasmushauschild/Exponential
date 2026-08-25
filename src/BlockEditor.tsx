@@ -110,9 +110,17 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   };
 
   /* ── keyboard behaviour for text blocks ── */
+  // ⌘A anywhere in the notes selects every block (not the current field's text).
+  const selectAll = (e: React.KeyboardEvent) => {
+    e.preventDefault();
+    (document.activeElement as HTMLElement | null)?.blur();
+    window.getSelection()?.removeAllRanges();
+    setSel({ a: 0, b: blocksRef.current.length - 1 });
+  };
   const onTextKey = (i: number, e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
     const b = blocks[i] as Extract<Block, { kind: 'h1' | 'h2' | 'p' }>;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       const head = el.value.slice(0, el.selectionStart), tail = el.value.slice(el.selectionEnd);
@@ -135,6 +143,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
 
   const onTaskKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>, task: Task | undefined) => {
     const el = e.currentTarget;
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
     if (e.key === 'Enter') {
       e.preventDefault();
       if (el.value === '') {
@@ -157,6 +166,29 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   const activeRef = useRef(0);
   const setActive = (i: number) => { activeRef.current = i; };
   const turnInto = (kind: 'h1' | 'h2' | 'p' | 'task') => {
+    // With a block selection, the whole selection converts (images stay images).
+    const s = selRef.current;
+    if (s) {
+      const lo = Math.min(s.a, s.b), hi = Math.max(s.a, s.b);
+      const next = [...blocksRef.current];
+      for (let i = lo; i <= hi; i++) {
+        const b = next[i];
+        if (b.kind === 'img' || b.kind === kind) continue;
+        if (kind === 'task') {
+          if (b.kind === 'task') continue;
+          const id = createTask(b.text);
+          next[i] = { key: newKey(), kind: 'task', taskId: id };
+        } else if (b.kind === 'task') {
+          const t = tasks.find((x) => x.id === b.taskId);
+          next[i] = { key: newKey(), kind, text: t?.title ?? '' };
+          onDeleteTask(b.taskId);
+        } else {
+          next[i] = { ...b, kind };
+        }
+      }
+      commit(next);
+      return;
+    }
     const active = activeRef.current;
     const b = blocks[active];
     if (!b) { if (kind === 'task') { const id = createTask(''); insertAt(blocks.length, { key: newKey(), kind: 'task', taskId: id }); } else insertAt(blocks.length, { key: newKey(), kind, text: '' }); return; }
@@ -281,7 +313,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         setSel(null);
       } else if (e.key === 'Escape') setSel(null);
     };
-    const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.blk-list')) setSel(null); };
+    const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.blk-list, .toolbar')) setSel(null); };
     window.addEventListener('keydown', key);
     window.addEventListener('pointerdown', down);
     return () => { window.removeEventListener('keydown', key); window.removeEventListener('pointerdown', down); };
