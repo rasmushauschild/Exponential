@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Tray, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, Tray, nativeImage, screen, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
@@ -16,6 +16,11 @@ const WIDGET_W = 640;
 const WIDGET_H = 460;
 
 function loadRenderer(win, mode) {
+  // Links in notes (window.open / target=_blank) go to the default browser, never a new Electron window.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
   if (devUrl) win.loadURL(mode ? `${devUrl}?mode=${mode}` : devUrl);
   else win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), mode ? { query: { mode } } : undefined);
 }
@@ -79,7 +84,9 @@ function toggleWidget(trayBounds) {
   const area = display.workArea;
   let x = Math.round(trayBounds.x + trayBounds.width / 2 - WIDGET_W / 2);
   x = Math.max(area.x + 8, Math.min(x, area.x + area.width - WIDGET_W - 8));
-  const y = Math.round(trayBounds.y + trayBounds.height + 6);
+  // Below the tray on macOS (menu bar at top); above it when it wouldn't fit (Windows taskbar at bottom).
+  let y = Math.round(trayBounds.y + trayBounds.height + 6);
+  if (y + WIDGET_H > area.y + area.height) y = Math.round(trayBounds.y - WIDGET_H - 6);
   widgetWin.setPosition(x, y, false);
   widgetWin.show();
   widgetWin.focus();
@@ -87,8 +94,15 @@ function toggleWidget(trayBounds) {
 }
 
 function createTray() {
-  const img = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'trayTemplate.png'));
-  img.setTemplateImage(true);
+  // macOS gets the template glyph (recolored by the menu bar); Windows needs the colored icon,
+  // since a black template image disappears on the dark taskbar.
+  let img;
+  if (process.platform === 'darwin') {
+    img = nativeImage.createFromPath(path.join(__dirname, '..', 'build', 'trayTemplate.png'));
+    img.setTemplateImage(true);
+  } else {
+    img = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  }
   tray = new Tray(img);
   tray.setToolTip('Exponential — this week');
   tray.on('click', (_e, bounds) => toggleWidget(bounds));

@@ -8,6 +8,8 @@ import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
  * Backspace on an empty block removes it, blocks drag up and down. Task blocks are real tasks
  * (status, owner, claimable in projects); everything is stored as Markdown, with a task block
  * written as `- [ ] Title <!--task:id-->` so the task's id survives round-trips.
+ * Dragging the cursor across block boundaries switches to Notion-style block selection:
+ * the range highlights, Backspace deletes it, dragging any selected block moves the whole range.
  */
 
 type Block =
@@ -64,17 +66,21 @@ interface Props {
 
 type Caret = 'start' | 'end' | number;
 type Focus = { index: number; caret: Caret } | null;
+type Sel = { a: number; b: number } | null;
 
 export function BlockEditor({ value, onChange, tasks, people, me, claimable, createTask, onUpdateTask, onDeleteTask, onClaim, onUnclaim, onOpenTask }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(() => withOrphans(parseBlocks(value), tasks));
   const [focus, setFocus] = useState<Focus>(null);
+  const [sel, setSel] = useState<Sel>(null);
   const lastEmitted = useRef(value);
   const blocksRef = useRef(blocks);
   blocksRef.current = blocks;
+  const selRef = useRef(sel);
+  selRef.current = sel;
 
   // Adopt outside changes (undo, another person) but never our own echo.
   useEffect(() => {
-    if (value !== lastEmitted.current && pending.current === null) { lastEmitted.current = value; setBlocks(withOrphans(parseBlocks(value), tasks)); }
+    if (value !== lastEmitted.current && pending.current === null) { lastEmitted.current = value; setBlocks(withOrphans(parseBlocks(value), tasks)); setSel(null); }
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   // Tasks created elsewhere (e.g. in the week view) for this project get a block appended.
   useEffect(() => { setBlocks((b) => { const n = withOrphans(b, tasks); return n.length === b.length ? b : n; }); }, [tasks]);
@@ -166,48 +172,116 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     reader.readAsDataURL(file);
   };
 
-  /* ── drag to reorder ── */
+  /* ── drag to reorder (a single block from its handle, or the whole selection) ── */
   const listRef = useRef<HTMLDivElement>(null);
-  const [drag, setDrag] = useState<{ from: number; to: number; dy: number; h: number } | null>(null);
-  const onHandleDown = (i: number, e: React.PointerEvent) => {
-    e.preventDefault();
+  const [drag, setDrag] = useState<{ from: number; count: number; ins: number; dy: number; h: number } | null>(null);
+  const startDrag = (from: number, count: number, startY: number, clickIndex?: number) => {
     const rows = Array.from(listRef.current!.querySelectorAll<HTMLElement>('.blk'));
     const rects = rows.map((r) => r.getBoundingClientRect());
-    const h = rects[i].height + 4;
-    const startY = e.clientY;
-    let latest = { from: i, to: i, dy: 0, h };
+    const h = rects.slice(from, from + count).reduce((s, r) => s + r.height, 0) + 4 * count;
+    // Everything is computed against the list without the dragged group: `ins` is where it lands.
+    const others = rects.map((r, j) => ({ r, j })).filter(({ j }) => j < from || j >= from + count);
+    const insAt = (y: number) => { let ins = 0; others.forEach(({ r }, k) => { if (y > r.top + r.height / 2) ins = k + 1; }); return ins; };
+    const homeIns = others.filter(({ j }) => j < from).length;
+    const mid0 = (rects[from].top + rects[from + count - 1].bottom) / 2;
+    let latest = { from, count, ins: homeIns, dy: 0, h };
+    let moved = false;
     setDrag(latest);
     const move = (ev: PointerEvent) => {
       const dy = ev.clientY - startY;
-      const y = rects[i].top + rects[i].height / 2 + dy;
-      let to = 0;
-      rects.forEach((r, j) => { if (j !== i && y > r.top + r.height / 2) to = j < i ? j + 1 : j; });
-      if (dy < 0) { to = 0; rects.forEach((r, j) => { if (j < i && y > r.top + r.height / 2) to = j + 1; }); if (to > i) to = i; }
-      else { to = i; rects.forEach((r, j) => { if (j > i && y > r.top + r.height / 2) to = j; }); }
-      latest = { from: i, to, dy, h };
+      if (Math.abs(dy) > 3) moved = true;
+      latest = { from, count, ins: insAt(mid0 + dy), dy, h };
       setDrag(latest);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       setDrag(null);
-      if (latest.to !== latest.from) {
-        const next = [...blocks];
-        const [b] = next.splice(latest.from, 1);
-        next.splice(latest.to, 0, b);
-        commit(next);
+      if (!moved) {
+        // A plain click on a selected block: deselect and start editing it.
+        if (clickIndex !== undefined) { setSel(null); setFocus({ index: clickIndex, caret: 'end' }); }
+        return;
+      }
+      if (latest.ins !== homeIns) {
+        const bs = blocksRef.current;
+        const group = bs.slice(from, from + count);
+        const rest = [...bs.slice(0, from), ...bs.slice(from + count)];
+        commit([...rest.slice(0, latest.ins), ...group, ...rest.slice(latest.ins)]);
+        if (count > 1) setSel({ a: latest.ins, b: latest.ins + count - 1 });
       }
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
+  const onHandleDown = (i: number, e: React.PointerEvent) => {
+    e.preventDefault();
+    const s = selRef.current;
+    const lo = s ? Math.min(s.a, s.b) : -1, hi = s ? Math.max(s.a, s.b) : -1;
+    if (s && i >= lo && i <= hi) startDrag(lo, hi - lo + 1, e.clientY);
+    else { setSel(null); startDrag(i, 1, e.clientY); }
+  };
   const shift = (j: number) => {
     if (!drag) return 0;
-    if (j === drag.from) return drag.dy;
-    if (drag.to > drag.from && j > drag.from && j <= drag.to) return -drag.h;
-    if (drag.to < drag.from && j >= drag.to && j < drag.from) return drag.h;
+    const { from, count, ins, dy, h } = drag;
+    if (j >= from && j < from + count) return dy;
+    const k = j < from ? j : j - count; // this row's slot once the group is lifted out
+    if (j < from && ins <= k) return h;
+    if (j >= from + count && ins > k) return -h;
     return 0;
   };
+
+  /* ── block selection: drag across block boundaries to select a range ── */
+  const onRowPointerDown = (i: number, e: React.PointerEvent) => {
+    setActive(i);
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (target.closest('.blk-handle, .status-btn, .claim, .owner-chip, .blk-x, .blk-link, .status-menu')) return;
+    const s = selRef.current;
+    if (s) {
+      const lo = Math.min(s.a, s.b), hi = Math.max(s.a, s.b);
+      if (i >= lo && i <= hi) { e.preventDefault(); startDrag(lo, hi - lo + 1, e.clientY, i); return; }
+      setSel(null);
+    }
+    // Watch for the pointer crossing into another block; until then, native text selection runs.
+    const rects = Array.from(listRef.current!.querySelectorAll<HTMLElement>('.blk')).map((r) => r.getBoundingClientRect());
+    let started = false;
+    const move = (ev: PointerEvent) => {
+      let over = 0;
+      rects.forEach((r, j) => { if (ev.clientY > r.top - 2) over = j; });
+      if (!started && over !== i) {
+        started = true;
+        (document.activeElement as HTMLElement | null)?.blur();
+        window.getSelection()?.removeAllRanges();
+      }
+      if (started) setSel({ a: i, b: over });
+    };
+    const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  // While a selection exists: Backspace deletes it, Escape or clicking elsewhere clears it.
+  useEffect(() => {
+    if (!sel) return;
+    const lo = Math.min(sel.a, sel.b), hi = Math.max(sel.a, sel.b);
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        e.preventDefault();
+        const bs = blocksRef.current;
+        for (const b of bs.slice(lo, hi + 1)) if (b.kind === 'task') onDeleteTask(b.taskId);
+        commit(bs.filter((_, j) => j < lo || j > hi));
+        setSel(null);
+      } else if (e.key === 'Escape') setSel(null);
+    };
+    const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.blk-list')) setSel(null); };
+    window.addEventListener('keydown', key);
+    window.addEventListener('pointerdown', down);
+    return () => { window.removeEventListener('keydown', key); window.removeEventListener('pointerdown', down); };
+  }, [sel]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selLo = sel ? Math.min(sel.a, sel.b) : -1;
+  const selHi = sel ? Math.max(sel.a, sel.b) : -1;
+  const docEmpty = blocks.length === 1 && blocks[0].kind === 'p' && blocks[0].text === '';
 
   return (
     <div className="blocks">
@@ -219,7 +293,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       </div>
       <div
         ref={listRef}
-        className="blk-list"
+        className={`blk-list${sel ? ' selecting' : ''}`}
         onDrop={(e) => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f, blocks.length); } }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
         onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f, activeRef.current + 1); } }}
@@ -227,10 +301,10 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         {blocks.map((b, i) => (
           <div
             key={b.key}
-            className={`blk blk-${b.kind}${drag?.from === i ? ' dragging' : ''}${drag && drag.from !== i ? ' shifting' : ''}`}
+            className={`blk blk-${b.kind}${drag && i >= drag.from && i < drag.from + drag.count ? ' dragging' : ''}${drag && (i < drag.from || i >= drag.from + drag.count) ? ' shifting' : ''}${i >= selLo && i <= selHi ? ' selected' : ''}`}
             style={shift(i) ? { transform: `translateY(${shift(i)}px)` } : undefined}
             onFocus={() => setActive(i)}
-            onPointerDownCapture={() => setActive(i)}
+            onPointerDownCapture={(e) => onRowPointerDown(i, e)}
             onKeyDownCapture={() => setActive(i)}
           >
             <button className="blk-handle" title="Drag to move" onPointerDown={(e) => onHandleDown(i, e)}>⋮⋮</button>
@@ -255,6 +329,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
             ) : (
               <TextBlock
                 block={b}
+                placeholder={b.kind !== 'p' ? 'Heading' : docEmpty ? 'Write something…' : ''}
                 focus={focus?.index === i ? focus : null}
                 onFocused={() => setFocus(null)}
                 onChange={(text) => setBlock(i, { text })}
@@ -285,8 +360,31 @@ function ensureTrailing(blocks: Block[]): Block[] {
   return [...blocks, { key: newKey(), kind: 'p', text: '' }];
 }
 
-function TextBlock({ block, focus, onFocused, onChange, onKey }: {
-  block: Extract<Block, { kind: 'h1' | 'h2' | 'p' }>; focus: Focus; onFocused: () => void;
+/* ── links inside text blocks ── */
+const URL_RE = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/g;
+
+/** Split text into plain runs and links; null when there is no link at all. */
+function linkify(text: string): (string | { url: string; label: string })[] | null {
+  URL_RE.lastIndex = 0;
+  if (!URL_RE.test(text)) return null;
+  URL_RE.lastIndex = 0; // test() advanced it; matchAll starts from lastIndex
+  const parts: (string | { url: string; label: string })[] = [];
+  let last = 0;
+  for (const m of text.matchAll(URL_RE)) {
+    let label = m[0];
+    const trail = label.match(/[),.;:!?\]]+$/)?.[0] ?? ''; // sentence punctuation isn't part of the URL
+    label = label.slice(0, label.length - trail.length);
+    if (!label) continue;
+    parts.push(text.slice(last, m.index));
+    parts.push({ url: label.startsWith('www.') ? `https://${label}` : label, label });
+    last = (m.index ?? 0) + label.length;
+  }
+  parts.push(text.slice(last));
+  return parts;
+}
+
+function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
+  block: Extract<Block, { kind: 'h1' | 'h2' | 'p' }>; placeholder: string; focus: Focus; onFocused: () => void;
   onChange: (text: string) => void; onKey: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
@@ -299,17 +397,30 @@ function TextBlock({ block, focus, onFocused, onChange, onKey }: {
     el.setSelectionRange(pos, pos);
     onFocused();
   }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
+  // With links present the textarea's own text goes transparent and a mirror layer renders it,
+  // links styled and clickable; the two must share exact metrics so glyphs line up.
+  const links = linkify(block.text);
   return (
-    <textarea
-      ref={ref}
-      className={`blk-text ${block.kind}`}
-      rows={1}
-      value={block.text}
-      placeholder={block.kind === 'p' ? 'Write something…' : 'Heading'}
-      onChange={(e) => onChange(e.target.value)}
-      onKeyDown={onKey}
-      spellCheck
-    />
+    <div className="blk-textwrap">
+      <textarea
+        ref={ref}
+        className={`blk-text ${block.kind}${links ? ' has-links' : ''}`}
+        rows={1}
+        value={block.text}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKey}
+        spellCheck
+      />
+      {links && (
+        <div className={`blk-linklayer ${block.kind}`}>
+          {links.map((p, k) => typeof p === 'string'
+            ? <span key={k}>{p}</span>
+            : <a key={k} className="blk-link" href={p.url} title={p.url} onClick={(e) => { e.preventDefault(); window.open(p.url); }}>{p.label}</a>)}
+          {'\n'}
+        </div>
+      )}
+    </div>
   );
 }
 

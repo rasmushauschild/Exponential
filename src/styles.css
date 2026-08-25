@@ -16,6 +16,7 @@
   --ov-5: rgba(0, 0, 0, 0.05);
   --ov-6: rgba(0, 0, 0, 0.06);
   --ov-18: rgba(0, 0, 0, 0.18);
+  --sel-blk: rgba(10, 132, 255, 0.1);
   --line: rgba(0, 0, 0, 0.07);
   --radius-xl: 32px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -42,6 +43,7 @@
   --ov-5: rgba(255, 255, 255, 0.07);
   --ov-6: rgba(255, 255, 255, 0.09);
   --ov-18: rgba(255, 255, 255, 0.22);
+  --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.09);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.35);
   --menu-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.6);
@@ -452,16 +454,29 @@ img { display: block; -webkit-user-drag: none; }
 .blk { position: relative; display: flex; align-items: flex-start; gap: 4px; margin-left: -26px; padding-left: 26px; border-radius: 12px; }
 .blk.shifting { transition: transform 0.15s ease-out; }
 .blk.dragging { z-index: 5; background: var(--panel); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
+.blk.selected { background: var(--sel-blk); }
+.blk.dragging.selected { background: var(--sel-blk); }
+/* While blocks are selected, the inputs go inert so keys and clicks act on the selection. */
+.blk-list.selecting, .blk-list.selecting * { user-select: none; }
+.blk-list.selecting .blk-text, .blk-list.selecting .task-blk-title { pointer-events: none; }
 .blk-handle {
   position: absolute; left: 4px; top: 6px; width: 18px; height: 22px; border-radius: 6px; color: var(--text-3); font-size: 12px; letter-spacing: -2px;
   cursor: grab; opacity: 0; transition: opacity 0.15s, background 0.15s; display: grid; place-items: center;
 }
 .blk:hover .blk-handle { opacity: 1; }
 .blk-handle:hover { background: var(--ov-5); color: var(--text-2); }
-.blk-text { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--text); font: inherit; line-height: 1.55; padding: 4px 0; overflow: hidden; user-select: text; }
+.blk-textwrap { flex: 1; min-width: 0; position: relative; display: flex; }
+.blk-text { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--text); font: inherit; line-height: 1.55; padding: 4px 0; overflow: hidden; user-select: text; white-space: pre-wrap; overflow-wrap: break-word; }
 .blk-text::placeholder { color: var(--text-3); }
 .blk-text.h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; padding: 12px 0 2px; }
 .blk-text.h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; padding: 10px 0 2px; }
+/* Links: the textarea's glyphs go transparent and an aligned mirror layer draws them, links styled. */
+.blk-text.has-links { color: transparent; caret-color: var(--text); }
+.blk-linklayer { position: absolute; inset: 0; pointer-events: none; color: var(--text); font: inherit; line-height: 1.55; padding: 4px 0; white-space: pre-wrap; overflow-wrap: break-word; overflow: hidden; }
+.blk-linklayer.h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; padding: 12px 0 2px; }
+.blk-linklayer.h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; padding: 10px 0 2px; }
+.blk-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; pointer-events: auto; cursor: pointer; }
+.blk-list.selecting .blk-link { pointer-events: none; }
 .blk-img { max-width: 100%; border-radius: 14px; margin: 6px 0; display: block; }
 .blk-x { position: absolute; right: 6px; top: 10px; width: 24px; height: 24px; border-radius: 8px; background: var(--panel); color: var(--text-2); opacity: 0; transition: opacity 0.15s; box-shadow: var(--shadow); }
 .blk:hover .blk-x { opacity: 1; }
@@ -469,8 +484,9 @@ img { display: block; -webkit-user-drag: none; }
 .task-blk-title { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-weight: 500; user-select: text; }
 .task-blk.done .task-blk-title, .task-blk.cancelled .task-blk-title { color: var(--text-3); }
 .task-blk.cancelled .task-blk-title { text-decoration: line-through; }
-.task-blk .claim { opacity: 0; transition: opacity 0.15s; flex: none; }
-.blk:hover .task-blk .claim { opacity: 1; }
+/* Hidden entirely (not just faded) so the title runs to the panel edge until hover. */
+.task-blk .claim { display: none; flex: none; }
+.blk:hover .task-blk .claim { display: block; }
 .task-blk .from-chip { cursor: pointer; flex: none; }
 .owner-chip { padding-right: 3px; }
 .owner-open { display: inline-flex; align-items: center; gap: 4px; }
