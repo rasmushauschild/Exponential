@@ -186,6 +186,14 @@ ipcMain.handle('data:save', (e, data) => {
   }
 });
 
+// Cloud mode: a window that just wrote tells the others so they reload right away
+// (realtime would get there too, but this is instant and covers same-machine deletes).
+ipcMain.on('cloud:ping', (e) => {
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.webContents.id !== e.sender.id) w.webContents.send('cloud:ping');
+  }
+});
+
 ipcMain.on('widget:openMain', (_e, target) => {
   const win = createMainWindow();
   if (target) {

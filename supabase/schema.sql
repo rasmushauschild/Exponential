@@ -281,3 +281,13 @@ alter table public.projects add column if not exists group_id uuid references pu
 do $$ begin
   execute 'alter publication supabase_realtime add table public.groups';
 exception when duplicate_object then null; end $$;
+-- 006: Realtime DELETE events normally carry only the old primary key, so subscriptions filtered on
+-- team_id (or to_user) never receive them and deletions don't propagate live. Full replica identity
+-- puts the whole old row in the event, letting the filters match.
+do $$
+declare t text;
+begin
+  foreach t in array array['projects', 'deadlines', 'tasks', 'retros', 'team_members', 'groups', 'notifications'] loop
+    execute format('alter table public.%I replica identity full', t);
+  end loop;
+end $$;

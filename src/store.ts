@@ -23,6 +23,8 @@ declare global {
       installUpdate: () => void;
       checkForUpdate: () => void;
       onOpen: (cb: (target: { kind: string; id: string }) => void) => () => void;
+      pingCloud?: () => void;
+      onCloudPing?: (cb: () => void) => () => void;
       platform: string;
       google: {
         getConfig: () => Promise<GoogleConfig | null>;
@@ -279,11 +281,24 @@ export function useData() {
     return subscribeTeam(teamId, me, () => reload(teamId));
   }, [teamId, me, reload]);
 
+  // The widget and the main window are separate renderers on the same machine: after either one
+  // writes, it pings the other through the main process so changes (deletes included) show instantly.
+  useEffect(() => {
+    let timer: number | undefined;
+    const off = window.exponential?.onCloudPing?.(() => {
+      if (!cloudRef.current) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => reload(), 150);
+    });
+    return () => { window.clearTimeout(timer); off?.(); };
+  }, [reload]);
+
   const writeDiff = (prev: Data, next: Data) => {
     editSeq.current++;
     inflight.current++;
     persistDiff(prev, next).finally(() => {
       inflight.current--;
+      window.exponential?.pingCloud?.();
       if (inflight.current === 0 && reloadWanted.current) { reloadWanted.current = false; reload(); }
     });
   };
