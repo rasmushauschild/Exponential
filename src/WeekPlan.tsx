@@ -28,6 +28,7 @@ interface Props {
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
   onDeny?: (id: string) => void; // decline a review request shown in my week
+  onCompleteReview?: (id: string) => void; // sign off on one
   onOpen: (t: Task) => void;
   onReorder: (id: string, delta: number) => void;
   onWeekChange: (monday: ISODate) => void;
@@ -38,7 +39,7 @@ interface Props {
 
 /** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeny, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeny, onCompleteReview, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const readonly = selected !== me;
   const todayIdx = dayIndex(today) - dayIndex(week);
@@ -106,11 +107,13 @@ export function WeekPlan(props: Props) {
   const dateKey = (t: Task) => t.date ?? '9999-99-99';
   const sorted = [...tasks].sort((a, b) => (dateKey(a) < dateKey(b) ? -1 : dateKey(a) > dateKey(b) ? 1 : 0) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
 
-  // Completed tasks can be tucked away; the choice sticks per machine.
+  // Completed tasks can be tucked away; the choice sticks per machine. A finished review of
+  // someone else's task counts as completed here even though the task itself is In progress.
+  const doneRow = (t: Task) => t.status === 'done' || (t.personId !== selected && !!t.reviewDone);
   const [showDone, setShowDone] = useState(() => localStorage.getItem('exponential-show-done') !== '0');
   const toggleDone = () => setShowDone((v) => { localStorage.setItem('exponential-show-done', v ? '0' : '1'); return !v; });
-  const doneCount = sorted.filter((t) => t.status === 'done').length;
-  const visible = showDone ? sorted : sorted.filter((t) => t.status !== 'done');
+  const doneCount = sorted.filter(doneRow).length;
+  const visible = showDone ? sorted : sorted.filter((t) => !doneRow(t));
 
   // While a row is lifted, same-day neighbours slide out of its way so the drop position is obvious.
   const lifted = lift ? visible.find((t) => t.id === lift.id) : undefined;
@@ -185,6 +188,7 @@ export function WeekPlan(props: Props) {
                 onUpdate={onUpdate}
                 onDelete={onDelete}
                 onDeny={onDeny}
+                onCompleteReview={onCompleteReview}
                 onOpen={onOpen}
                 onToggleSelect={onToggleSelect}
                 onRename={onRename}
@@ -251,7 +255,7 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, onDeny, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop }: {
+function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
@@ -263,6 +267,7 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
   onUpdate: Props['onUpdate'];
   onDelete: Props['onDelete'];
   onDeny?: Props['onDeny'];
+  onCompleteReview?: Props['onCompleteReview'];
   onOpen: Props['onOpen'];
   onToggleSelect: Props['onToggleSelect'];
   onRename: Props['onRename'];
@@ -377,22 +382,24 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
   const creator = !reviewRow && task.createdBy && task.createdBy !== task.personId ? people.find((p) => p.id === task.createdBy) : undefined;
   const reviewer = !reviewRow && task.status === 'review' && task.reviewerId ? people.find((p) => p.id === task.reviewerId) : undefined;
   const reviewOwner = reviewRow ? people.find((p) => p.id === task.personId) : undefined;
+  // A review I've signed off on reads as Completed in my week, whatever the task itself says.
+  const displayStatus = reviewRow && task.reviewDone ? 'done' as const : task.status;
   return (
     <div
       ref={rowRef}
-      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator || reviewRow ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
+      className={`wk-row task ${displayStatus}${selected ? ' selected' : ''}${creator || reviewRow ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
       style={offset ? { transform: `translateY(${offset}px)` } : undefined}
-      onContextMenu={(e) => { if (readonly) return; e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
+      onContextMenu={(e) => { if (readonly || (reviewRow && task.reviewDone)) return; e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
     >
       <div className="wk-list" onPointerDown={onRowDown} style={{ cursor: readonly ? 'default' : 'grab' }}>
-        <button className="status-btn" title={STATUS_LABEL[task.status]}
+        <button className="status-btn" title={reviewRow && task.reviewDone ? 'Review completed' : STATUS_LABEL[displayStatus]}
           onClick={(e) => {
-            if (readonly) return;
+            if (readonly || (reviewRow && task.reviewDone)) return;
             const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
             setMenu((m) => (m ? null : r));
           }}
-          style={{ cursor: readonly ? 'default' : 'pointer' }}>
-          <StatusDot status={task.status} />
+          style={{ cursor: readonly || (reviewRow && task.reviewDone) ? 'default' : 'pointer' }}>
+          <StatusDot status={displayStatus} />
         </button>
         {editing
           ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t, viaEnter) => onRename(task.id, t, viaEnter)} />
@@ -412,17 +419,26 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
             <Avatar person={reviewOwner} size={14} /> {shortName(reviewOwner.name).split(' ')[0]}
           </span>
         )}
-        {menu && (
+        {menu && (reviewRow ? (
+          <ReviewMenu
+            anchor={menu}
+            onComplete={() => {
+              setMenu(null);
+              confettiBurst(menu.left + menu.width / 2, menu.top + menu.height / 2);
+              onCompleteReview?.(task.id);
+            }}
+            onDeny={() => { setMenu(null); onDeny?.(task.id); }}
+          />
+        ) : (
           <StatusMenu
             value={task.status}
             reviewerId={task.reviewerId}
             people={people.filter((x) => x.id !== task.personId)}
             onPick={(status, reviewerId) => { onUpdate(task.id, reviewerId !== undefined ? { status, reviewerId } : { status }); setMenu(null); }}
-            onDelete={reviewRow ? undefined : () => { setMenu(null); onDelete(task.id); }}
-            onDeny={reviewRow && onDeny ? () => { setMenu(null); onDeny(task.id); } : undefined}
+            onDelete={() => { setMenu(null); onDelete(task.id); }}
             anchor={menu}
           />
-        )}
+        ))}
       </div>
       <div
         className={`wk-days${backlog && !readonly && !reviewRow ? ' ghost-zone' : ''}`}
@@ -448,7 +464,7 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
             style={{
               left: `${(vs / 7) * 100}%`,
               width: `calc(${((ve - vs + 1) / 7) * 100}% - 6px)`,
-              ['--sc' as string]: STATUS_COLOR[task.status],
+              ['--sc' as string]: STATUS_COLOR[displayStatus],
               cursor: readonly || reviewRow ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor,
             }}
             onPointerDown={onBlockDown}
@@ -459,6 +475,20 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
         )}
       </div>
     </div>
+  );
+}
+
+/** The reviewer's verdict on a task sent to them: sign off or decline, nothing else. */
+function ReviewMenu({ anchor, onComplete, onDeny }: { anchor: DOMRect; onComplete: () => void; onDeny: () => void }) {
+  const menuH = 44 * 2 + 12;
+  const up = anchor.bottom + menuH > window.innerHeight - 8;
+  const style: React.CSSProperties = { position: 'fixed', left: Math.min(anchor.left, window.innerWidth - 200), ...(up ? { bottom: window.innerHeight - anchor.top + 6 } : { top: anchor.bottom + 6 }) };
+  return createPortal(
+    <div className="status-menu" style={style} onPointerDown={(e) => e.stopPropagation()}>
+      <button onClick={onComplete}><StatusDot status="done" /> Completed</button>
+      <button className="danger" onClick={onDeny}><span style={{ width: 14 }} /> Deny</button>
+    </div>,
+    document.body,
   );
 }
 

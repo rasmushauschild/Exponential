@@ -7,7 +7,7 @@ import logoUrl from '../build/icon.png';
 import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
-import { addTask, claimTask, denyReview, nameOf, notify, patchTask, renameTask, reorderTask, unclaimTask } from './taskOps';
+import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, renameTask, reorderTask, unclaimTask } from './taskOps';
 import { isPending, onPersistError, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
@@ -466,7 +466,7 @@ export default function App() {
               onSelect={setSelectedPerson}
               week={week}
               today={today}
-              tasks={data.tasks.filter((t) => (t.personId === person || (t.status === 'review' && t.reviewerId === person)) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
+              tasks={data.tasks.filter((t) => (t.personId === person || (t.reviewerId === person && (t.status === 'review' || t.reviewDone))) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
               selectedId={selection?.id}
               selectedIds={multi}
               onToggleSelect={toggleSelect}
@@ -497,6 +497,7 @@ export default function App() {
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
               onDeny={(id) => update((d) => denyReview(d, id))}
+              onCompleteReview={(id) => update((d) => completeReview(d, id))}
               onOpen={(t) => open('task', t.id)}
               onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
               calendar={{

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { WeekPlan } from './WeekPlan';
 import { useData } from './store';
-import { addTask, denyReview, patchTask, renameTask, reorderTask } from './taskOps';
+import { addTask, completeReview, denyReview, patchTask, renameTask, reorderTask } from './taskOps';
 import { todayISO, weekStart } from './dates';
 
 /** Menu-bar popover: only the week panel, full featured, always synced with the main window. */
@@ -72,7 +72,7 @@ export default function Widget() {
           onSelect={setPerson}
           week={week}
           today={today}
-          tasks={data.tasks.filter((t) => (t.personId === who || (t.status === 'review' && t.reviewerId === who)) && (!t.date || (t.date <= addDaysISO(week, 6) && (t.end ?? t.date) >= week)))}
+          tasks={data.tasks.filter((t) => (t.personId === who || (t.reviewerId === who && (t.status === 'review' || t.reviewDone))) && (!t.date || (t.date <= addDaysISO(week, 6) && (t.end ?? t.date) >= week)))}
           editingId={editingId ?? undefined}
           onToggleSelect={() => {}}
           onAdd={(date) => { let id = ''; update((d) => { const r = addTask(d, who, date); id = r.id; return r.data; }); setEditingId(id); }}
@@ -90,6 +90,7 @@ export default function Widget() {
           onUpdate={(id, patch) => update((d) => patchTask(d, id, patch))}
           onDelete={(id) => update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))}
           onDeny={(id) => update((d) => denyReview(d, id))}
+          onCompleteReview={(id) => update((d) => completeReview(d, id))}
           onOpen={(t) => window.exponential?.openMain({ kind: 'task', id: t.id })}
           onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
           onWeekChange={setWeek}

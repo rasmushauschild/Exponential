@@ -47,11 +47,12 @@ export interface Task {
   notes?: string;
   createdBy?: string; // person id when someone else added it
   reviewerId?: string;
+  reviewDone?: boolean; // the reviewer finished this review (task itself went back to In progress)
   projectId?: string; // taken from a project's to-do list
   parentId?: string; // subtask of another task
 }
 
-export type NotificationKind = 'task-added' | 'review-requested' | 'review-denied' | 'owner-changed' | 'project-changed';
+export type NotificationKind = 'task-added' | 'review-requested' | 'review-denied' | 'review-completed' | 'owner-changed' | 'project-changed';
 
 export interface Notification {
   id: string;

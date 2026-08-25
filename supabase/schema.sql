@@ -281,6 +281,8 @@ alter table public.projects add column if not exists group_id uuid references pu
 do $$ begin
   execute 'alter publication supabase_realtime add table public.groups';
 exception when duplicate_object then null; end $$;
+-- 007: The reviewer's "Completed" verdict lives on the task; the task itself returns to In progress.
+alter table public.tasks add column if not exists review_done boolean not null default false;
 -- 006: Realtime DELETE events normally carry only the old primary key, so subscriptions filtered on
 -- team_id (or to_user) never receive them and deletions don't propagate live. Full replica identity
 -- puts the whole old row in the event, letting the filters match.

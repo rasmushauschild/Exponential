@@ -55,9 +55,22 @@ export function patchTask(d: Data, id: string, patch: Partial<Task>): Data {
     if (before.personId) next = notify(next, { to: before.personId, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} moved “${after.title}” to ${nameOf(d, after.personId!)}`, ref: { kind: 'task', id } });
   }
   if (after.status === 'review' && after.reviewerId && (after.reviewerId !== before.reviewerId || before.status !== 'review')) {
+    // A fresh request: any earlier verdict from this (or another) reviewer no longer applies.
+    next = { ...next, tasks: next.tasks.map((t) => (t.id === id ? { ...t, reviewDone: undefined } : t)) };
     next = notify(next, { to: after.reviewerId, from: d.me, kind: 'review-requested', text: `${nameOf(d, d.me)} asked you to review “${after.title}”`, ref: { kind: 'task', id } });
   }
   return next;
+}
+
+/** The reviewer signs off: the owner's task returns to In progress, and the reviewer keeps a
+ *  "completed review" entry in their own week. */
+export function completeReview(d: Data, id: string): Data {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || t.status !== 'review' || !t.reviewerId) return d;
+  const next: Data = { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, status: 'progress' as const, reviewDone: true } : x)) };
+  return t.personId
+    ? notify(next, { to: t.personId, from: d.me, kind: 'review-completed', text: `${nameOf(d, d.me)} completed the review of “${t.title}”`, ref: { kind: 'task', id } })
+    : next;
 }
 
 /** The reviewer declines: the task goes back to In progress and the owner hears about it. */
