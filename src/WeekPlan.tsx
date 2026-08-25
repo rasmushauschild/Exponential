@@ -132,44 +132,53 @@ export function WeekPlan(props: Props) {
     return 0;
   };
   const events = calendar.enabled ? calendar.events.filter((e) => days.includes(e.date)) : [];
-  // The next upcoming event is pinned as an overlay on the bottom row while its real row is
-  // scrolled below the fold; once its row comes into view the overlay yields to it.
-  const nextEventId = (() => {
-    if (!events.length) return null;
+  const openEvent = (e: CalendarEvent) => window.open(e.link ?? `https://calendar.google.com/calendar/r/day/${e.date.replaceAll('-', '/')}`);
+  // Each day's first still-upcoming event is pinned as an overlay on the bottom row while its real
+  // row is scrolled below the fold; each pill yields to its own row as it comes into view.
+  const pinnedCandidates = (() => {
+    if (!events.length) return [] as CalendarEvent[];
     const nowT = new Date().toTimeString().slice(0, 5);
-    const sortedEv = [...events].sort((a, b) => a.date.localeCompare(b.date) || (a.start ?? '').localeCompare(b.start ?? ''));
-    return sortedEv.find((e) => e.date > today || (e.date === today && (e.allDay || !e.start || e.start >= nowT)))?.id ?? null;
+    const out: CalendarEvent[] = [];
+    for (const d of days) {
+      if (d < today) continue;
+      const dayEvs = events.filter((e) => e.date === d).sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''));
+      const pick = d === today ? dayEvs.find((e) => e.allDay || !e.start || (e.end ?? e.start) >= nowT) : dayEvs[0];
+      if (pick) out.push(pick);
+    }
+    return out;
   })();
-  const nextEvent = events.find((e) => e.id === nextEventId);
-  const nextEvRowRef = useRef<HTMLDivElement>(null);
-  const [pinEvent, setPinEvent] = useState(false);
+  const evRowEls = useRef(new Map<string, HTMLElement>());
+  const candidatesRef = useRef(pinnedCandidates);
+  candidatesRef.current = pinnedCandidates;
+  const candidatesKey = pinnedCandidates.map((e) => e.id).join(',');
+  const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   useEffect(() => {
     const rows = bodyRef.current?.querySelector<HTMLElement>('.wk-rows');
-    if (!rows || !nextEventId) { setPinEvent(false); return; }
+    if (!rows || !candidatesKey) { setPinnedIds([]); return; }
     const check = () => {
-      const row = nextEvRowRef.current;
-      if (!row) return setPinEvent(false);
-      setPinEvent(row.getBoundingClientRect().bottom > rows.getBoundingClientRect().bottom + 1);
+      const rb = rows.getBoundingClientRect().bottom;
+      const next = candidatesRef.current
+        .filter((e) => { const el = evRowEls.current.get(e.id); return el ? el.getBoundingClientRect().bottom > rb + 1 : false; })
+        .map((e) => e.id);
+      setPinnedIds((prev) => (prev.join(',') === next.join(',') ? prev : next));
     };
     check();
     rows.addEventListener('scroll', check, { passive: true });
     const ro = new ResizeObserver(check);
     ro.observe(rows);
     return () => { rows.removeEventListener('scroll', check); ro.disconnect(); };
-  }, [nextEventId, tasks, week, calendar.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [candidatesKey, tasks, week, calendar.enabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const eventRowInner = (e: CalendarEvent) => (
-    <>
-      <div className="wk-list">
-        <span className="ev-time">{e.allDay ? 'All day' : e.start}</span>
-        <span className="ev-title">{e.title}</span>
-      </div>
-      <div className="wk-days">
-        <div className="wk-block ev" style={{ left: `${(days.indexOf(e.date) / 7) * 100}%`, width: `calc(100% / 7 - 6px)` }}>
-          {!e.allDay && <span>{e.start}</span>} {e.title}
-        </div>
-      </div>
-    </>
+  const eventBlock = (e: CalendarEvent) => (
+    <div
+      key={e.id}
+      className="wk-block ev"
+      style={{ left: `${(days.indexOf(e.date) / 7) * 100}%`, width: `calc(100% / 7 - 6px)` }}
+      onClick={() => openEvent(e)}
+      title={`${e.title} — open in Google Calendar`}
+    >
+      {!e.allDay && <span>{e.start}</span>} {e.title}
+    </div>
   );
 
   const dayAt = (el: HTMLElement, clientX: number) => {
@@ -264,8 +273,12 @@ export function WeekPlan(props: Props) {
                   {calendar.note && <span className="wk-note"> · {calendar.note}</span>}
                 </div>
                 {events.map((e) => (
-                  <div key={e.id} className="wk-row event" ref={e.id === nextEventId ? nextEvRowRef : undefined}>
-                    {eventRowInner(e)}
+                  <div key={e.id} className="wk-row event" ref={(el) => { if (el) evRowEls.current.set(e.id, el); else evRowEls.current.delete(e.id); }}>
+                    <div className="wk-list">
+                      <span className="ev-time">{e.allDay ? 'All day' : e.start}</span>
+                      <span className="ev-title">{e.title}</span>
+                    </div>
+                    <div className="wk-days">{eventBlock(e)}</div>
                   </div>
                 ))}
                 {events.length === 0 && !calendar.note && <div className="hint wk-empty">No events this week.</div>}
@@ -275,8 +288,11 @@ export function WeekPlan(props: Props) {
         </div>
 
         {todayX !== null && <div className="week-today-line" style={{ left: todayX }} />}
-        {pinEvent && nextEvent && (
-          <div className="wk-row event pinned">{eventRowInner(nextEvent)}</div>
+        {pinnedIds.length > 0 && (
+          <div className="wk-row event pinned">
+            <div className="wk-list" />
+            <div className="wk-days">{pinnedCandidates.filter((e) => pinnedIds.includes(e.id)).map(eventBlock)}</div>
+          </div>
         )}
       </div>
 

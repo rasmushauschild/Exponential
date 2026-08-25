@@ -113,6 +113,7 @@ export interface CalendarEvent {
   start?: string; // HH:MM, absent for all-day
   end?: string;
   allDay: boolean;
+  link?: string; // htmlLink into Google Calendar
 }
 
 export interface GoogleUser {

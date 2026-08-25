@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { WeekPlan } from './WeekPlan';
 import { useData } from './store';
+import type { CalendarEvent } from './types';
 import { addTask, completeReview, denyReview, patchTask, renameTask, reorderTask } from './taskOps';
 import { todayISO, weekStart } from './dates';
 
@@ -12,7 +13,10 @@ export default function Widget() {
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [person, setPerson] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  // Follow the theme chosen in the main window (same origin → same localStorage); re-check whenever it changes or we open.
+  // Follow the theme and calendar preference chosen in the main window (same origin → same
+  // localStorage); re-check whenever they change or the popover opens.
+  const readCalPref = () => { try { return !!JSON.parse(localStorage.getItem('exponential-layout') ?? '{}').calendar; } catch { return false; } };
+  const [calOn, setCalOn] = useState(readCalPref);
   const applyTheme = () => {
     let saved = '';
     try { saved = JSON.parse(localStorage.getItem('exponential-layout') ?? '{}').theme || ''; } catch { /* ignore */ }
@@ -21,11 +25,25 @@ export default function Widget() {
   useEffect(() => {
     document.documentElement.classList.add('widget-window');
     applyTheme();
-    window.addEventListener('storage', applyTheme);
+    const sync = () => { applyTheme(); setCalOn(readCalPref()); };
+    window.addEventListener('storage', sync);
     const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
     mq?.addEventListener('change', applyTheme);
-    return () => { window.removeEventListener('storage', applyTheme); mq?.removeEventListener('change', applyTheme); };
+    return () => { window.removeEventListener('storage', sync); mq?.removeEventListener('change', applyTheme); };
   }, []);
+
+  // My calendar for the shown week, when the main window has calendar on and access is granted.
+  const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
+  useEffect(() => {
+    const g = window.exponential?.google;
+    if (!g || !calOn) { setCalEvents([]); return; }
+    let dead = false;
+    g.hasCalendar()
+      .then((ok) => (ok && !dead ? g.events('primary', week, addDaysISO(week, 6)) : []))
+      .then((ev) => { if (!dead) setCalEvents(ev); })
+      .catch(() => { if (!dead) setCalEvents([]); });
+    return () => { dead = true; };
+  }, [calOn, week]);
 
   const me = data?.me ?? '';
   const who = person ?? me;
@@ -46,6 +64,7 @@ export default function Widget() {
     if (!openedOnce.current && document.visibilityState === 'visible') { openedOnce.current = true; startNewTask(); }
     return window.exponential?.onWidgetShown(() => {
       applyTheme();
+      setCalOn(readCalPref());
       setToday(todayISO());
       setWeek(weekStart(todayISO()));
       setPerson(null);
@@ -94,7 +113,7 @@ export default function Widget() {
           onOpen={(t) => window.exponential?.openMain({ kind: 'task', id: t.id })}
           onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
           onWeekChange={setWeek}
-          calendar={{ enabled: false, available: false, events: [] }}
+          calendar={{ enabled: calOn && !!window.exponential, available: true, events: calEvents }}
           onToggleCalendar={() => {}}
           headExtra={
             <button className="pill" onClick={() => window.exponential?.openMain()} title="Open Exponential">

@@ -190,12 +190,12 @@ async function events(calendarId, from, to) {
     .filter((e) => e.status !== 'cancelled')
     .map((e) => {
       const allDay = !!e.start?.date;
-      if (allDay) return { id: e.id, title: e.summary || '(No title)', date: e.start.date, allDay: true };
+      if (allDay) return { id: e.id, title: e.summary || '(No title)', date: e.start.date, allDay: true, link: e.htmlLink };
       const s = new Date(e.start.dateTime);
       const en = new Date(e.end.dateTime);
       const hhmm = (d) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
       const local = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-${String(s.getDate()).padStart(2, '0')}`;
-      return { id: e.id, title: e.summary || '(No title)', date: local, start: hhmm(s), end: hhmm(en), allDay: false };
+      return { id: e.id, title: e.summary || '(No title)', date: local, start: hhmm(s), end: hhmm(en), allDay: false, link: e.htmlLink };
     });
 }
 
