@@ -1,0 +1,45 @@
+# Exponential — CLAUDE.md
+
+Team planning app (Electron + React + TS + Vite, Supabase backend). Repo: https://github.com/rasmushauschild/Exponential (public). Owner: Rasmus Hauschild <r.hauschild@airyautomotive.com>.
+
+## What it is
+- **Master plan** (top): zoomable/pannable timeline. Projects = outlined pastel bars in **group** sections (group = name+colour; ungrouped = grey, last section). Deadlines = black dots on one row (hover row to add). Blue **week band** (drag = snap-animated; label opens that week's **Retro**). Red today line. Vertical scroll when rows overflow. Click empty lane = create project w/ inline name. Drop a bar on a group label = append to that group.
+- **Week view** (bottom): rows = tasks (list left, 7-day blocks right). Backlog = undated tasks, faded at bottom, shown every week; click a day on its row to schedule. Drag blocks horiz = move/stretch; vert on row = reorder within day. Status dot menu (todo/progress/review/done/cancelled; hover "Needs review" → pick reviewer). Person dropdown (Me first, then alphabetical). Enter after naming a task chains a new one. Trackpad swipe = prev/next week (one flip per gesture, no rubber band). Floating grey "+ Add task" bottom-left.
+- **Side panel** (slides in, squishes planners, resizable): title, props, **BlockEditor** notes (Notion-style blocks: h1/h2/p/img/task; Enter=new block, ⋮⋮ drag handle; task blocks are real tasks — claimable "+ Add to my week" in projects (unclaim via × on own chip), subtasks in tasks, NOT claimable). "Send to Agent" copies markdown. Kinds: project/task/deadline/retro/inbox.
+- **Sidebar** (72px rail, hover expands to 232px pushing content): team list (click=switch, hover cog=Team settings page: rename, image icon upload, retro questions, members/invites/roles, delete team), Plan, Inbox (real notifications), Check-for-updates, dark mode toggle, account.
+- **Menu-bar widget** (macOS Tray, plan glyph): frameless popover with only my week; opens ready-to-type (new task at TOP of backlog); "Open app" button; hides on blur.
+- ⌘Z/⌘⇧Z undo/redo (100 steps, per team); shift/⌘-click multi-select + Backspace deletes; Escape clears.
+
+## Architecture
+- `electron/main.cjs` — windows (transparent+CSS-rounded on mac, radius 26 in `#root.mac-window`; traffic lights 14,14), Tray+widget (`?mode=widget`, `--widget` arg), IPC (data load/save broadcast, google:*, update:*), electron-updater (check 8s + 2h, autoDownload, installs on quit; log: userData/updater.log).
+- `electron/google.cjs` — OAuth PKCE via system browser + loopback; tokens in userData/google-tokens.json; **id_token refreshed with access token, validity from its own exp**; incremental `grantCalendar()` (calendar.readonly is NOT granted at first sign-in — Google checkbox). Client creds: `electron/google.client.json` (git-ignored, bundled; example file beside it).
+- `src/store.ts` `useData()` — dual mode: **local** (browser preview: localStorage workspace w/ sample data) / **cloud** (after `connectCloud()`). Cloud: one team at a time → `Data` shape; every `update(fn, coalesceKey?)` diffs prev/next via `cloud.persistDiff` into row writes; realtime `subscribeTeam` → debounced reload, **deferred while writes in flight AND discarded if editSeq changed during fetch** (typing race!). Undo = reverse diff. Team list re-checked on focus + 30s (invites). NO side effects inside React setState updaters (Strict Mode runs them twice — caused real bugs).
+- `src/cloud.ts` — supabase client (URL+publishable key hardcoded), row↔model mapping, `ensureSession` (Google id_token → signInWithIdToken, retry with forced refresh; recovers stale sessions via signOut+retry in store), `ensureProfile` rpc, `onPersistError` → red toast in App. **Notifications: plain INSERT (upsert trips the own-rows UPDATE policy!), updates only for read-marking.**
+- `src/taskOps.ts` — shared pure ops (addTask w/ 'start'|'end' + link {projectId|parentId}, renameTask (notifies), patchTask (owner/review notifications), reorderTask (groups by person+date ONLY), claimTask/unclaimTask).
+- `src/App.tsx` — shell, sign-in gate (mandatory Google), no-team screen, sheets (project/deadline/group/team/settings), notifications wiring, prefs in localStorage `exponential-layout` (weekH 400, detailW 415, theme, calendar).
+- `src/BigPlan.tsx` (sections/lanes math, slotAt, drags), `src/WeekPlan.tsx` (rows, swipe, StatusMenu portal — all popups render to document.body, positioned from captured rects; **capture getBoundingClientRect BEFORE setState**, event is recycled), `src/BlockEditor.tsx` (blocks ↔ markdown, task line = `- [ ] Title <!--task:uuid-->`, trailing empty p always), `src/DetailPanel.tsx`, `src/TeamPage.tsx`, `src/Widget.tsx`.
+- Click-away listeners use **pointerdown** (mousedown is suppressed by preventDefault on drag surfaces). Drag regions: `.shell`/heads drag; sheets/menus/panels no-drag (buttons in drag regions don't click!).
+
+## Supabase
+- Project `mojqfsnnawdxndqaciuv` (org "utopia labs", owner account rasmushauschild@hotmail.com). Publishable key in src/cloud.ts.
+- `supabase/schema.sql` = full schema (idempotent; patches 001-005 appended, all APPLIED): profiles (trigger from auth.users + ensure_profile rpc + attach_member trigger links invites), teams, team_members (PK team+email; user_id null=pending invite), groups, projects (group_id), deadlines, tasks (person_id NULLABLE=unassigned, project_id, parent_id), retros (answers jsonb), notifications. RLS: is_member/is_moderator helpers; realtime publication on all. `create_team` rpc.
+- Auth: Google provider enabled, client ID in "Client IDs", **Skip nonce checks ON** (desktop tokens carry no nonce).
+- Google Cloud: project "Exponential" (utopialabs.com org), OAuth client 693162044501-7tq251q1pp26pk56coiu10lfjpo4t44f (Desktop app), consent External+Testing (**test users list required**; calendar.readonly = sensitive scope, verification needed before production).
+
+## Build / release
+- Dev: `npm run dev` (or vite via .claude/launch.json + `VITE_DEV_SERVER_URL=http://localhost:5173 npx electron .`). Browser preview = local data mode, no Google.
+- Release: bump version, commit, then `APPLE_KEYCHAIN_PROFILE=exponential GH_TOKEN=$(gh auth token) npm run release` (= electron-builder --mac --publish always, config `electron-builder.config.cjs`). **arm64 only** (dmg+zip; zip+latest-mac.yml required by updater). Signing: "Developer ID Application: Rasmus Hauschild (TSH9XSMSE4)" in keychain; notarization via keychain profile `exponential` (skipped if env absent → Gatekeeper blocks + translocation breaks updates — always notarize).
+- electron-builder creates DRAFT releases: publish by PATCHing the draft (`gh api -X PATCH .../releases/<id> -f draft=false`, then `-F make_latest=true`). **Never delete drafts before checking which release holds the assets** (deleted 0.2.5's assets that way once).
+- Icon: `build/` — Icon Composer bundle compiled with `xcrun actool` → icon.icns + Assets.car (CFBundleIconName "exponential"); tray = AppKit-drawn plan glyph template PNGs.
+- Current released: v0.2.6. package.json version must match.
+
+## Conventions & gotchas
+- All colours via CSS tokens incl. `--line` (hairline outlines) and `--ov-*` overlays; dark mode `[data-theme='dark']`; panels radius 32, hairline+small shadow (must fit in 18px shell padding or it clips).
+- Dates are `YYYY-MM-DD` strings, day math via dayIndex/fromDayIndex (UTC-based) in src/dates.ts; weeks start Monday.
+- uid() = crypto.randomUUID (DB needs uuids).
+- Commit style: descriptive one-liner + `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`; push after every accepted change; git identity set per-command with -c.
+- Hidden browser-preview pane throttles timers & freezes animations/focus events — use MutationObserver waits and fake performance.now in tests; don't trust screenshots mid-animation.
+- User prefers: compact minimal UI, no stray gaps, quiet grey buttons, everything pushed (not overlaid), releases with few assets.
+
+## Next candidates (discussed, not built)
+- Invite emails (Resend + Supabase Edge Function) + download page on app.utopialabs.com; Google consent verification for production; Windows signing; offline cache for cloud mode.
