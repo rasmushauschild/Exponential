@@ -60,6 +60,16 @@ export function patchTask(d: Data, id: string, patch: Partial<Task>): Data {
   return next;
 }
 
+/** The reviewer declines: the task goes back to In progress and the owner hears about it. */
+export function denyReview(d: Data, id: string): Data {
+  const t = d.tasks.find((x) => x.id === id);
+  if (!t || !t.reviewerId) return d;
+  const next: Data = { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, reviewerId: undefined, status: 'progress' as const } : x)) };
+  return t.personId
+    ? notify(next, { to: t.personId, from: d.me, kind: 'review-denied', text: `${nameOf(d, d.me)} declined to review “${t.title}”`, ref: { kind: 'task', id } })
+    : next;
+}
+
 /** Take a task from a project's (or parent task's) list into my own backlog. */
 export function claimTask(d: Data, id: string): Data {
   const t = d.tasks.find((x) => x.id === id);

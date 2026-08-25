@@ -7,7 +7,7 @@ import logoUrl from '../build/icon.png';
 import { useData, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
-import { addTask, claimTask, nameOf, notify, patchTask, renameTask, reorderTask, unclaimTask } from './taskOps';
+import { addTask, claimTask, denyReview, nameOf, notify, patchTask, renameTask, reorderTask, unclaimTask } from './taskOps';
 import { isPending, onPersistError, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
@@ -39,6 +39,7 @@ export default function App() {
   const [sheet, setSheet] = useState<'project' | 'deadline' | 'settings' | 'new-team' | 'group' | null>(null);
   const [editGroup, setEditGroup] = useState<Group | null>(null); // group being edited in the group sheet
   const [editingId, setEditingId] = useState<string | null>(null);
+  const editingNew = useRef(false); // fresh task (Enter chains another) vs a double-click rename (Enter just commits)
   const [multi, setMulti] = useState<Set<string>>(new Set()); // shift/cmd-click selection across both panels
   const toggleSelect = (id: string) => setMulti((m) => {
     const n = new Set(m);
@@ -409,7 +410,7 @@ export default function App() {
               onSelect={setSelectedPerson}
               week={week}
               today={today}
-              tasks={data.tasks.filter((t) => t.personId === person && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
+              tasks={data.tasks.filter((t) => (t.personId === person || (t.status === 'review' && t.reviewerId === person)) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
               selectedId={selection?.id}
               selectedIds={multi}
               onToggleSelect={toggleSelect}
@@ -419,16 +420,19 @@ export default function App() {
                 if (isPending(person)) return; // they need to sign in once before they can own tasks
                 let id = '';
                 update((d) => { const r = addTask(d, person, date); id = r.id; return r.data; });
+                editingNew.current = true;
                 setEditingId(id);
               }}
+              onEdit={(id) => { editingNew.current = false; setEditingId(id); }}
               onRename={(id, title, viaEnter) => {
                 setEditingId(null);
+                if (!title && !editingNew.current) return; // clearing the name of an existing task keeps the old one
                 let nextId = '';
                 update((d) => {
                   const t = d.tasks.find((x) => x.id === id);
                   const renamed = renameTask(d, id, title);
-                  // Enter keeps the flow going: a fresh task right after, ready to type.
-                  if (viaEnter && title && t) { const r = addTask(renamed, t.personId, t.date); nextId = r.id; return r.data; }
+                  // Enter keeps the flow going after a NEW task: a fresh one right after, ready to type.
+                  if (viaEnter && title && t && editingNew.current) { const r = addTask(renamed, t.personId, t.date); nextId = r.id; return r.data; }
                   return renamed;
                 });
                 if (nextId) setEditingId(nextId);
@@ -436,6 +440,7 @@ export default function App() {
               onAddNamed={(title) => { if (isPending(person)) return; update((d) => { const r = addTask(d, person, undefined); return renameTask(r.data, r.id, title); }); }}
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
+              onDeny={(id) => update((d) => denyReview(d, id))}
               onOpen={(t) => setSelection({ kind: 'task', id: t.id })}
               onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
               calendar={{

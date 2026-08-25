@@ -51,7 +51,7 @@ export interface Task {
   parentId?: string; // subtask of another task
 }
 
-export type NotificationKind = 'task-added' | 'review-requested' | 'owner-changed' | 'project-changed';
+export type NotificationKind = 'task-added' | 'review-requested' | 'review-denied' | 'owner-changed' | 'project-changed';
 
 export interface Notification {
   id: string;

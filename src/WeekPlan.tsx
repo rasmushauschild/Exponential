@@ -23,8 +23,10 @@ interface Props {
   onAdd: (date?: ISODate) => void;
   onAddNamed: (title: string) => void; // from the placeholder row shown when the week is empty
   onRename: (id: string, title: string, viaEnter?: boolean) => void;
+  onEdit?: (id: string) => void; // double-click on a title: rename it in place
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
+  onDeny?: (id: string) => void; // decline a review request shown in my week
   onOpen: (t: Task) => void;
   onReorder: (id: string, delta: number) => void;
   onWeekChange: (monday: ISODate) => void;
@@ -35,7 +37,7 @@ interface Props {
 
 /** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onUpdate, onDelete, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeny, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const readonly = selected !== me;
   const todayIdx = dayIndex(today) - dayIndex(week);
@@ -96,9 +98,15 @@ export function WeekPlan(props: Props) {
   const dateKey = (t: Task) => t.date ?? '9999-99-99';
   const sorted = [...tasks].sort((a, b) => (dateKey(a) < dateKey(b) ? -1 : dateKey(a) > dateKey(b) ? 1 : 0) || (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
 
+  // Completed tasks can be tucked away; the choice sticks per machine.
+  const [showDone, setShowDone] = useState(() => localStorage.getItem('exponential-show-done') !== '0');
+  const toggleDone = () => setShowDone((v) => { localStorage.setItem('exponential-show-done', v ? '0' : '1'); return !v; });
+  const doneCount = sorted.filter((t) => t.status === 'done').length;
+  const visible = showDone ? sorted : sorted.filter((t) => t.status !== 'done');
+
   // While a row is lifted, same-day neighbours slide out of its way so the drop position is obvious.
-  const lifted = lift ? sorted.find((t) => t.id === lift.id) : undefined;
-  const group = lifted ? sorted.filter((t) => t.date === lifted.date) : [];
+  const lifted = lift ? visible.find((t) => t.id === lift.id) : undefined;
+  const group = lifted ? visible.filter((t) => t.date === lifted.date) : [];
   const liftIdx = lifted ? group.findIndex((t) => t.id === lifted.id) : -1;
   const liftSteps = lift ? Math.min(group.length - 1 - liftIdx, Math.max(-liftIdx, Math.round(lift.dy / lift.rowH))) : 0;
   const liftStepsRef = useRef(0); // read at drop time: the row's pointer handlers were bound before the drag began
@@ -138,7 +146,20 @@ export function WeekPlan(props: Props) {
       <div className="wk-body" ref={bodyRef}>
         <div className="wk-swipe" style={{ transform: `translateX(${swipe.x}px)`, transition: swipe.animate ? 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none' }}>
           <div className="wk-row wk-header">
-            <div className="wk-list" />
+            <div className="wk-list">
+              {(doneCount > 0 || !showDone) && (
+                <button className={`done-toggle${showDone ? ' on' : ''}`} onClick={toggleDone} title={showDone ? 'Hide completed tasks' : `Show ${doneCount || ''} completed task${doneCount === 1 ? '' : 's'}`.replace('  ', ' ')}>
+                  <span className="done-check">
+                    {showDone && (
+                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M1.5 5.5l2.5 2.5 4.5-5" />
+                      </svg>
+                    )}
+                  </span>
+                  Show completed tasks
+                </button>
+              )}
+            </div>
             <div className="wk-days">
               {days.map((d, i) => (
                 <div key={d} className={`wk-day${i === todayIdx ? ' today' : ''}${i >= 5 ? ' weekend' : ''}`}>
@@ -149,29 +170,32 @@ export function WeekPlan(props: Props) {
           </div>
 
           <div className="wk-rows">
-            {sorted.map((t) => (
+            {visible.map((t) => (
               <TaskRow
                 key={t.id}
                 task={t}
                 week={week}
                 readonly={readonly && editingId !== t.id}
+                reviewRow={t.personId !== selected}
                 people={people}
                 me={me}
                 selected={selectedId === t.id || !!selectedIds?.has(t.id)}
                 editing={editingId === t.id}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
+                onDeny={onDeny}
                 onOpen={onOpen}
                 onToggleSelect={onToggleSelect}
                 onRename={onRename}
+                onEdit={onEdit}
                 offset={rowOffset(t)}
                 lifting={lift?.id === t.id}
                 onLift={(dy, rowH) => setLift({ id: t.id, dy, rowH })}
                 onDrop={() => { if (liftStepsRef.current !== 0) onReorder(t.id, liftStepsRef.current); setLift(null); }}
               />
             ))}
-            {readonly && sorted.length === 0 && <div className="hint wk-empty">Nothing planned this week.</div>}
-            {!readonly && sorted.length === 0 && <PlaceholderRow onAdd={onAddNamed} />}
+            {readonly && visible.length === 0 && <div className="hint wk-empty">Nothing planned this week.</div>}
+            {!readonly && visible.length === 0 && <PlaceholderRow onAdd={onAddNamed} />}
 
             {(
               <div className="wk-row wk-free">
@@ -226,19 +250,22 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate, onDelete, onOpen, onToggleSelect, onRename, offset, lifting, onLift, onDrop }: {
+function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, onDeny, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
+  reviewRow: boolean; // someone else's task, here because they asked this week's person for a review
   people: Person[];
   me: string;
   selected: boolean;
   editing: boolean;
   onUpdate: Props['onUpdate'];
   onDelete: Props['onDelete'];
+  onDeny?: Props['onDeny'];
   onOpen: Props['onOpen'];
   onToggleSelect: Props['onToggleSelect'];
   onRename: Props['onRename'];
+  onEdit?: Props['onEdit'];
   offset: number;
   lifting: boolean;
   onLift: (dy: number, rowH: number) => void;
@@ -266,7 +293,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   }, [menu]);
 
   const onBlockDown = (e: React.PointerEvent) => {
-    if (readonly || e.button !== 0) return;
+    if (readonly || reviewRow || e.button !== 0) return;
     e.preventDefault();
     const rect = daysRef.current!.getBoundingClientRect();
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
@@ -315,7 +342,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
     const move = (ev: PointerEvent) => {
       const dy = ev.clientY - startY;
       if (Math.abs(dy) > 4) moved = true;
-      if (moved && !readonly) onLift(dy, rowH);
+      if (moved && !readonly && !reviewRow) onLift(dy, rowH);
     };
     const up = () => {
       window.removeEventListener('pointermove', move);
@@ -328,7 +355,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   };
 
   const onBlockHover = (e: React.PointerEvent) => {
-    if (readonly) return;
+    if (readonly || reviewRow) return;
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const local = e.clientX - bar.left;
     setHoverCursor(local < EDGE || bar.width - local < EDGE ? 'ew-resize' : 'grab');
@@ -337,12 +364,13 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
   const s = live ? live.s : s0;
   const en = live ? live.e : e0;
   const vs = Math.max(0, s), ve = Math.min(6, en);
-  const creator = task.createdBy && task.createdBy !== task.personId ? people.find((p) => p.id === task.createdBy) : undefined;
-  const reviewer = task.status === 'review' && task.reviewerId ? people.find((p) => p.id === task.reviewerId) : undefined;
+  const creator = !reviewRow && task.createdBy && task.createdBy !== task.personId ? people.find((p) => p.id === task.createdBy) : undefined;
+  const reviewer = !reviewRow && task.status === 'review' && task.reviewerId ? people.find((p) => p.id === task.reviewerId) : undefined;
+  const reviewOwner = reviewRow ? people.find((p) => p.id === task.personId) : undefined;
   return (
     <div
       ref={rowRef}
-      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
+      className={`wk-row task ${task.status}${selected ? ' selected' : ''}${creator || reviewRow ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
       style={offset ? { transform: `translateY(${offset}px)` } : undefined}
     >
       <div className="wk-list" onPointerDown={onRowDown} style={{ cursor: readonly ? 'default' : 'grab' }}>
@@ -357,7 +385,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
         </button>
         {editing
           ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t, viaEnter) => onRename(task.id, t, viaEnter)} />
-          : <button className="task-title">{task.title}</button>}
+          : <button className="task-title" onDoubleClick={() => { if (!readonly && !reviewRow) onEdit?.(task.id); }}>{task.title}</button>}
         {creator && (
           <span className="from-chip" title={`Added by ${creator.name}`}>
             <Avatar person={creator} size={14} /> {creator.id === me ? 'you' : shortName(creator.name).split(' ')[0]}
@@ -368,23 +396,29 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
             <Avatar person={reviewer} size={14} />
           </span>
         )}
+        {reviewOwner && (
+          <span className="from-chip review named" title={`${reviewOwner.name} asked for a review`}>
+            <Avatar person={reviewOwner} size={14} /> {shortName(reviewOwner.name).split(' ')[0]}
+          </span>
+        )}
         {menu && (
           <StatusMenu
             value={task.status}
             reviewerId={task.reviewerId}
             people={people.filter((x) => x.id !== task.personId)}
             onPick={(status, reviewerId) => { onUpdate(task.id, reviewerId !== undefined ? { status, reviewerId } : { status }); setMenu(null); }}
-            onDelete={() => { setMenu(null); onDelete(task.id); }}
+            onDelete={reviewRow ? undefined : () => { setMenu(null); onDelete(task.id); }}
+            onDeny={reviewRow && onDeny ? () => { setMenu(null); onDeny(task.id); } : undefined}
             anchor={menu}
           />
         )}
       </div>
       <div
-        className={`wk-days${backlog && !readonly ? ' ghost-zone' : ''}`}
+        className={`wk-days${backlog && !readonly && !reviewRow ? ' ghost-zone' : ''}`}
         ref={daysRef}
-        onPointerMove={backlog && !readonly ? (e) => { const r = e.currentTarget.getBoundingClientRect(); setScheduleGhost(Math.min(6, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 7)))); } : undefined}
+        onPointerMove={backlog && !readonly && !reviewRow ? (e) => { const r = e.currentTarget.getBoundingClientRect(); setScheduleGhost(Math.min(6, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 7)))); } : undefined}
         onPointerLeave={backlog ? () => setScheduleGhost(null) : undefined}
-        onClick={backlog && !readonly ? (e) => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.min(6, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 7))); onUpdate(task.id, { date: addDays(week, i) }); setScheduleGhost(null); } : undefined}
+        onClick={backlog && !readonly && !reviewRow ? (e) => { const r = e.currentTarget.getBoundingClientRect(); const i = Math.min(6, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * 7))); onUpdate(task.id, { date: addDays(week, i) }); setScheduleGhost(null); } : undefined}
       >
         {backlog && scheduleGhost !== null && (
           <div className="wk-block ghost" style={{ left: `${(scheduleGhost / 7) * 100}%`, width: `calc(100% / 7 - 6px)` }} />
@@ -396,7 +430,7 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
               left: `${(vs / 7) * 100}%`,
               width: `calc(${((ve - vs + 1) / 7) * 100}% - 6px)`,
               ['--sc' as string]: STATUS_COLOR[task.status],
-              cursor: readonly ? 'default' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor,
+              cursor: readonly || reviewRow ? 'default' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor,
             }}
             onPointerDown={onBlockDown}
             onPointerMove={onBlockHover}
@@ -412,16 +446,17 @@ function TaskRow({ task, week, readonly, people, me, selected, editing, onUpdate
  * Status picker. Hovering "Needs review" slides out a list of people so a review can be requested
  * in the same gesture; clicking "Needs review" itself just sets the status.
  */
-export function StatusMenu({ value, reviewerId, people, onPick, onDelete, anchor }: {
+export function StatusMenu({ value, reviewerId, people, onPick, onDelete, onDeny, anchor }: {
   value: Status;
   reviewerId?: string;
   people: Person[];
   onPick: (status: Status, reviewerId?: string) => void;
   onDelete?: () => void;
+  onDeny?: () => void; // review request aimed at me: decline instead of delete
   anchor: DOMRect; // the button that opened it; the menu renders in a portal so panels can't clip it
 }) {
   const [sub, setSub] = useState(false);
-  const menuH = 44 * 5 + (onDelete ? 50 : 0) + 12;
+  const menuH = 44 * 5 + (onDelete || onDeny ? 50 : 0) + 12;
   const up = anchor.bottom + menuH > window.innerHeight - 8;
   const style: React.CSSProperties = { position: 'fixed', left: Math.min(anchor.left, window.innerWidth - 420), ...(up ? { bottom: window.innerHeight - anchor.top + 6 } : { top: anchor.bottom + 6 }) };
   return createPortal(
@@ -445,10 +480,10 @@ export function StatusMenu({ value, reviewerId, people, onPick, onDelete, anchor
           )}
         </div>
       ))}
-      {onDelete && (
+      {(onDelete || onDeny) && (
         <>
           <div className="sep" />
-          <button className="danger" onClick={onDelete}><span style={{ width: 14 }} /> Delete</button>
+          <button className="danger" onClick={onDelete ?? onDeny}><span style={{ width: 14 }} /> {onDelete ? 'Delete' : 'Deny'}</button>
         </>
       )}
     </div>,
