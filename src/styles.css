@@ -279,9 +279,9 @@ img { display: block; -webkit-user-drag: none; }
 .wk-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .wk-rows::-webkit-scrollbar { width: 0; }
 .wk-list { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px; position: relative; height: 100%; }
-.wk-days { position: relative; height: 100%; display: grid; grid-template-columns: repeat(7, 1fr); min-height: 36px; }
+.wk-days { position: relative; height: 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-height: 36px; }
 
-.wk-day { font-size: 12px; color: var(--text-2); font-weight: 600; padding: 0 10px; display: flex; align-items: center; gap: 5px; }
+.wk-day { font-size: 12px; color: var(--text-2); font-weight: 600; padding: 0 10px; display: flex; align-items: center; gap: 5px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .wk-day .num { font-size: 14px; color: var(--text); font-weight: 700; }
 .wk-day.weekend { opacity: 0.6; }
 .wk-day.today .num { color: var(--today); }
@@ -571,6 +571,11 @@ img { display: block; -webkit-user-drag: none; }
 .widget .arrow { font-size: 12px; margin-left: 2px; }
 .widget .pill.toggle, .widget .head-gap, .widget .pill.person { display: none; }
 .widget .panel-head .pill { padding: 5px 10px 5px 5px; font-size: 13px; }
+/* The widget window is a fixed 640px: the week squishes to fit, never scrolls or clips. */
+.widget-panel .wk-swipe { min-width: 0; }
+.widget-panel .wk-body { overflow-x: hidden; }
+.widget-panel .wk-row { grid-template-columns: 170px minmax(0, 1fr); }
+.widget-panel .wk-day { padding: 0 6px; }
 .widget .panel-head .pill:not(.person) { padding-left: 10px; }
 .widget .panel-head { gap: 6px; }
 
