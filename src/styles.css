@@ -325,18 +325,9 @@ img { display: block; -webkit-user-drag: none; }
 .from-chip.review { padding: 2px; background: rgba(255, 159, 10, 0.18); }
 .from-chip.review.named { padding: 2px 7px 2px 3px; }
 
-/* Quiet toggle in the header's empty left cell: tucks completed tasks away. */
-.done-toggle {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--text-3);
-  padding: 3px 8px 3px 6px; margin-left: -6px; border-radius: 8px; transition: color 0.15s;
-}
-.done-toggle:hover { color: var(--text-2); background: var(--ov-35); }
-.done-check {
-  width: 13px; height: 13px; flex: none; border-radius: 4.5px; border: 1.5px solid currentColor;
-  display: grid; place-items: center; color: inherit;
-}
-.done-toggle.on .done-check { background: var(--text-3); border-color: var(--text-3); color: #fff; }
-.done-toggle.on:hover .done-check { background: var(--text-2); border-color: var(--text-2); }
+/* Quiet toggle in the header's empty left cell: tucks completed tasks away. Faded like a done task's title. */
+.done-toggle { font-size: 12px; font-weight: 500; color: var(--text-3); padding: 3px 0; transition: color 0.15s; }
+.done-toggle:hover { color: var(--text-2); }
 .wk-row.from-other .wk-block { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 70%, var(--surface)); }
 .wk-row.from-other .wk-block::before { opacity: 0.04; background-image: repeating-linear-gradient(135deg, var(--sc) 0 3px, transparent 3px 8px); }
 .wk-row.from-other .wk-block { border: 1.5px dashed color-mix(in srgb, var(--sc) 70%, var(--surface)); box-shadow: none; }

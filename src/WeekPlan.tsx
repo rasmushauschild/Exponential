@@ -148,15 +148,8 @@ export function WeekPlan(props: Props) {
           <div className="wk-row wk-header">
             <div className="wk-list">
               {(doneCount > 0 || !showDone) && (
-                <button className={`done-toggle${showDone ? ' on' : ''}`} onClick={toggleDone} title={showDone ? 'Hide completed tasks' : `Show ${doneCount || ''} completed task${doneCount === 1 ? '' : 's'}`.replace('  ', ' ')}>
-                  <span className="done-check">
-                    {showDone && (
-                      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1.5 5.5l2.5 2.5 4.5-5" />
-                      </svg>
-                    )}
-                  </span>
-                  Show completed tasks
+                <button className="done-toggle" onClick={toggleDone}>
+                  {showDone ? 'Hide completed' : 'Show completed'}
                 </button>
               )}
             </div>
@@ -430,10 +423,11 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
               left: `${(vs / 7) * 100}%`,
               width: `calc(${((ve - vs + 1) / 7) * 100}% - 6px)`,
               ['--sc' as string]: STATUS_COLOR[task.status],
-              cursor: readonly || reviewRow ? 'default' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor,
+              cursor: readonly || reviewRow ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor,
             }}
             onPointerDown={onBlockDown}
             onPointerMove={onBlockHover}
+            onClick={readonly || reviewRow ? () => onOpen(task) : undefined}
             title={task.title}
           />
         )}
