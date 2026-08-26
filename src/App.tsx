@@ -109,6 +109,14 @@ export default function App() {
   };
   const mainRef = useRef<HTMLDivElement>(null);
 
+  // Launch splash: the mark slides in from the bottom, and once the teams are loaded it slides
+  // up and fades before the main screen appears.
+  const [splash, setSplash] = useState<'in' | 'out' | 'gone'>(() => (window.exponential ? 'in' : 'gone'));
+  useEffect(() => {
+    if (splash === 'in' && cloudMode) setSplash('out');
+    if (splash === 'out') { const t = window.setTimeout(() => setSplash('gone'), 480); return () => window.clearTimeout(t); }
+  }, [splash, cloudMode]);
+
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
   const [authChecked, setAuthChecked] = useState(!window.exponential); // browser preview has no Google
   const [googleConfig, setGoogleConfig] = useState<GoogleConfig | null>(null);
@@ -280,10 +288,10 @@ export default function App() {
     );
   }
 
-  if (window.exponential && !cloudMode) {
+  if (window.exponential && (!cloudMode || splash !== 'gone')) {
     return (
-      <div className="gate">
-        <div className="gate-card">
+      <div className={`splash${splash === 'out' ? ' out' : ''}`}>
+        <div className="splash-mark">
           {/* The utopialabs.com mark through Paper's LiquidMetal shader, at double speed. */}
           <LiquidMetal
             image={utopiaUrl}
