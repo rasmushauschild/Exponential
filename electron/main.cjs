@@ -67,6 +67,8 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
+        { role: 'reload' },
+        { type: 'separator' },
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+=', click: () => setZoom(zoomFactor + 0.1) },
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', visible: false, acceleratorWorksWhenHidden: true, click: () => setZoom(zoomFactor + 0.1) },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => setZoom(zoomFactor - 0.1) },
