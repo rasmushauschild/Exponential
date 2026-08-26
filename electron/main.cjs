@@ -195,7 +195,7 @@ function claudeDesktopDir() {
 
 function mcpServerPath() {
   return app.isPackaged
-    ? path.join(process.resourcesPath, 'mcp', 'server.mjs')
+    ? path.join(process.resourcesPath, 'mcp', 'server.bundle.mjs')
     : path.join(__dirname, '..', 'mcp', 'server.mjs');
 }
 
