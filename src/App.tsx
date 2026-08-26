@@ -4,6 +4,8 @@ import { Avatar, WeekPlan } from './WeekPlan';
 import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
 import logoUrl from '../build/icon.png';
+import utopiaUrl from '../build/utopia.svg';
+import { LiquidMetal } from '@paper-design/shaders-react';
 import { useData, useSystemNotifications, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
@@ -282,8 +284,24 @@ export default function App() {
     return (
       <div className="gate">
         <div className="gate-card">
-          <img className="gate-logo" src={logoUrl} alt="" />
-          {cloudError ? <p className="error">{cloudError}</p> : <p className="hint">Loading your teams…</p>}
+          {/* The utopialabs.com mark through Paper's LiquidMetal shader, at double speed. */}
+          <LiquidMetal
+            image={utopiaUrl}
+            colorBack="#00000000"
+            colorTint="#ffffff"
+            repetition={1}
+            softness={0.13}
+            shiftRed={0.3}
+            shiftBlue={0.3}
+            distortion={0}
+            contour={0.49}
+            angle={70}
+            speed={1.28}
+            scale={0.66}
+            fit="contain"
+            style={{ width: 150, height: 100 }}
+          />
+          {cloudError && <p className="error">{cloudError}</p>}
         </div>
       </div>
     );
