@@ -60,7 +60,7 @@ function ClaudeConnect() {
         {busy ? 'Connecting…' : connected ? 'Connected to Claude' : 'Connect to Claude'}
       </button>
       {entry && (
-        <button className="pill" style={{ marginLeft: 8 }} onClick={() => setShowOther((v) => !v)}>
+        <button className="pill ghost" style={{ marginLeft: 8 }} onClick={() => setShowOther((v) => !v)}>
           Connect another agent
         </button>
       )}
