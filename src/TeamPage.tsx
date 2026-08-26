@@ -43,6 +43,10 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
     ...team.tasks.filter((t) => t.deletedAt).map((t) => ({ id: t.id, kind: 'Task', name: t.title || '(untitled)', at: t.deletedAt! })),
   ].sort((a, b) => b.at.localeCompare(a.at));
   const daysLeft = (at: string) => Math.max(1, Math.ceil(7 - (Date.now() - new Date(at).getTime()) / 86_400_000));
+  const when = (at: string) => {
+    const d = new Date(at);
+    return `${d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}, ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
+  };
   const recover = (id: string) => onUpdate((d) => ({
     ...d,
     projects: d.projects.map((p) => (p.id === id ? { ...p, deletedAt: undefined } : p)),
@@ -125,7 +129,7 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
           <div className="team-card-sub">
             <div className="settings-title">Claude</div>
             <p className="hint" style={{ margin: '0 0 10px' }}>
-              Let Claude read your plan, manage tasks and plan your week. The master plan stays read-only for Claude unless you unlock it.
+              Let Claude read your plan and manage tasks. Editing the master plan needs Unlock.
             </p>
             <ClaudeConnect />
           </div>
@@ -201,14 +205,16 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
       <div className="panel team-card">
         <div className="settings-title">Recently deleted</div>
         {trash.length === 0 && <p className="hint" style={{ margin: 0 }}>Deleted projects and tasks stay here for 7 days.</p>}
-        {trash.map((x) => (
-          <div key={x.id} className="trash-row">
-            <span className="trash-kind">{x.kind}</span>
-            <span className="trash-name">{x.name}</span>
-            <span className="trash-when">gone in {daysLeft(x.at)} day{daysLeft(x.at) === 1 ? '' : 's'}</span>
-            <button className="pill small" onClick={() => recover(x.id)}>Recover</button>
-          </div>
-        ))}
+        <div className="trash-list">
+          {trash.map((x) => (
+            <div key={x.id} className="trash-row">
+              <span className="trash-kind">{x.kind}</span>
+              <span className="trash-name">{x.name}</span>
+              <span className="trash-when">{when(x.at)} · gone in {daysLeft(x.at)} day{daysLeft(x.at) === 1 ? '' : 's'}</span>
+              <button className="pill small" onClick={() => recover(x.id)}>Recover</button>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Delete team: plainly on the background, outside every box ── */}
