@@ -34,12 +34,12 @@ export default function Widget() {
   }, []);
 
   // My calendar for the shown week, when the main window has calendar on and access is granted.
-  // Refetched every time the popover opens and every 30s, so new events show up right away.
+  // Refetched every time the popover opens and once a minute.
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
   const [calTick, setCalTick] = useState(0);
   useEffect(() => {
     if (!calOn) return;
-    const iv = window.setInterval(() => setCalTick((t) => t + 1), 30_000);
+    const iv = window.setInterval(() => setCalTick((t) => t + 1), 60_000);
     return () => window.clearInterval(iv);
   }, [calOn]);
   useEffect(() => {

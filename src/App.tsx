@@ -204,15 +204,12 @@ export default function App() {
 
   const person = selectedPerson ?? data?.me ?? '';
 
-  // The visible calendar refreshes quietly every 30s and whenever the window regains focus,
-  // so events added in Google show up within moments; the cache only bridges the gaps.
+  // The visible calendar refreshes quietly once a minute; the cache bridges the gaps.
   const [calTick, setCalTick] = useState(0);
   useEffect(() => {
     if (!calendarOn || !googleUser) return;
-    const bump = () => setCalTick((t) => t + 1);
-    const iv = window.setInterval(bump, 30_000);
-    window.addEventListener('focus', bump);
-    return () => { window.clearInterval(iv); window.removeEventListener('focus', bump); };
+    const iv = window.setInterval(() => setCalTick((t) => t + 1), 60_000);
+    return () => window.clearInterval(iv);
   }, [calendarOn, googleUser]);
 
   // Fetch the selected person's calendar for the visible week (silently when already cached).
