@@ -132,11 +132,14 @@ export function WeekPlan(props: Props) {
     return 0;
   };
   const events = calendar.enabled ? calendar.events.filter((e) => days.includes(e.date)) : [];
-  // authuser pins the link to the account the app is signed in with, not the browser's default one.
+  // Calendar ignores ?authuser= on event links when that account isn't the browser default;
+  // the /u/<email>/ path is the switch it reliably honours, so open that account's day view.
   const openEvent = (e: CalendarEvent) => {
-    const url = e.link ?? `https://calendar.google.com/calendar/r/day/${e.date.replaceAll('-', '/')}`;
+    const day = e.date.replaceAll('-', '/');
     const myEmail = people.find((p) => p.id === me)?.email;
-    window.open(myEmail ? `${url}${url.includes('?') ? '&' : '?'}authuser=${encodeURIComponent(myEmail)}` : url);
+    window.open(myEmail
+      ? `https://calendar.google.com/calendar/u/${encodeURIComponent(myEmail)}/r/day/${day}`
+      : e.link ?? `https://calendar.google.com/calendar/r/day/${day}`);
   };
   // Each day's first still-upcoming event is pinned as an overlay on the bottom row while its real
   // row is scrolled below the fold; each pill yields to its own row as it comes into view.
