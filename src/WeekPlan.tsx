@@ -372,6 +372,9 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
     const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const local = e.clientX - bar.left;
     const mode: BlockDrag['mode'] = local < EDGE ? 'start' : bar.width - local < EDGE ? 'end' : 'move';
+    // Pin the cursor for the whole drag: the pointer leaves the bar between day snaps, which
+    // otherwise flickers the cursor between resize/grab and the row's default.
+    document.body.classList.add(mode === 'move' ? 'cursor-grabbing' : 'cursor-ew');
     const colW = rect.width / 7;
     const startX = e.clientX, startY = e.clientY;
     const rowH = rowRef.current?.offsetHeight ?? 36;
@@ -393,6 +396,7 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
     const up = () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
+      document.body.classList.remove('cursor-grabbing', 'cursor-ew');
       setLive(null);
       if (axis === 'y') { onDrop(); return; }
       if (!moved) { if (multi) onToggleSelect(task.id); else onOpen(task); }

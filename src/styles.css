@@ -662,3 +662,7 @@ img { display: block; -webkit-user-drag: none; }
   user-select: text; -webkit-user-select: text;
 }
 .copy-code::-webkit-scrollbar { height: 0; }
+
+/* Steady cursor while dragging bars/blocks (the pointer strays off them between day snaps). */
+body.cursor-ew, body.cursor-ew * { cursor: ew-resize !important; }
+body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }

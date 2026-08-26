@@ -250,6 +250,7 @@ export function BigPlan(props: Props) {
     const s0 = dayIndex(p.start), e0 = dayIndex(p.end), lane0 = p.lane;
     const startX = e.clientX, startY = e.clientY;
     const multi = e.metaKey || e.shiftKey || e.ctrlKey;
+    document.body.classList.add(mode === 'move' ? 'cursor-grabbing' : 'cursor-ew'); // steady cursor between day snaps
     const d: Drag = { id: p.id, mode, start: s0, end: e0, lane: lane0, groupId: p.groupId, moved: false, dd: 0, ids: asGroup ? groupSel : undefined };
     setDrag(d);
     let latest = d;
@@ -270,6 +271,7 @@ export function BigPlan(props: Props) {
         setDrag(latest);
       },
       () => {
+        document.body.classList.remove('cursor-grabbing', 'cursor-ew');
         setDrag(null);
         if (!latest.moved) { if (multi) onToggleSelect(p.id); else onOpenProject(p); }
         else if (asGroup) { if (latest.dd) onMoveMany(groupSel, latest.dd); }
@@ -287,6 +289,7 @@ export function BigPlan(props: Props) {
     const d0 = dayIndex(d.date);
     const multi = e.metaKey || e.shiftKey || e.ctrlKey;
     let latest = d0, moved = false;
+    document.body.classList.add('cursor-grabbing');
     setDlDrag({ id: d.id, date: d0 });
     track(
       (ev) => {
@@ -295,6 +298,7 @@ export function BigPlan(props: Props) {
         setDlDrag({ id: d.id, date: latest });
       },
       () => {
+        document.body.classList.remove('cursor-grabbing');
         setDlDrag(null);
         if (!moved) { if (multi) onToggleSelect(d.id); else onOpenDeadline(d); }
         else if (latest !== d0) onMoveDeadline(d.id, fromDayIndex(latest));
