@@ -28,7 +28,7 @@ declare global {
       notify?: (p: { id: string; title: string; body: string; ref?: { kind: string; id: string } }) => void;
       setSharedState?: (p: { teamId: string | null; teamName: string | null; planUnlocked: boolean }) => void;
       connectClaude?: () => Promise<{ ok: boolean; messages: string[] }>;
-      claudeStatus?: () => Promise<{ connected: boolean; targets: string[] }>;
+      claudeStatus?: () => Promise<{ connected: boolean; targets: string[]; entry: { command: string; serverPath: string } }>;
       platform: string;
       google: {
         getConfig: () => Promise<GoogleConfig | null>;

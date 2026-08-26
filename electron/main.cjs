@@ -193,6 +193,12 @@ function claudeDesktopDir() {
     : path.join(app.getPath('home'), '.config', 'Claude');
 }
 
+function mcpServerPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'mcp', 'server.mjs')
+    : path.join(__dirname, '..', 'mcp', 'server.mjs');
+}
+
 // Is our MCP server currently registered (and its files still on disk)?
 ipcMain.handle('mcp:status', () => {
   const targets = [];
@@ -205,7 +211,7 @@ ipcMain.handle('mcp:status', () => {
     const cfg = JSON.parse(fs.readFileSync(path.join(app.getPath('home'), '.claude.json'), 'utf8'));
     if (entryOk(cfg.mcpServers?.exponential)) targets.push('Claude Code');
   } catch { /* not installed / not connected */ }
-  return { connected: targets.length > 0, targets };
+  return { connected: targets.length > 0, targets, entry: { command: process.execPath, serverPath: mcpServerPath() } };
 });
 
 /* ── "Connect to Claude": register the bundled MCP server with Claude Desktop and Claude Code.
@@ -213,9 +219,7 @@ ipcMain.handle('mcp:status', () => {
    needs to be installed. ── */
 ipcMain.handle('mcp:connect', () => {
   const { execSync } = require('node:child_process');
-  const serverPath = app.isPackaged
-    ? path.join(process.resourcesPath, 'mcp', 'server.mjs')
-    : path.join(__dirname, '..', 'mcp', 'server.mjs');
+  const serverPath = mcpServerPath();
   if (!fs.existsSync(serverPath)) return { ok: false, messages: ['This build is missing the Claude connector files.'] };
   const entry = { command: process.execPath, args: [serverPath], env: { ELECTRON_RUN_AS_NODE: '1' } };
   const messages = [];

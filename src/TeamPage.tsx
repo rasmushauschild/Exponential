@@ -16,11 +16,26 @@ interface Props {
 
 /** One click registers the bundled MCP server with Claude Desktop / Claude Code on this machine.
  *  The button reads the actual registration state, so it stays blue across restarts. */
+function CopyRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="copy-row">
+      <span className="trash-kind" style={{ width: 68 }}>{label}</span>
+      <code className="copy-code">{value}</code>
+      <button className="pill small" onClick={() => { navigator.clipboard.writeText(value); setCopied(true); window.setTimeout(() => setCopied(false), 1500); }}>
+        {copied ? 'Copied' : 'Copy'}
+      </button>
+    </div>
+  );
+}
+
 function ClaudeConnect() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; messages: string[] } | null>(null);
   const [targets, setTargets] = useState<string[]>([]);
-  const refresh = () => window.exponential?.claudeStatus?.().then((s) => setTargets(s.targets)).catch(() => {});
+  const [entry, setEntry] = useState<{ command: string; serverPath: string } | null>(null);
+  const [showOther, setShowOther] = useState(false);
+  const refresh = () => window.exponential?.claudeStatus?.().then((s) => { setTargets(s.targets); setEntry(s.entry); }).catch(() => {});
   useEffect(() => { refresh(); }, []);
   const connect = async () => {
     setBusy(true);
@@ -44,7 +59,21 @@ function ClaudeConnect() {
         )}
         {busy ? 'Connecting…' : connected ? 'Connected to Claude' : 'Connect to Claude'}
       </button>
+      {entry && (
+        <button className="pill" style={{ marginLeft: 8 }} onClick={() => setShowOther((v) => !v)}>
+          Connect another agent
+        </button>
+      )}
       {result?.messages.map((m, i) => <p key={i} className="hint" style={{ padding: '8px 0 0' }}>{m}</p>)}
+      {showOther && entry && (
+        <div className="agent-connect">
+          <p className="hint" style={{ margin: '10px 0 8px' }}>
+            Any MCP-capable agent can use Exponential. Register a stdio server with this command — as one line, or as the usual JSON entry:
+          </p>
+          <CopyRow label="Command" value={`ELECTRON_RUN_AS_NODE=1 "${entry.command}" "${entry.serverPath}"`} />
+          <CopyRow label="JSON" value={JSON.stringify({ command: entry.command, args: [entry.serverPath], env: { ELECTRON_RUN_AS_NODE: '1' } })} />
+        </div>
+      )}
     </div>
   );
 }
