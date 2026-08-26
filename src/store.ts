@@ -26,6 +26,7 @@ declare global {
       pingCloud?: () => void;
       onCloudPing?: (cb: () => void) => () => void;
       notify?: (p: { id: string; title: string; body: string; ref?: { kind: string; id: string } }) => void;
+      setSharedState?: (p: { teamId: string | null; teamName: string | null; planUnlocked: boolean }) => void;
       platform: string;
       google: {
         getConfig: () => Promise<GoogleConfig | null>;

@@ -18,6 +18,18 @@ interface Props {
 export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const isMod = team.moderators.includes(team.me);
+
+  // Soft-deleted projects and tasks, newest first; anyone may bring one back.
+  const trash = [
+    ...team.projects.filter((p) => p.deletedAt).map((p) => ({ id: p.id, kind: 'Project', name: p.name, at: p.deletedAt! })),
+    ...team.tasks.filter((t) => t.deletedAt).map((t) => ({ id: t.id, kind: 'Task', name: t.title || '(untitled)', at: t.deletedAt! })),
+  ].sort((a, b) => b.at.localeCompare(a.at));
+  const daysLeft = (at: string) => Math.max(1, Math.ceil(7 - (Date.now() - new Date(at).getTime()) / 86_400_000));
+  const recover = (id: string) => onUpdate((d) => ({
+    ...d,
+    projects: d.projects.map((p) => (p.id === id ? { ...p, deletedAt: undefined } : p)),
+    tasks: d.tasks.map((t) => (t.id === id ? { ...t, deletedAt: undefined } : t)),
+  }));
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -149,6 +161,19 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
           );
         })}
         {!isMod && <p className="hint" style={{ padding: '14px 12px' }}>Ask a moderator to add or remove people.</p>}
+
+        <div className="settings-block">
+          <div className="settings-title">Recently deleted</div>
+          {trash.length === 0 && <p className="hint" style={{ padding: '4px 0 0' }}>Deleted projects and tasks stay here for 7 days.</p>}
+          {trash.map((x) => (
+            <div key={x.id} className="trash-row">
+              <span className="trash-kind">{x.kind}</span>
+              <span className="trash-name">{x.name}</span>
+              <span className="trash-when">gone in {daysLeft(x.at)} day{daysLeft(x.at) === 1 ? '' : 's'}</span>
+              <button className="pill small" onClick={() => recover(x.id)}>Recover</button>
+            </div>
+          ))}
+        </div>
 
         {isMod && canDelete && (
           <div className="settings-block danger-zone">

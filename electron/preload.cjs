@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('exponential', {
   onOpen: (cb) => { const h = (_e, t) => cb(t); ipcRenderer.on('open', h); return () => ipcRenderer.removeListener('open', h); },
   pingCloud: () => ipcRenderer.send('cloud:ping'),
   notify: (p) => ipcRenderer.send('notify', p),
+  setSharedState: (p) => ipcRenderer.send('state:set', p),
   onCloudPing: (cb) => { const h = () => cb(); ipcRenderer.on('cloud:ping', h); return () => ipcRenderer.removeListener('cloud:ping', h); },
   google: {
     getConfig: () => ipcRenderer.invoke('google:getConfig'),

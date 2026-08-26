@@ -281,6 +281,9 @@ alter table public.projects add column if not exists group_id uuid references pu
 do $$ begin
   execute 'alter publication supabase_realtime add table public.groups';
 exception when duplicate_object then null; end $$;
+-- 008: Soft deletion — deleted projects/tasks keep their row for 7 days ("Recently deleted").
+alter table public.projects add column if not exists deleted_at timestamptz;
+alter table public.tasks add column if not exists deleted_at timestamptz;
 -- 007: The reviewer's "Completed" verdict lives on the task; the task itself returns to In progress.
 alter table public.tasks add column if not exists review_done boolean not null default false;
 -- 006: Realtime DELETE events normally carry only the old primary key, so subscriptions filtered on

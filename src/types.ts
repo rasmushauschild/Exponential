@@ -27,6 +27,7 @@ export interface Project {
   color?: string; // legacy; colour now comes from the group
   notes?: string; // Markdown
   assignees?: string[];
+  deletedAt?: string; // soft-deleted: sits in Team settings → Recently deleted for 7 days
 }
 
 export interface Deadline {
@@ -50,6 +51,7 @@ export interface Task {
   reviewDone?: boolean; // the reviewer finished this review (task itself went back to In progress)
   projectId?: string; // taken from a project's to-do list
   parentId?: string; // subtask of another task
+  deletedAt?: string; // soft-deleted: sits in Team settings → Recently deleted for 7 days
 }
 
 export type NotificationKind = 'task-added' | 'review-requested' | 'review-denied' | 'review-completed' | 'owner-changed' | 'project-changed';

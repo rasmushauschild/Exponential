@@ -7,7 +7,7 @@ import logoUrl from '../build/icon.png';
 import { useData, useSystemNotifications, uid, type GoogleConfig } from './store';
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
-import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, renameTask, reorderTask, unclaimTask } from './taskOps';
+import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, purgeTrash, renameTask, reorderTask, softDelete, unclaimTask } from './taskOps';
 import { isPending, onPersistError, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
@@ -133,12 +133,7 @@ export default function App() {
           : null;
         if (!ids) return;
         e.preventDefault();
-        update((d) => ({
-          ...d,
-          projects: d.projects.filter((p) => !ids.has(p.id)),
-          deadlines: d.deadlines.filter((x) => !ids.has(x.id)),
-          tasks: d.tasks.filter((t) => !ids.has(t.id)),
-        }));
+        update((d) => softDelete(d, ids));
         if (selection && ids.has(selection.id)) setSelection(null);
         setMulti(new Set());
       }
@@ -179,6 +174,19 @@ export default function App() {
   // The menu-bar widget can ask the main window to open a specific item.
   useEffect(() => window.exponential?.onOpen((t) => { setView('plan'); setSelection(t as Selection); }), []);
   useSystemNotifications(data);
+
+  // Trash housekeeping: anything deleted more than 7 days ago is removed for real (once per team per session).
+  const purgedTeam = useRef<string | null>(null);
+  useEffect(() => {
+    if (!data || purgedTeam.current === data.id) return;
+    purgedTeam.current = data.id;
+    if (purgeTrash(data) !== data) update((d) => purgeTrash(d));
+  }, [data, update]);
+
+  // The MCP server (Claude) reads this to know the current team and whether plan edits are allowed.
+  useEffect(() => {
+    window.exponential?.setSharedState?.({ teamId: data?.id ?? null, teamName: data?.name ?? null, planUnlocked: unlocked });
+  }, [data?.id, data?.name, unlocked]);
 
   // Google: restore session on launch.
   useEffect(() => {
@@ -313,8 +321,10 @@ export default function App() {
 
   const isThisWeek = week === weekStart(today);
   const me = data.people.find((p) => p.id === data.me)!;
-  const selProject = selection?.kind === 'project' ? data.projects.find((p) => p.id === selection.id) : undefined;
-  const selTask = selection?.kind === 'task' ? data.tasks.find((t) => t.id === selection.id) : undefined;
+  // Everything the planners render comes from `live`; soft-deleted rows stay only in `data` (for the trash).
+  const live = { ...data, projects: data.projects.filter((p) => !p.deletedAt), tasks: data.tasks.filter((t) => !t.deletedAt) };
+  const selProject = selection?.kind === 'project' ? live.projects.find((p) => p.id === selection.id) : undefined;
+  const selTask = selection?.kind === 'task' ? live.tasks.find((t) => t.id === selection.id) : undefined;
   const selDeadline = selection?.kind === 'deadline' ? data.deadlines.find((d) => d.id === selection.id) : undefined;
   const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro' || selection?.kind === 'inbox';
   const unread = (data.notifications ?? []).filter((n) => n.to === data.me && !n.read).length;
@@ -417,7 +427,7 @@ export default function App() {
               </button>
             </div>
             <BigPlan
-              projects={data.projects}
+              projects={live.projects}
               groups={data.groups ?? []}
               deadlines={data.deadlines}
               people={data.people}
@@ -462,7 +472,7 @@ export default function App() {
               }}
               onMoveMany={(ids, dd) => update((d) => ({ ...d, projects: d.projects.map((p) => (ids.includes(p.id) ? { ...p, start: addDays(p.start, dd), end: addDays(p.end, dd) } : p)) }))}
               onDeleteProject={(id) => {
-                update((d) => ({ ...d, projects: d.projects.filter((p) => p.id !== id) }));
+                update((d) => softDelete(d, [id]));
                 if (selection?.id === id) setSelection(null);
                 setMulti((m) => { if (!m.has(id)) return m; const n = new Set(m); n.delete(id); return n; });
               }}
@@ -479,7 +489,7 @@ export default function App() {
               onSelect={setSelectedPerson}
               week={week}
               today={today}
-              tasks={data.tasks.filter((t) => (t.personId === person || (t.reviewerId === person && (t.status === 'review' || t.reviewDone))) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
+              tasks={live.tasks.filter((t) => (t.personId === person || (t.reviewerId === person && (t.status === 'review' || t.reviewDone))) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
               selectedId={selection?.id}
               selectedIds={multi}
               onToggleSelect={toggleSelect}
@@ -508,7 +518,7 @@ export default function App() {
               }}
               onAddNamed={(title) => { if (isPending(person)) return; update((d) => { const r = addTask(d, person, undefined); return renameTask(r.data, r.id, title); }); }}
               onUpdate={(id, patch) => updateTask(id, patch)}
-              onDelete={(id) => { update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) })); if (selection?.id === id) setSelection(null); }}
+              onDelete={(id) => { update((d) => softDelete(d, [id])); if (selection?.id === id) setSelection(null); }}
               onDeny={(id) => update((d) => denyReview(d, id))}
               onCompleteReview={(id) => update((d) => completeReview(d, id))}
               onOpen={(t) => open('task', t.id)}
@@ -555,13 +565,13 @@ export default function App() {
             me={data.me}
             onClose={() => setSelection(null)}
             onOpen={setSelection}
-            tasks={data.tasks}
+            tasks={live.tasks}
             onCreateLinked={(link, title) => {
               let id = '';
               update((d) => { const r = addTask(d, undefined, undefined, 'end', link); id = r.id; return { ...r.data, tasks: r.data.tasks.map((t) => (t.id === r.id ? { ...t, title } : t)) }; });
               return id;
             }}
-            onDeleteTask={(id) => update((d) => ({ ...d, tasks: d.tasks.filter((t) => t.id !== id) }))}
+            onDeleteTask={(id) => update((d) => softDelete(d, [id]))}
             onClaimTask={(id) => update((d) => claimTask(d, id))}
             onUnclaimTask={(id) => update((d) => unclaimTask(d, id))}
             onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
@@ -582,8 +592,7 @@ export default function App() {
             onDelete={() => {
               const { kind, id } = selection;
               update((d) =>
-                kind === 'project' ? { ...d, projects: d.projects.filter((p) => p.id !== id) }
-                : kind === 'task' ? { ...d, tasks: d.tasks.filter((t) => t.id !== id) }
+                kind === 'project' || kind === 'task' ? softDelete(d, [id])
                 : kind === 'deadline' ? { ...d, deadlines: d.deadlines.filter((x) => x.id !== id) }
                 : d,
               );

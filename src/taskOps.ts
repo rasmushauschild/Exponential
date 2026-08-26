@@ -73,6 +73,29 @@ export function completeReview(d: Data, id: string): Data {
     : next;
 }
 
+/** Deleting projects and tasks is soft: they sit in Team settings → Recently deleted for 7 days.
+ *  Deadlines (and anything else) in the id set are removed outright. */
+export function softDelete(d: Data, ids: string[] | Set<string>): Data {
+  const set = ids instanceof Set ? ids : new Set(ids);
+  const now = new Date().toISOString();
+  return {
+    ...d,
+    projects: d.projects.map((p) => (set.has(p.id) ? { ...p, deletedAt: now } : p)),
+    tasks: d.tasks.map((t) => (set.has(t.id) ? { ...t, deletedAt: now } : t)),
+    deadlines: d.deadlines.filter((x) => !set.has(x.id)),
+  };
+}
+
+export const TRASH_DAYS = 7;
+
+/** Hard-remove anything whose 7 days in the trash are up. Returns d unchanged when there's nothing to purge. */
+export function purgeTrash(d: Data): Data {
+  const cutoff = new Date(Date.now() - TRASH_DAYS * 86_400_000).toISOString();
+  const dead = (x: { deletedAt?: string }) => !!x.deletedAt && x.deletedAt < cutoff;
+  if (!d.projects.some(dead) && !d.tasks.some(dead)) return d;
+  return { ...d, projects: d.projects.filter((p) => !dead(p)), tasks: d.tasks.filter((t) => !dead(t)) };
+}
+
 /** The reviewer declines: the task goes back to In progress and the owner hears about it. */
 export function denyReview(d: Data, id: string): Data {
   const t = d.tasks.find((x) => x.id === id);

@@ -1,0 +1,12 @@
+{
+  "name": "exponential-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that lets Claude read and edit your Exponential plan",
+  "type": "module",
+  "bin": { "exponential-mcp": "./server.mjs" },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@supabase/supabase-js": "^2.112.3",
+    "zod": "^3.24.0"
+  }
+}

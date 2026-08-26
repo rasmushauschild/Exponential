@@ -186,6 +186,16 @@ ipcMain.handle('data:save', (e, data) => {
   }
 });
 
+// State the out-of-process MCP server needs: the current team and whether the master plan
+// is unlocked (Claude may only edit the plan while the user has it unlocked in the app).
+ipcMain.on('state:set', (_e, p) => {
+  try {
+    const f = path.join(app.getPath('userData'), 'shared-state.json');
+    const cur = (() => { try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; } })();
+    fs.writeFileSync(f, JSON.stringify({ ...cur, ...p, updatedAt: new Date().toISOString() }));
+  } catch { /* ignore */ }
+});
+
 // System notifications for the inbox. Both renderers (main + widget) report what they see,
 // so dedupe by notification id here; clicking one opens the referenced item in the main window.
 const notifiedIds = new Set();
