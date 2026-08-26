@@ -204,25 +204,40 @@ export default function App() {
 
   const person = selectedPerson ?? data?.me ?? '';
 
-  // Fetch the selected person's calendar for the visible week.
+  // The visible calendar refreshes quietly every 30s and whenever the window regains focus,
+  // so events added in Google show up within moments; the cache only bridges the gaps.
+  const [calTick, setCalTick] = useState(0);
   useEffect(() => {
-    if (!data || !calendarOn || !googleUser || !window.exponential) return;
-    const p = data.people.find((x) => x.id === person);
-    const calendarId = p?.id === data.me ? 'primary' : p?.email;
+    if (!calendarOn || !googleUser) return;
+    const bump = () => setCalTick((t) => t + 1);
+    const iv = window.setInterval(bump, 30_000);
+    window.addEventListener('focus', bump);
+    return () => { window.clearInterval(iv); window.removeEventListener('focus', bump); };
+  }, [calendarOn, googleUser]);
+
+  // Fetch the selected person's calendar for the visible week (silently when already cached).
+  const calEventsRef = useRef(calEvents);
+  calEventsRef.current = calEvents;
+  const dataRef2 = useRef(data);
+  dataRef2.current = data;
+  useEffect(() => {
+    const d = dataRef2.current;
+    if (!d || !calendarOn || !googleUser || !window.exponential) return;
+    const p = d.people.find((x) => x.id === person);
+    const calendarId = p?.id === d.me ? 'primary' : p?.email;
     if (!calendarId) { setCalNote(`${shortName(p?.name ?? '')} hasn't signed in with Google yet`); return; }
     const key = `${calendarId}|${week}`;
-    if (calEvents[key]) { setCalNote(undefined); return; }
+    if (!calEventsRef.current[key]) setCalNote('Loading…'); // first look shows a note; refreshes are invisible
     let cancelled = false;
-    setCalNote('Loading…');
     window.exponential.google.events(calendarId, week, addDays(week, 6))
       .then((ev) => { if (!cancelled) { setCalEvents((c) => ({ ...c, [key]: ev })); setCalNote(undefined); } })
       .catch((err: Error) => {
         if (cancelled) return;
         setCalNote(/404|403/.test(err.message) ? 'Calendar not shared with you' : err.message);
-        setCalEvents((c) => ({ ...c, [key]: [] }));
+        setCalEvents((c) => (c[key] ? c : { ...c, [key]: [] })); // keep the last good events on a failed refresh
       });
     return () => { cancelled = true; };
-  }, [data, calendarOn, googleUser, person, week, calEvents]);
+  }, [!!data, calendarOn, googleUser, person, week, calTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signIn = useCallback(async () => {
     const g = window.exponential?.google;

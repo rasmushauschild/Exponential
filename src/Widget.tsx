@@ -34,7 +34,14 @@ export default function Widget() {
   }, []);
 
   // My calendar for the shown week, when the main window has calendar on and access is granted.
+  // Refetched every time the popover opens and every 30s, so new events show up right away.
   const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
+  const [calTick, setCalTick] = useState(0);
+  useEffect(() => {
+    if (!calOn) return;
+    const iv = window.setInterval(() => setCalTick((t) => t + 1), 30_000);
+    return () => window.clearInterval(iv);
+  }, [calOn]);
   useEffect(() => {
     const g = window.exponential?.google;
     if (!g || !calOn) { setCalEvents([]); return; }
@@ -42,9 +49,9 @@ export default function Widget() {
     g.hasCalendar()
       .then((ok) => (ok && !dead ? g.events('primary', week, addDaysISO(week, 6)) : []))
       .then((ev) => { if (!dead) setCalEvents(ev); })
-      .catch(() => { if (!dead) setCalEvents([]); });
+      .catch(() => { /* keep the last good events */ });
     return () => { dead = true; };
-  }, [calOn, week]);
+  }, [calOn, week, calTick]);
 
   const me = data?.me ?? '';
   const who = person ?? me;
@@ -66,6 +73,7 @@ export default function Widget() {
     return window.exponential?.onWidgetShown(() => {
       applyTheme();
       setCalOn(readCalPref());
+      setCalTick((t) => t + 1); // fresh events every time the popover opens
       setToday(todayISO());
       setWeek(weekStart(todayISO()));
       setPerson(null);
