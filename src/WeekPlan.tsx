@@ -110,7 +110,7 @@ export function WeekPlan(props: Props) {
   // Completed tasks can be tucked away; the choice sticks per machine. A finished review of
   // someone else's task counts as completed here even though the task itself is In progress.
   const doneRow = (t: Task) => t.status === 'done' || (t.personId !== selected && !!t.reviewDone);
-  const [showDone, setShowDone] = useState(() => localStorage.getItem('exponential-show-done') !== '0');
+  const [showDone, setShowDone] = useState(() => localStorage.getItem('exponential-show-done') === '1'); // hidden by default
   const toggleDone = () => setShowDone((v) => { localStorage.setItem('exponential-show-done', v ? '0' : '1'); return !v; });
   const doneCount = sorted.filter(doneRow).length;
   const visible = showDone ? sorted : sorted.filter((t) => !doneRow(t));
