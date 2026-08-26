@@ -100,7 +100,7 @@ img { display: block; -webkit-user-drag: none; }
 .team-row.current { background: var(--ov-6); }
 .team-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 7px 7px; text-align: left; border-radius: 14px; }
 .team-row.add { display: none; }
-.sidebar:hover .team-list:hover .team-row.add, .sidebar:hover .team-list:focus-within .team-row.add { display: flex; }
+.sidebar:hover .team-list:hover .team-row.add { display: flex; } /* hover only: focus-within lingered on the cog */
 .team-row.add { padding: 7px 7px; gap: 10px; color: var(--text-3); }
 .team-row.add:hover { color: var(--text-2); }
 .team-cog {

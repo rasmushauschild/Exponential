@@ -37,6 +37,11 @@ function ClaudeConnect() {
         disabled={busy}
         title={connected ? `Connected: ${targets.join(' · ')} — click to re-register` : 'Register Exponential with Claude on this computer'}
       >
+        {connected && !busy && (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 -2px' }}>
+            <path d="M4.5 12.5l5 5L19.5 7" />
+          </svg>
+        )}
         {busy ? 'Connecting…' : connected ? 'Connected to Claude' : 'Connect to Claude'}
       </button>
       {result?.messages.map((m, i) => <p key={i} className="hint" style={{ padding: '8px 0 0' }}>{m}</p>)}
