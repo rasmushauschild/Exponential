@@ -34,6 +34,7 @@ interface Props {
   onMoveProject: (id: string, patch: Pick<Project, 'start' | 'end' | 'lane' | 'groupId'>) => void;
   onMoveMany: (ids: string[], deltaDays: number) => void; // shift a multi-selection in time
   onDeleteProject: (id: string) => void;
+  onDeleteMany?: (ids: string[]) => void; // right-click Delete with a multi-selection
   onOpenGroup: (g: Group) => void;
   onMoveDeadline: (id: string, date: ISODate) => void;
   onCreateProject: (start: ISODate, lane: number, groupId?: string) => void;
@@ -53,7 +54,7 @@ type Section = { groupId?: string; name: string; color: string; headerTop: numbe
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
+  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -500,7 +501,14 @@ export function BigPlan(props: Props) {
 
       {ctx && createPortal(
         <div className="status-menu ctx-menu" style={{ position: 'fixed', left: Math.min(ctx.x, window.innerWidth - 180), top: Math.min(ctx.y, window.innerHeight - 52) }} onPointerDown={(e) => e.stopPropagation()}>
-          <button className="danger" onClick={() => { onDeleteProject(ctx.id); setCtx(null); }}>Delete</button>
+          {(() => {
+            const many = !!selectedIds?.has(ctx.id) && selectedIds.size > 1 && !!onDeleteMany;
+            return (
+              <button className="danger" onClick={() => { if (many) onDeleteMany!([...selectedIds!]); else onDeleteProject(ctx.id); setCtx(null); }}>
+                {many ? `Delete ${selectedIds!.size} items` : 'Delete'}
+              </button>
+            );
+          })()}
         </div>,
         document.body,
       )}

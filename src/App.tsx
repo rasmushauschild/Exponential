@@ -153,6 +153,13 @@ export default function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, [undo, redo, multi, selection, update]);
 
+  /** Right-click Delete on a multi-selection removes everything selected, like Backspace. */
+  const deleteMany = (ids: string[]) => {
+    update((d) => softDelete(d, ids));
+    if (selection && ids.includes(selection.id)) setSelection(null);
+    setMulti(new Set());
+  };
+
   /** Plain click on a single item: the multi-selection gives way to it. */
   const open = (kind: Selection['kind'], id: string) => {
     setMulti((m) => (m.size ? new Set<string>() : m));
@@ -497,6 +504,7 @@ export default function App() {
                 update((d) => ({ ...d, projects: d.projects.map((p) => (p.id === id ? { ...p, name } : p)) }));
               }}
               onMoveMany={(ids, dd) => update((d) => ({ ...d, projects: d.projects.map((p) => (ids.includes(p.id) ? { ...p, start: addDays(p.start, dd), end: addDays(p.end, dd) } : p)) }))}
+              onDeleteMany={deleteMany}
               onDeleteProject={(id) => {
                 update((d) => softDelete(d, [id]));
                 if (selection?.id === id) setSelection(null);
@@ -545,6 +553,7 @@ export default function App() {
               onAddNamed={(title) => { if (isPending(person)) return; update((d) => { const r = addTask(d, person, undefined); return renameTask(r.data, r.id, title); }); }}
               onUpdate={(id, patch) => updateTask(id, patch)}
               onDelete={(id) => { update((d) => softDelete(d, [id])); if (selection?.id === id) setSelection(null); }}
+              onDeleteMany={deleteMany}
               onDeny={(id) => update((d) => denyReview(d, id))}
               onCompleteReview={(id) => update((d) => completeReview(d, id))}
               onOpen={(t) => open('task', t.id)}

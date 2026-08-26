@@ -27,6 +27,7 @@ interface Props {
   onEdit?: (id: string) => void; // double-click on a title: rename it in place
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
+  onDeleteMany?: (ids: string[]) => void; // right-click Delete with a multi-selection
   onDeny?: (id: string) => void; // decline a review request shown in my week
   onCompleteReview?: (id: string) => void; // sign off on one
   onOpen: (t: Task) => void;
@@ -39,7 +40,7 @@ interface Props {
 
 /** Tasks are editable by their owner; anyone may add a task to someone's week. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeny, onCompleteReview, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeleteMany, onDeny, onCompleteReview, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   const readonly = selected !== me;
   const todayIdx = dayIndex(today) - dayIndex(week);
@@ -243,6 +244,8 @@ export function WeekPlan(props: Props) {
                 editing={editingId === t.id}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
+                selCount={selectedIds?.has(t.id) ? selectedIds.size : 1}
+                onDeleteSel={selectedIds?.has(t.id) && selectedIds.size > 1 && onDeleteMany ? () => onDeleteMany([...selectedIds]) : undefined}
                 onDeny={onDeny}
                 onCompleteReview={onCompleteReview}
                 onOpen={onOpen}
@@ -313,7 +316,7 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop }: {
+function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, selCount = 1, onDeleteSel, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
@@ -324,6 +327,8 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
   editing: boolean;
   onUpdate: Props['onUpdate'];
   onDelete: Props['onDelete'];
+  selCount?: number;
+  onDeleteSel?: () => void;
   onDeny?: Props['onDeny'];
   onCompleteReview?: Props['onCompleteReview'];
   onOpen: Props['onOpen'];
@@ -516,7 +521,11 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
           <div className="status-menu ctx-menu" style={{ position: 'fixed', left: Math.min(ctx.x, window.innerWidth - 180), top: Math.min(ctx.y, window.innerHeight - 52) }} onPointerDown={(e) => e.stopPropagation()}>
             {reviewRow
               ? (onDeny && <button className="danger" onClick={() => { setCtx(null); onDeny(task.id); }}>Deny</button>)
-              : <button className="danger" onClick={() => { setCtx(null); onDelete(task.id); }}>Delete</button>}
+              : (
+                <button className="danger" onClick={() => { setCtx(null); if (onDeleteSel) onDeleteSel(); else onDelete(task.id); }}>
+                  {onDeleteSel ? `Delete ${selCount} items` : 'Delete'}
+                </button>
+              )}
           </div>,
           document.body,
         )}
