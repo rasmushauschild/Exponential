@@ -132,14 +132,14 @@ export function WeekPlan(props: Props) {
     return 0;
   };
   const events = calendar.enabled ? calendar.events.filter((e) => days.includes(e.date)) : [];
-  // Calendar ignores ?authuser= on event links when that account isn't the browser default;
-  // the /u/<email>/ path is the switch it reliably honours, so open that account's day view.
+  // Via Google's account chooser: it switches to (or asks the user to pick) the right account,
+  // then continues to the event itself — the one way the event deep link works cross-account.
   const openEvent = (e: CalendarEvent) => {
-    const day = e.date.replaceAll('-', '/');
+    const target = e.link ?? `https://calendar.google.com/calendar/r/day/${e.date.replaceAll('-', '/')}`;
     const myEmail = people.find((p) => p.id === me)?.email;
     window.open(myEmail
-      ? `https://calendar.google.com/calendar/u/${encodeURIComponent(myEmail)}/r/day/${day}`
-      : e.link ?? `https://calendar.google.com/calendar/r/day/${day}`);
+      ? `https://accounts.google.com/AccountChooser?Email=${encodeURIComponent(myEmail)}&continue=${encodeURIComponent(target)}`
+      : target);
   };
   // Each day's first still-upcoming event is pinned as an overlay on the bottom row while its real
   // row is scrolled below the fold; each pill yields to its own row as it comes into view.
