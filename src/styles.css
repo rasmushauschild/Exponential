@@ -100,14 +100,14 @@ img { display: block; -webkit-user-drag: none; }
 .team-row.current { background: var(--ov-6); }
 .team-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 7px 7px; text-align: left; border-radius: 14px; }
 .team-row.add { display: none; }
-.team-list:hover .team-row.add, .team-list:focus-within .team-row.add { display: flex; }
+.sidebar:hover .team-list:hover .team-row.add, .sidebar:hover .team-list:focus-within .team-row.add { display: flex; }
 .team-row.add { padding: 7px 7px; gap: 10px; color: var(--text-3); }
 .team-row.add:hover { color: var(--text-2); }
 .team-cog {
   width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--text-3); margin-right: 6px; flex: none;
   opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
 }
-.sidebar:hover .team-row:hover .team-cog, .team-cog.on { opacity: 1; }
+.sidebar:hover .team-row:hover .team-cog, .sidebar:hover .team-cog.on { opacity: 1; }
 .team-cog:hover { background: var(--ov-6); color: var(--text); }
 .team-cog.on { color: var(--text); }
 .team-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--text); color: var(--bg); box-shadow: 0 0 0 1px var(--line); display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }
@@ -534,6 +534,7 @@ img { display: block; -webkit-user-drag: none; }
 /* ─── Team page ─────────────────────────────────────── */
 
 .team-page {
+  -webkit-app-region: no-drag; /* the gaps between cards must scroll, not drag the window */
   flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px;
   /* the scrollport is padded (and margin-compensated) so card outlines and shadows never clip */
   margin: -4px -18px -18px -4px; padding: 4px 18px 18px 4px;
