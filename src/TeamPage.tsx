@@ -14,6 +14,24 @@ interface Props {
   onDelete: () => void;
 }
 
+/** One click registers the bundled MCP server with Claude Desktop / Claude Code on this machine. */
+function ClaudeConnect() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; messages: string[] } | null>(null);
+  const connect = async () => {
+    setBusy(true);
+    try { setResult(await window.exponential!.connectClaude!()); }
+    catch (e) { setResult({ ok: false, messages: [String((e as Error).message ?? e)] }); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div>
+      <button className="pill" onClick={connect} disabled={busy}>{busy ? 'Connecting…' : result?.ok ? 'Reconnect to Claude' : 'Connect to Claude'}</button>
+      {result?.messages.map((m, i) => <p key={i} className="hint" style={{ padding: '8px 0 0' }}>{m}</p>)}
+    </div>
+  );
+}
+
 /** Members of the current team. Moderators can add, remove, and promote/demote. */
 export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -161,6 +179,16 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
           );
         })}
         {!isMod && <p className="hint" style={{ padding: '14px 12px' }}>Ask a moderator to add or remove people.</p>}
+
+        {!!window.exponential?.connectClaude && (
+          <div className="settings-block">
+            <div className="settings-title">Claude</div>
+            <p className="hint" style={{ padding: '4px 0 8px' }}>
+              Let Claude read your plan, manage tasks and plan your week. The master plan stays read-only for Claude unless you unlock it.
+            </p>
+            <ClaudeConnect />
+          </div>
+        )}
 
         <div className="settings-block">
           <div className="settings-title">Recently deleted</div>

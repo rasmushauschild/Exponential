@@ -6,6 +6,9 @@ module.exports = {
   appId: 'com.airy.exponential',
   productName: 'Exponential',
   files: ['dist/**', 'electron/**', '!electron/google.client.example.json', 'build/icon.png', 'build/trayTemplate*.png', 'package.json'],
+  // The MCP server ships inside the app ("Connect to Claude" registers it; the app binary doubles
+  // as its Node runtime via ELECTRON_RUN_AS_NODE, so users need nothing else installed).
+  extraResources: [{ from: 'mcp', to: 'mcp', filter: ['server.mjs', 'package.json', 'node_modules/**'] }],
   directories: { output: 'release', buildResources: 'build' },
   publish: [{ provider: 'github', owner: 'rasmushauschild', repo: 'Exponential' }],
   mac: {

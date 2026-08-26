@@ -186,6 +186,50 @@ ipcMain.handle('data:save', (e, data) => {
   }
 });
 
+/* ── "Connect to Claude": register the bundled MCP server with Claude Desktop and Claude Code.
+   The Exponential binary itself is the Node runtime (ELECTRON_RUN_AS_NODE), so nothing else
+   needs to be installed. ── */
+ipcMain.handle('mcp:connect', () => {
+  const { execSync } = require('node:child_process');
+  const serverPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'mcp', 'server.mjs')
+    : path.join(__dirname, '..', 'mcp', 'server.mjs');
+  if (!fs.existsSync(serverPath)) return { ok: false, messages: ['This build is missing the Claude connector files.'] };
+  const entry = { command: process.execPath, args: [serverPath], env: { ELECTRON_RUN_AS_NODE: '1' } };
+  const messages = [];
+
+  // Claude Desktop: merge our server into its JSON config (created on install; only touch it if Claude exists).
+  try {
+    const dir = process.platform === 'win32' ? path.join(process.env.APPDATA ?? '', 'Claude')
+      : process.platform === 'darwin' ? path.join(app.getPath('home'), 'Library', 'Application Support', 'Claude')
+      : path.join(app.getPath('home'), '.config', 'Claude');
+    if (fs.existsSync(dir)) {
+      const f = path.join(dir, 'claude_desktop_config.json');
+      let cfg = {};
+      try { cfg = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { /* fresh */ }
+      cfg.mcpServers = { ...cfg.mcpServers, exponential: entry };
+      fs.writeFileSync(f, JSON.stringify(cfg, null, 2));
+      messages.push('Claude Desktop — connected. Restart Claude Desktop and Exponential appears in its tools.');
+    }
+  } catch (e) { messages.push(`Claude Desktop: ${e.message}`); }
+
+  // Claude Code: through its own CLI (resolved via a login shell, since GUI apps don't get the terminal's PATH).
+  try {
+    const probe = execSync(
+      process.platform === 'win32' ? 'where claude' : '/bin/zsh -lc "command -v claude"',
+      { encoding: 'utf8', timeout: 10_000 }).trim().split(/\r?\n/)[0];
+    if (probe) {
+      try { execSync(`${JSON.stringify(probe)} mcp remove -s user exponential`, { encoding: 'utf8', timeout: 15_000 }); } catch { /* wasn't there */ }
+      execSync(`${JSON.stringify(probe)} mcp add -s user -e ELECTRON_RUN_AS_NODE=1 exponential -- ${JSON.stringify(entry.command)} ${JSON.stringify(serverPath)}`,
+        { encoding: 'utf8', timeout: 15_000 });
+      messages.push('Claude Code — connected for new sessions.');
+    }
+  } catch { /* no claude CLI on this machine */ }
+
+  if (!messages.length) return { ok: false, messages: ['Claude wasn\'t found on this computer. Install Claude Desktop or Claude Code, then try again.'] };
+  return { ok: true, messages };
+});
+
 // State the out-of-process MCP server needs: the current team and whether the master plan
 // is unlocked (Claude may only edit the plan while the user has it unlocked in the app).
 ipcMain.on('state:set', (_e, p) => {
