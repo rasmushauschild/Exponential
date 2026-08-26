@@ -220,9 +220,14 @@ ipcMain.handle('mcp:connect', () => {
       { encoding: 'utf8', timeout: 10_000 }).trim().split(/\r?\n/)[0];
     if (probe) {
       try { execSync(`${JSON.stringify(probe)} mcp remove -s user exponential`, { encoding: 'utf8', timeout: 15_000 }); } catch { /* wasn't there */ }
-      execSync(`${JSON.stringify(probe)} mcp add -s user -e ELECTRON_RUN_AS_NODE=1 exponential -- ${JSON.stringify(entry.command)} ${JSON.stringify(serverPath)}`,
-        { encoding: 'utf8', timeout: 15_000 });
-      messages.push('Claude Code — connected for new sessions.');
+      try {
+        // The server name must come before -e: the env flag is greedy and would swallow it.
+        execSync(`${JSON.stringify(probe)} mcp add exponential -s user -e ELECTRON_RUN_AS_NODE=1 -- ${JSON.stringify(entry.command)} ${JSON.stringify(serverPath)}`,
+          { encoding: 'utf8', timeout: 15_000 });
+        messages.push('Claude Code — connected for new sessions.');
+      } catch (e) {
+        messages.push(`Claude Code: ${(e.stderr?.toString() || e.message || String(e)).trim().split('\n')[0]}`);
+      }
     }
   } catch { /* no claude CLI on this machine */ }
 
