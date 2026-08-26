@@ -186,6 +186,28 @@ ipcMain.handle('data:save', (e, data) => {
   }
 });
 
+// Where Claude Desktop keeps its config, per platform.
+function claudeDesktopDir() {
+  return process.platform === 'win32' ? path.join(process.env.APPDATA ?? '', 'Claude')
+    : process.platform === 'darwin' ? path.join(app.getPath('home'), 'Library', 'Application Support', 'Claude')
+    : path.join(app.getPath('home'), '.config', 'Claude');
+}
+
+// Is our MCP server currently registered (and its files still on disk)?
+ipcMain.handle('mcp:status', () => {
+  const targets = [];
+  const entryOk = (e) => e && Array.isArray(e.args) && fs.existsSync(e.args[0] ?? '');
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(claudeDesktopDir(), 'claude_desktop_config.json'), 'utf8'));
+    if (entryOk(cfg.mcpServers?.exponential)) targets.push('Claude Desktop');
+  } catch { /* not installed / not connected */ }
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(app.getPath('home'), '.claude.json'), 'utf8'));
+    if (entryOk(cfg.mcpServers?.exponential)) targets.push('Claude Code');
+  } catch { /* not installed / not connected */ }
+  return { connected: targets.length > 0, targets };
+});
+
 /* ── "Connect to Claude": register the bundled MCP server with Claude Desktop and Claude Code.
    The Exponential binary itself is the Node runtime (ELECTRON_RUN_AS_NODE), so nothing else
    needs to be installed. ── */
@@ -200,9 +222,7 @@ ipcMain.handle('mcp:connect', () => {
 
   // Claude Desktop: merge our server into its JSON config (created on install; only touch it if Claude exists).
   try {
-    const dir = process.platform === 'win32' ? path.join(process.env.APPDATA ?? '', 'Claude')
-      : process.platform === 'darwin' ? path.join(app.getPath('home'), 'Library', 'Application Support', 'Claude')
-      : path.join(app.getPath('home'), '.config', 'Claude');
+    const dir = claudeDesktopDir();
     if (fs.existsSync(dir)) {
       const f = path.join(dir, 'claude_desktop_config.json');
       let cfg = {};

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TeamMark } from './App';
 import type { Data, Person } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, type RetroField } from './types';
@@ -14,19 +14,31 @@ interface Props {
   onDelete: () => void;
 }
 
-/** One click registers the bundled MCP server with Claude Desktop / Claude Code on this machine. */
+/** One click registers the bundled MCP server with Claude Desktop / Claude Code on this machine.
+ *  The button reads the actual registration state, so it stays blue across restarts. */
 function ClaudeConnect() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; messages: string[] } | null>(null);
+  const [targets, setTargets] = useState<string[]>([]);
+  const refresh = () => window.exponential?.claudeStatus?.().then((s) => setTargets(s.targets)).catch(() => {});
+  useEffect(() => { refresh(); }, []);
   const connect = async () => {
     setBusy(true);
     try { setResult(await window.exponential!.connectClaude!()); }
     catch (e) { setResult({ ok: false, messages: [String((e as Error).message ?? e)] }); }
-    finally { setBusy(false); }
+    finally { setBusy(false); refresh(); }
   };
+  const connected = targets.length > 0;
   return (
     <div>
-      <button className="pill" onClick={connect} disabled={busy}>{busy ? 'Connecting…' : result?.ok ? 'Reconnect to Claude' : 'Connect to Claude'}</button>
+      <button
+        className={`pill toggle${connected ? ' active' : ''}`}
+        onClick={connect}
+        disabled={busy}
+        title={connected ? `Connected: ${targets.join(' · ')} — click to re-register` : 'Register Exponential with Claude on this computer'}
+      >
+        {busy ? 'Connecting…' : connected ? 'Connected to Claude' : 'Connect to Claude'}
+      </button>
       {result?.messages.map((m, i) => <p key={i} className="hint" style={{ padding: '8px 0 0' }}>{m}</p>)}
     </div>
   );
