@@ -533,9 +533,17 @@ img { display: block; -webkit-user-drag: none; }
 
 /* ─── Team page ─────────────────────────────────────── */
 
-.team-page { flex: 1; min-width: 0; }
+.team-page { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.team-page::-webkit-scrollbar { width: 0; }
+.team-card { flex: none; min-height: 0; padding: 22px 26px; display: block; }
+.team-card-head { display: flex; align-items: center; gap: 18px; -webkit-app-region: drag; }
+.team-card-head button, .team-card-head input { -webkit-app-region: no-drag; }
+.team-card-name { flex: 1; min-width: 0; }
+.team-card-sub { margin-top: 22px; }
+.team-card-titlerow { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.team-card-titlerow .settings-title { margin-bottom: 0; }
+.team-danger { padding: 0 26px 16px; flex: none; }
 .panel-sub-count { color: var(--text-3); font-weight: 600; margin-left: 4px; }
-.team-body { padding: 6px 14px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .member-row { display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 16px; transition: background 0.15s; }
 .member-row:hover { background: var(--ov-3); }
 .member-row.add { background: var(--soft); margin-bottom: 6px; }

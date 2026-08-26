@@ -95,51 +95,49 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
   };
 
   return (
-    <section className="panel team-page">
-      <div className="panel-head">
-        <TeamMark team={team} size={38} />
-        {isMod ? (
-          <input
-            className="panel-title team-title-input"
-            defaultValue={team.name}
-            key={team.id}
-            title="Rename team"
-            onBlur={(e) => { const n = e.target.value.trim(); if (n && n !== team.name) onUpdate((d) => ({ ...d, name: n })); else e.target.value = team.name; }}
-            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
-          />
-        ) : <div className="panel-title">{team.name}</div>}
-        <div className="panel-sub-count">{team.people.length} {team.people.length === 1 ? 'member' : 'members'}</div>
-        <div className="panel-spacer" />
-        {isMod && !adding && <button className="pill" onClick={() => setAdding(true)}>+ Add member</button>}
-      </div>
-
-      <div className="team-body">
-        {isMod && (
-          <div className="settings-block">
-            <div className="settings-title">Icon</div>
+    <section className="team-page">
+      {/* ── Team: identity + Claude ── */}
+      <div className="panel team-card">
+        <div className="team-card-head">
+          <TeamMark team={team} size={64} />
+          <div className="team-card-name">
+            {isMod ? (
+              <input
+                className="panel-title team-title-input"
+                defaultValue={team.name}
+                key={team.id}
+                title="Rename team"
+                onBlur={(e) => { const n = e.target.value.trim(); if (n && n !== team.name) onUpdate((d) => ({ ...d, name: n })); else e.target.value = team.name; }}
+                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+              />
+            ) : <div className="panel-title">{team.name}</div>}
+            <div className="panel-sub-count">{team.people.length} {team.people.length === 1 ? 'member' : 'members'}</div>
+          </div>
+          {isMod && (
             <div className="icon-row">
-              <TeamMark team={team} size={64} />
               <button className="pill" onClick={() => fileRef.current?.click()}>{team.icon ? 'Change image' : 'Upload image'}</button>
               {team.icon && <button className="pill" onClick={() => onUpdate((d) => ({ ...d, icon: undefined }))}>Use the letter</button>}
               <input ref={fileRef} type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) pickIcon(f); e.target.value = ''; }} />
             </div>
-
-            <div className="settings-title" style={{ marginTop: 22 }}>Retro questions</div>
-            <p className="hint" style={{ margin: '0 0 8px' }}>These are the prompts everyone answers in each week's retro.</p>
-            <div className="retro-config">
-              {fields.map((f, i) => (
-                <div key={f.key} className="retro-config-row">
-                  <input className="member-input" value={f.label} placeholder="Question" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-                  <input className="member-input" value={f.hint} placeholder="Hint shown when empty" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, hint: e.target.value } : x)))} />
-                  <button className="icon-btn" title="Remove" disabled={fields.length <= 1} onClick={() => setFields(fields.filter((_, j) => j !== i))}>×</button>
-                </div>
-              ))}
-              <button className="add-task" onClick={() => setFields([...fields, { key: uid(), label: '', hint: '' }])}><span className="plus">+</span> Add question</button>
-            </div>
-
-            <div className="settings-title" style={{ marginTop: 22 }}>Members</div>
+          )}
+        </div>
+        {!!window.exponential?.connectClaude && (
+          <div className="team-card-sub">
+            <div className="settings-title">Claude</div>
+            <p className="hint" style={{ margin: '0 0 10px' }}>
+              Let Claude read your plan, manage tasks and plan your week. The master plan stays read-only for Claude unless you unlock it.
+            </p>
+            <ClaudeConnect />
           </div>
         )}
+      </div>
+
+      {/* ── Members ── */}
+      <div className="panel team-card">
+        <div className="team-card-titlerow">
+          <div className="settings-title">Members</div>
+          {isMod && !adding && <button className="pill" onClick={() => setAdding(true)}>+ Add member</button>}
+        </div>
         {adding && (
           <form className="member-row add" onSubmit={(e) => { e.preventDefault(); add(); }}>
             <span className="avatar initials" style={{ width: 36, height: 36, background: 'var(--soft-2)', color: 'var(--text-3)', fontSize: 18 }}>+</span>
@@ -178,46 +176,55 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
             </div>
           );
         })}
-        {!isMod && <p className="hint" style={{ padding: '14px 12px' }}>Ask a moderator to add or remove people.</p>}
-
-        {!!window.exponential?.connectClaude && (
-          <div className="settings-block">
-            <div className="settings-title">Claude</div>
-            <p className="hint" style={{ padding: '4px 0 8px' }}>
-              Let Claude read your plan, manage tasks and plan your week. The master plan stays read-only for Claude unless you unlock it.
-            </p>
-            <ClaudeConnect />
-          </div>
-        )}
-
-        <div className="settings-block">
-          <div className="settings-title">Recently deleted</div>
-          {trash.length === 0 && <p className="hint" style={{ padding: '4px 0 0' }}>Deleted projects and tasks stay here for 7 days.</p>}
-          {trash.map((x) => (
-            <div key={x.id} className="trash-row">
-              <span className="trash-kind">{x.kind}</span>
-              <span className="trash-name">{x.name}</span>
-              <span className="trash-when">gone in {daysLeft(x.at)} day{daysLeft(x.at) === 1 ? '' : 's'}</span>
-              <button className="pill small" onClick={() => recover(x.id)}>Recover</button>
-            </div>
-          ))}
-        </div>
-
-        {isMod && canDelete && (
-          <div className="settings-block danger-zone">
-            <div className="settings-title">Danger zone</div>
-            {confirmDelete ? (
-              <div className="confirm-row">
-                <span>Delete <b>{team.name}</b> with all its projects, tasks and retros for everyone? This can't be undone.</span>
-                <button className="btn danger-btn" onClick={onDelete}>Delete team</button>
-                <button className="btn" onClick={() => setConfirmDelete(false)}>Keep it</button>
-              </div>
-            ) : (
-              <button className="pill danger" onClick={() => setConfirmDelete(true)}>Delete team…</button>
-            )}
-          </div>
-        )}
+        {!isMod && <p className="hint" style={{ padding: '10px 12px 2px' }}>Ask a moderator to add or remove people.</p>}
       </div>
+
+      {/* ── Retro template ── */}
+      {isMod && (
+        <div className="panel team-card">
+          <div className="settings-title">Retro questions</div>
+          <p className="hint" style={{ margin: '0 0 8px' }}>These are the prompts everyone answers in each week's retro.</p>
+          <div className="retro-config">
+            {fields.map((f, i) => (
+              <div key={f.key} className="retro-config-row">
+                <input className="member-input" value={f.label} placeholder="Question" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
+                <input className="member-input" value={f.hint} placeholder="Hint shown when empty" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, hint: e.target.value } : x)))} />
+                <button className="icon-btn" title="Remove" disabled={fields.length <= 1} onClick={() => setFields(fields.filter((_, j) => j !== i))}>×</button>
+              </div>
+            ))}
+            <button className="add-task" onClick={() => setFields([...fields, { key: uid(), label: '', hint: '' }])}><span className="plus">+</span> Add question</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Recently deleted ── */}
+      <div className="panel team-card">
+        <div className="settings-title">Recently deleted</div>
+        {trash.length === 0 && <p className="hint" style={{ margin: 0 }}>Deleted projects and tasks stay here for 7 days.</p>}
+        {trash.map((x) => (
+          <div key={x.id} className="trash-row">
+            <span className="trash-kind">{x.kind}</span>
+            <span className="trash-name">{x.name}</span>
+            <span className="trash-when">gone in {daysLeft(x.at)} day{daysLeft(x.at) === 1 ? '' : 's'}</span>
+            <button className="pill small" onClick={() => recover(x.id)}>Recover</button>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Delete team: plainly on the background, outside every box ── */}
+      {isMod && canDelete && (
+        <div className="team-danger">
+          {confirmDelete ? (
+            <div className="confirm-row">
+              <span>Delete <b>{team.name}</b> with all its projects, tasks and retros for everyone? This can't be undone.</span>
+              <button className="btn danger-btn" onClick={onDelete}>Delete team</button>
+              <button className="btn" onClick={() => setConfirmDelete(false)}>Keep it</button>
+            </div>
+          ) : (
+            <button className="pill danger" onClick={() => setConfirmDelete(true)}>Delete team…</button>
+          )}
+        </div>
+      )}
     </section>
   );
 }
