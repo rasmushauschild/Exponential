@@ -3,3 +3,4 @@ dist
 release
 electron/google.client.json
 mcp/server.bundle.mjs
+.gstack/
