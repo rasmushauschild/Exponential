@@ -151,6 +151,9 @@ export default function App() {
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (e.key === 'Backspace' || e.key === 'Delete') {
+        // A block selection in the notes editor owns Backspace (it blurs the input, so
+        // the focus check above doesn't catch it) — deleting blocks must not delete the item.
+        if (document.querySelector('.blk-list.selecting')) return;
         // The multi-selection wins; otherwise whatever is open in the side panel gets deleted.
         const ids = multi.size ? multi
           : selection && ['project', 'task', 'deadline'].includes(selection.kind) ? new Set([selection.id])
