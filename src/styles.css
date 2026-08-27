@@ -681,45 +681,54 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 /* ─── Retro (redesigned) ───────────────────────────── */
 /* One quiet type scale: 11px caps titles, 13px/500 content, 12px tabular numbers.
    Each section is a soft inset card so the boundaries read at a glance. */
-.retro-sec { margin-bottom: 10px; font-size: 13px; padding: 14px 16px; border-radius: 16px; background: var(--soft); }
+.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 16px; background: var(--soft); }
 .retro-sec-title {
   font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
-  letter-spacing: 0.07em; margin-bottom: 10px;
+  letter-spacing: 0.07em; margin-bottom: 12px;
 }
 .retro-carried {
-  margin-bottom: 10px; padding: 14px 16px; border-radius: 16px; background: var(--soft);
+  margin-bottom: 12px; padding: 16px 18px; border-radius: 16px; background: var(--soft);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .retro-carried .retro-sec-title { margin-bottom: 3px; }
 .retro-carried-text { white-space: pre-wrap; color: var(--text-2); font-size: 13px; font-weight: 500; line-height: 1.5; }
 
-/* confidence sliders */
-.retro-objective { font-size: 13px; font-weight: 650; margin: 0 0 6px; line-height: 1.45; }
-.kr-row { display: flex; align-items: center; gap: 16px; padding: 4px 0; position: relative; }
-.kr-name { flex: 1; min-width: 0; font-weight: 500; line-height: 1.45; white-space: pre-wrap; color: var(--text-2); }
-/* static so the warp canvas positions against the whole .kr-row, not just the stepper */
-.cstep { position: static; display: flex; align-items: center; gap: 2px; flex: none; padding: 2px 0; }
-.cstep-canvas { position: absolute; left: -16px; top: -4px; width: calc(100% + 32px); height: calc(100% + 8px); pointer-events: none; z-index: 2; }
+/* confidence steppers — each key result is its own rounded box; its background
+   reacts to the score: deep space while warping (≥7), red-tinged while ≤2 */
+.retro-objective { font-size: 13px; font-weight: 650; margin: 0 0 10px; line-height: 1.45; }
+.kr-row {
+  display: flex; align-items: center; gap: 16px; padding: 10px 12px; position: relative; overflow: hidden;
+  border-radius: 12px; background: var(--panel); transition: background 0.4s;
+}
+.kr-row + .kr-row { margin-top: 8px; }
+.kr-row:has(.cstep.warp) { background: #0c1120; }
+.kr-row:has(.cstep.warp) .kr-name { color: #d8e2f5; }
+.kr-row:has(.cstep.warp) .cstep-btn { color: rgba(216, 226, 245, 0.55); }
+.kr-row:has(.cstep.warp) .cstep-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.kr-row:has(.cstep.danger) { background: color-mix(in srgb, #ff3b30 6%, var(--panel)); }
+.kr-name { flex: 1; min-width: 0; font-weight: 500; line-height: 1.45; white-space: pre-wrap; color: var(--text-2); position: relative; z-index: 1; transition: color 0.4s; }
+.cstep { position: static; display: flex; align-items: center; gap: 4px; flex: none; }
+.cstep-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
 .cstep-btn {
-  width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center;
+  width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; position: relative; z-index: 1;
   font-size: 14px; font-weight: 700; color: var(--text-3); cursor: pointer; transition: background 0.15s, color 0.15s;
 }
 .cstep-btn:hover { background: var(--soft-2); color: var(--text); }
 .cstep-btn:disabled { opacity: 0.3; cursor: default; background: none; }
+/* the number sits in a tinted chip, like the P1-P3 chips up in Priorities */
 .cstep-value {
-  width: 28px; text-align: center; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;
-  color: var(--gc, var(--text)); /* light mode: the number itself carries the color — glows smudge on white */
+  min-width: 30px; height: 20px; padding: 0 6px; border-radius: 7px; display: grid; place-items: center;
+  position: relative; z-index: 1; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--gc, var(--text-3)); background: color-mix(in srgb, var(--gc, var(--text-3)) 14%, transparent);
 }
-[data-theme='dark'] .cstep-value { color: var(--text); text-shadow: 0 0 10px color-mix(in srgb, var(--gc) 80%, transparent); }
-.cstep-value.unrated, [data-theme='dark'] .cstep-value.unrated { color: var(--text-3); text-shadow: none; }
+.kr-row:has(.cstep.warp) .cstep-value { background: color-mix(in srgb, var(--gc) 22%, transparent); }
+.cstep-value.unrated { color: var(--text-3); background: var(--soft-2); }
 .cstep.danger .cstep-value { color: #ff3b30; }
-/* low confidence breathes slowly: a red glow in dark, a gentle dim in light — no flashing */
-.cstep.danger .cstep-value:not(.fx-up):not(.fx-down) { animation: step-breathe-light 3s ease-in-out infinite; }
-[data-theme='dark'] .cstep.danger .cstep-value:not(.fx-up):not(.fx-down) { animation: step-breathe 3s ease-in-out infinite; }
-@keyframes step-breathe-light { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+/* low confidence: the chip breathes a slow red glow — no flashing */
+.cstep.danger .cstep-value:not(.fx-up):not(.fx-down) { animation: step-breathe 3s ease-in-out infinite; }
 @keyframes step-breathe {
-  0%, 100% { text-shadow: 0 0 4px rgba(255, 59, 48, 0.2); }
-  50% { text-shadow: 0 0 16px rgba(255, 59, 48, 0.75); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+  50% { box-shadow: 0 0 12px 2px rgba(255, 59, 48, 0.45); }
 }
 /* stepping up thumps, stepping down shakes */
 .cstep-value.fx-up { animation: step-pop 0.34s cubic-bezier(0.3, 1.4, 0.5, 1); }
@@ -740,7 +749,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 
 /* list fields */
 .rl { display: flex; flex-direction: column; }
-.rl-row { display: flex; align-items: center; gap: 10px; min-height: 28px; border-radius: 10px; }
+.rl-row { display: flex; align-items: center; gap: 10px; min-height: 32px; border-radius: 10px; }
 .rl-row.dragging { background: var(--soft-2); }
 .rl-p {
   flex: none; width: 26px; height: 18px; border-radius: 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
@@ -769,10 +778,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 
 /* health matrix: avatar header row, one dot per person per question */
 .health-table { display: grid; align-items: center; }
-.health-head { display: flex; justify-content: center; padding-bottom: 6px; opacity: 0.4; }
+.health-head { display: flex; justify-content: center; padding-bottom: 10px; opacity: 0.4; }
 .health-head.mine { opacity: 1; }
 .health-label { font-weight: 500; color: var(--text-2); padding-right: 12px; line-height: 1.4; }
-.health-cell { display: flex; align-items: center; justify-content: center; height: 30px; padding: 0; cursor: default; }
+.health-cell { display: flex; align-items: center; justify-content: center; height: 34px; padding: 0; cursor: default; }
 .health-cell.mine { cursor: pointer; }
 .health-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-3) 55%, transparent); transition: transform 0.12s; }
 .health-cell.mine .health-dot:not(.on) { box-shadow: inset 0 0 0 1.5px var(--text-3); }

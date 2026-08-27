@@ -69,12 +69,15 @@ export function ConfidenceStepper({ value, onChange }: {
       const W = c.width, H = c.height;
       const hyper = hyperRef.current;
       const t = intRef.current;
-      // light mode needs darker, saturated streaks — pale ones look like stains on white
-      const dark = document.documentElement.dataset.theme === 'dark';
       for (let i = 0; i < 2 + Math.round(t * 2); i++) {
-        if (stars.current.length < 40 + t * 35 && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 40, H));
+        if (stars.current.length < 30 + t * 20 && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 40, H));
       }
       ctx.clearRect(0, 0, W, H);
+      ctx.lineCap = 'round';
+      // the warping box is always deep space — one bright palette; drawn as two solid
+      // segments per streak (dim tail + bright head): no gradients, no shadowBlur, no lag
+      const headCol = hyper ? '235, 243, 255' : '190, 240, 200';
+      const tailCol = hyper ? '110, 170, 255' : '80, 205, 115';
       stars.current = stars.current.filter((s) => s.x + s.len + s.speed * 8 > -10);
       for (const s of stars.current) {
         s.x -= s.speed * (1 + t * 1.4);
@@ -82,48 +85,24 @@ export function ConfidenceStepper({ value, onChange }: {
         s.life = Math.min(1, s.life + 0.08);
         const len = (s.len + s.speed * 2.2) * (1 + t * 1.8); // higher score = longer streaks
         const head = s.x, tail = s.x + len;
-        // gentle fade over ~15% of the row at BOTH ends, and toward top/bottom — nothing clips
+        // gentle fade over ~15% of the box at BOTH ends, and toward top/bottom — nothing clips
         const fadeX = W * 0.15;
-        const edge = Math.min(1, s.y / 14, (H - s.y) / 14, tail / fadeX, (W - head) / fadeX);
-        const a = 0.55 * s.life * Math.max(0, edge);
+        const edge = Math.min(1, s.y / 10, (H - s.y) / 10, tail / fadeX, (W - head) / fadeX);
+        const a = 0.7 * s.life * Math.max(0, edge);
         if (a <= 0.01) continue;
-        const g = ctx.createLinearGradient(head, s.y, tail, s.y);
-        if (hyper) {
-          if (dark) {
-            g.addColorStop(0, `rgba(225, 240, 255, ${a})`);
-            g.addColorStop(0.25, `rgba(140, 190, 255, ${a * 0.8})`);
-            g.addColorStop(1, 'rgba(90, 162, 255, 0)');
-            ctx.shadowColor = 'rgba(90, 162, 255, 0.9)';
-            ctx.shadowBlur = 6;
-          } else {
-            g.addColorStop(0, `rgba(37, 99, 235, ${a})`);
-            g.addColorStop(0.25, `rgba(96, 165, 250, ${a * 0.75})`);
-            g.addColorStop(1, 'rgba(59, 130, 246, 0)');
-            ctx.shadowColor = 'rgba(59, 130, 246, 0.3)';
-            ctx.shadowBlur = 2;
-          }
-        } else if (dark) {
-          g.addColorStop(0, `rgba(190, 240, 200, ${a})`);
-          g.addColorStop(0.3, `rgba(90, 210, 120, ${a * 0.7})`);
-          g.addColorStop(1, 'rgba(52, 199, 89, 0)');
-          ctx.shadowColor = 'rgba(52, 199, 89, 0.55)';
-          ctx.shadowBlur = 4;
-        } else {
-          g.addColorStop(0, `rgba(21, 128, 61, ${a})`);
-          g.addColorStop(0.3, `rgba(34, 160, 84, ${a * 0.7})`);
-          g.addColorStop(1, 'rgba(52, 199, 89, 0)');
-          ctx.shadowColor = 'rgba(34, 160, 84, 0.25)';
-          ctx.shadowBlur = 2;
-        }
-        ctx.strokeStyle = g;
+        const headLen = Math.min(len, 10 + s.speed);
         ctx.lineWidth = s.width;
-        ctx.lineCap = 'round';
+        ctx.strokeStyle = `rgba(${tailCol}, ${a * 0.4})`;
         ctx.beginPath();
-        ctx.moveTo(head, s.y);
+        ctx.moveTo(head + headLen, s.y);
         ctx.lineTo(tail, s.y);
         ctx.stroke();
+        ctx.strokeStyle = `rgba(${headCol}, ${a})`;
+        ctx.beginPath();
+        ctx.moveTo(head, s.y);
+        ctx.lineTo(head + headLen, s.y);
+        ctx.stroke();
       }
-      ctx.shadowBlur = 0;
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
@@ -133,7 +112,7 @@ export function ConfidenceStepper({ value, onChange }: {
   const danger = rated && v <= 2;
 
   return (
-    <div className={`cstep${danger ? ' danger' : ''}`}>
+    <div className={`cstep${danger ? ' danger' : ''}${warp ? ' warp' : ''}`}>
       <canvas ref={canvasRef} className="cstep-canvas" />
       <button className="cstep-btn" title="Less confident" disabled={rated && v <= 0} onClick={() => bump(-1)}>−</button>
       <span
