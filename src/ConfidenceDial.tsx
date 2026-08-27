@@ -16,7 +16,7 @@ type Streak = { angle: number; r: number; speed: number; len: number; life: numb
 export function ConfidenceDial({ value, onChange, label }: {
   value: number | undefined;
   onChange: (v: number) => void;
-  label: string;
+  label?: string;
 }) {
   const committed = value ?? 0;
   const [live, setLive] = useState<number | null>(null); // while dragging
@@ -120,7 +120,7 @@ export function ConfidenceDial({ value, onChange, label }: {
   return (
     <div className={`dial${danger ? ' danger' : ''}`}>
       <canvas ref={canvasRef} className="dial-canvas" width={200} height={200} />
-      <div ref={dialRef} className="dial-face" onPointerDown={onPointerDown} title={`${label}: drag to rate confidence 0–10`}>
+      <div ref={dialRef} className="dial-face" onPointerDown={onPointerDown} title={`${label ? `${label}: ` : ''}drag to rate confidence 0\u201310`}>
         <svg width={88} height={88} viewBox="0 0 88 88">
           <path d={arc(START, START + SWEEP)} fill="none" stroke="var(--soft-2)" strokeWidth={7} strokeLinecap="round" />
           {rated && v > 0 && <path d={arc(START, end)} fill="none" stroke={color} strokeWidth={7} strokeLinecap="round" style={{ transition: live !== null ? 'none' : 'stroke 0.2s' }} />}
@@ -130,7 +130,7 @@ export function ConfidenceDial({ value, onChange, label }: {
         </svg>
         <span className="dial-value" style={{ color: rated ? color : 'var(--text-3)' }}>{rated ? v : '–'}</span>
       </div>
-      <span className="dial-label" title={label}>{label}</span>
+      {label && <span className="dial-label" title={label}>{label}</span>}
     </div>
   );
 }

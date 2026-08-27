@@ -438,6 +438,7 @@ img { display: block; -webkit-user-drag: none; }
 .retro-input {
   font: inherit; color: var(--text); background: var(--soft); border: 0; outline: 0; resize: none; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line);
   padding: 10px 12px; line-height: 1.5; user-select: text; min-height: 42px; overflow: hidden;
+  width: 100%; display: block;
 }
 .retro-input:focus { background: var(--soft-2); }
 .retro-input::placeholder { color: var(--text-3); }
@@ -690,6 +691,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 
 /* dials */
 .dial-row { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.kr-row { display: flex; align-items: center; gap: 14px; padding: 4px 0; }
+.kr-row + .kr-row { border-top: 1px solid var(--line); }
+.kr-name { flex: 1; min-width: 0; font-weight: 500; line-height: 1.45; white-space: pre-wrap; }
+.kr-row .dial { width: 88px; flex: none; }
 .dial { position: relative; width: 108px; display: flex; flex-direction: column; align-items: center; }
 .dial-canvas { position: absolute; width: 200px; height: 200px; left: 50%; top: 44px; transform: translate(-50%, -50%); pointer-events: none; z-index: 2; }
 .dial-face { position: relative; width: 88px; height: 88px; cursor: grab; touch-action: none; }
@@ -714,12 +719,15 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .health-grid { display: flex; flex-direction: column; }
 .health-row { display: flex; align-items: center; gap: 10px; min-height: 38px; }
 .health-label { flex: 1; min-width: 0; font-weight: 500; }
-.health-team { display: flex; gap: 4px; }
-.health-peer { display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--hc); }
-.health-pick { display: flex; gap: 7px; flex: none; }
-.health-dot {
-  width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--hc);
-  transition: transform 0.12s, background 0.15s;
+.health-people { display: flex; gap: 9px; flex: none; }
+.health-avatar {
+  display: inline-flex; border-radius: 50%; box-shadow: 0 0 0 2.5px var(--hc);
+  transition: transform 0.12s, box-shadow 0.15s; cursor: default; padding: 0;
 }
-.health-dot:hover { transform: scale(1.15); }
-.health-dot.on { background: var(--hc); }
+.health-avatar.blank { opacity: 0.55; }
+.health-avatar.mine { cursor: pointer; }
+.health-avatar.mine:hover { transform: scale(1.15); }
+.health-avatar:disabled { opacity: 1; cursor: default; }
+.health-avatar.blank:disabled { opacity: 0.55; }
+
+.grow-input { resize: none; overflow: hidden; line-height: 1.45; display: block; }

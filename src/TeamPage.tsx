@@ -78,6 +78,13 @@ function ClaudeConnect() {
   );
 }
 
+/** A member-input that grows with its content (objectives and key results run long). */
+function GrowInput({ value, placeholder, onChange, style }: { value: string; placeholder: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
+  const ref = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { const el = ref.current; if (el) { el.style.height = '0'; el.style.height = `${el.scrollHeight}px`; } }, [value]);
+  return <textarea ref={ref} rows={1} className="member-input grow-input" style={style} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
+}
+
 /** Members of the current team. Moderators can add, remove, and promote/demote. */
 export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) {
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -238,15 +245,15 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
             Past weeks keep whatever was set at the time.
           </p>
           <div className="retro-label" style={{ marginBottom: 6 }}>Objective</div>
-          <input className="member-input" style={{ width: '100%', maxWidth: 720 }} value={tpl.objective}
+          <GrowInput style={{ width: '100%', maxWidth: 720 }} value={tpl.objective}
             placeholder="The objective the team is driving at, e.g. First customer flight by December"
-            onChange={(e) => setTpl({ ...tpl, objective: e.target.value })} />
+            onChange={(v) => setTpl({ ...tpl, objective: v })} />
           <div className="retro-label" style={{ margin: '16px 0 6px' }}>Key results</div>
           <div className="retro-config">
             {tpl.keyResults.map((kr, i) => (
               <div key={kr.key} className="retro-config-row">
-                <input className="member-input" value={kr.name} placeholder="Key result"
-                  onChange={(e) => setTpl({ ...tpl, keyResults: tpl.keyResults.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+                <GrowInput value={kr.name} placeholder="Key result"
+                  onChange={(v) => setTpl({ ...tpl, keyResults: tpl.keyResults.map((x, j) => (j === i ? { ...x, name: v } : x)) })} />
                 <button className="icon-btn" title="Remove" onClick={() => setTpl({ ...tpl, keyResults: tpl.keyResults.filter((_, j) => j !== i) })}>×</button>
               </div>
             ))}
