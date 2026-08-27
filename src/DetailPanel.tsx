@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Deadline, Group, HealthMark, ISODate, Notification, Person, Project, Retro, RetroAnswers, RetroField, RetroTemplate, Status, Task } from './types';
 import { DEFAULT_HEALTH_METRICS } from './types';
-import { ConfidenceDial } from './ConfidenceDial';
+import { ConfidenceSlider } from './ConfidenceSlider';
 import { htmlToMarkdown } from './store';
 import { NO_GROUP_COLOR, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
@@ -242,8 +242,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Priorities this week</div>
-          <AutoTextarea value={(a.priorities as string) ?? ''}
-            placeholder={'One per line, tagged P1 / P2 / P3:\nP1 Fly the demo route\nP2 Order spare props'}
+          <RetroList value={(a.priorities as string) ?? ''} withPriority placeholder="What has to happen this week?"
             onChange={(v) => save({ priorities: v }, 'priorities')} />
         </div>
 
@@ -254,7 +253,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
           {tpl.keyResults.map((kr) => (
             <div key={kr.key} className="kr-row">
               <div className="kr-name">{kr.name}</div>
-              <ConfidenceDial value={confidence[kr.key]}
+              <ConfidenceSlider value={confidence[kr.key]}
                 onChange={(v) => save({ confidence: { ...confidence, [kr.key]: v } }, 'confidence')} />
             </div>
           ))}
@@ -262,7 +261,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Next four weeks</div>
-          <AutoTextarea value={(a.focus as string) ?? ''} placeholder={'The key areas, one per line…'}
+          <RetroList value={(a.focus as string) ?? ''} placeholder="A key area for the coming month"
             onChange={(v) => save({ focus: v }, 'focus')} />
         </div>
 
@@ -282,7 +281,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
                         title={`${p.name}${mark ? ` — ${markLabel[mark]}` : ' — not answered'}${mineRow ? ' · click to change' : ''}`}
                         disabled={!mineRow}
                         onClick={() => mineRow && cycleMark(m.key)}>
-                        <Avatar person={p} size={22} />
+                        <Avatar person={p} size={mineRow ? 24 : 22} />
                       </button>
                     );
                   })}
@@ -294,7 +293,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Improvements for next week</div>
-          <AutoTextarea value={(a.improvements as string) ?? ''} placeholder={'What we\u2019ll do better, one per line — this comes back up next Monday\u2026'}
+          <RetroList value={(a.improvements as string) ?? ''} placeholder={'What we\u2019ll do better \u2014 this comes back up next Monday'}
             onChange={(v) => save({ improvements: v }, 'improvements')} />
         </div>
 
@@ -325,15 +324,99 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
   );
 }
 
-function AutoTextarea({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (v: string) => void }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
+/*
+ * List-style retro field. Stored as plain lines of text (so past retros,
+ * carried improvements, and the MCP server keep working); priorities lines
+ * carry a leading "P1 " / "P2 " / "P3 " tag rendered as a clickable chip.
+ */
+type ListItem = { text: string; p: 1 | 2 | 3 };
+const P_COLORS: Record<1 | 2 | 3, string> = { 1: '#ff3b30', 2: '#ff9500', 3: '#8e8e93' };
+
+const parseList = (v: string, withP: boolean): ListItem[] =>
+  v.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    if (withP) {
+      const m = /^P([123])[\s.:—-]*(.*)$/i.exec(l);
+      if (m) return { text: m[2], p: Number(m[1]) as 1 | 2 | 3 };
+    }
+    return { text: l.replace(/^[-•]\s*/, ''), p: 1 };
+  });
+const serializeList = (items: ListItem[], withP: boolean) =>
+  items.filter((i) => i.text.trim()).map((i) => (withP ? `P${i.p} ${i.text.trim()}` : i.text.trim())).join('\n');
+
+function RetroList({ value, onChange, withPriority, placeholder }: {
+  value: string; onChange: (v: string) => void; withPriority?: boolean; placeholder: string;
+}) {
+  const withP = !!withPriority;
+  const [items, setItems] = useState<ListItem[]>(() => parseList(value, withP));
+  const lastSent = useRef(value);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = '0';
-    el.style.height = `${el.scrollHeight}px`;
-  }, [value]);
-  return <textarea ref={ref} className="retro-input" rows={1} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
+    // external change (another member editing, or week switch) — resync
+    if (value !== lastSent.current) { lastSent.current = value; setItems(parseList(value, withP)); }
+  }, [value, withP]);
+
+  const inputs = useRef<(HTMLInputElement | null)[]>([]);
+  const focusAt = useRef<number | null>(null);
+  useEffect(() => {
+    if (focusAt.current != null) {
+      const el = inputs.current[focusAt.current];
+      focusAt.current = null;
+      el?.focus();
+    }
+  });
+
+  const commit = (next: ListItem[]) => {
+    setItems(next);
+    const s = serializeList(next, withP);
+    if (s !== lastSent.current) { lastSent.current = s; onChange(s); }
+  };
+  const insertAt = (i: number, p: 1 | 2 | 3) => {
+    const next = [...items];
+    next.splice(i, 0, { text: '', p });
+    commit(next);
+    focusAt.current = i;
+  };
+  const removeAt = (i: number, refocus: boolean) => {
+    commit(items.filter((_, j) => j !== i));
+    if (refocus && i > 0) focusAt.current = i - 1;
+  };
+
+  return (
+    <div className="rl">
+      {items.map((it, i) => (
+        <div key={i} className="rl-row">
+          {withP ? (
+            <button
+              className="rl-p"
+              style={{ ['--pc' as string]: P_COLORS[it.p] }}
+              title={`Priority ${it.p} — click to change`}
+              onClick={() => commit(items.map((x, j) => (j === i ? { ...x, p: (x.p % 3) + 1 as 1 | 2 | 3 } : x)))}
+            >P{it.p}</button>
+          ) : (
+            <span className="rl-dot" />
+          )}
+          <input
+            ref={(el) => { inputs.current[i] = el; }}
+            className="rl-text"
+            value={it.text}
+            placeholder={placeholder}
+            onChange={(e) => commit(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); insertAt(i + 1, it.p); }
+              else if (e.key === 'Backspace' && it.text === '') { e.preventDefault(); removeAt(i, true); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); inputs.current[i - 1]?.focus(); }
+              else if (e.key === 'ArrowDown') { e.preventDefault(); inputs.current[i + 1]?.focus(); }
+            }}
+            onBlur={(e) => {
+              if (it.text.trim() === '' && !(e.relatedTarget instanceof Node && e.currentTarget.parentElement?.contains(e.relatedTarget))) removeAt(i, false);
+            }}
+          />
+        </div>
+      ))}
+      <button className="rl-add" onClick={() => insertAt(items.length, withP ? (items[items.length - 1]?.p ?? 1) : 1)}>
+        {items.length === 0 ? `+ ${placeholder}` : '+ Add'}
+      </button>
+    </div>
+  );
 }
 
 /* ─── Inbox ─────────────────────────────────────────── */
