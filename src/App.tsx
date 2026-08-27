@@ -21,6 +21,11 @@ const prefs: typeof DEFAULT_PREFS = (() => {
 })();
 const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, JSON.stringify(p));
 
+// The splash shader starts on its clean frame and sweeps its stripes once per cycle;
+// the splash holds for whole cycles so it always exits right as the stripes clear.
+const SPLASH_SPEED = 1.28;
+const SPLASH_CYCLE_MS = 1000 / (0.3 * SPLASH_SPEED); // ≈2.6s per sweep, from the shader's time scale
+
 export default function App() {
   const { data, teams, update, undo, redo, switchTeam, createTeam, deleteTeam, connectCloud, cloudMode } = useData();
   const [cloudError, setCloudError] = useState<string | null>(null);
@@ -109,11 +114,18 @@ export default function App() {
   };
   const mainRef = useRef<HTMLDivElement>(null);
 
-  // Launch splash: the mark slides in from the bottom, and once the teams are loaded it slides
-  // up and fades before the main screen appears.
+  // Launch splash: the mark slides in from the bottom, plays at least one full shader sweep,
+  // and once the teams are loaded it slides up and fades — timed to a sweep boundary, so the
+  // stripes have just cleared when it goes.
   const [splash, setSplash] = useState<'in' | 'out' | 'gone'>(() => (window.exponential ? 'in' : 'gone'));
+  const splashStart = useRef(performance.now());
   useEffect(() => {
-    if (splash === 'in' && cloudMode) setSplash('out');
+    if (splash === 'in' && cloudMode) {
+      const elapsed = performance.now() - splashStart.current;
+      const target = Math.max(1, Math.ceil(elapsed / SPLASH_CYCLE_MS)) * SPLASH_CYCLE_MS;
+      const t = window.setTimeout(() => setSplash('out'), target - elapsed);
+      return () => window.clearTimeout(t);
+    }
     if (splash === 'out') { const t = window.setTimeout(() => setSplash('gone'), 480); return () => window.clearTimeout(t); }
   }, [splash, cloudMode]);
 
@@ -311,7 +323,7 @@ export default function App() {
             distortion={0}
             contour={0.49}
             angle={70}
-            speed={1.28}
+            speed={SPLASH_SPEED}
             scale={0.66}
             fit="contain"
             style={{ width: 150, height: 100 }}
