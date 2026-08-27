@@ -256,6 +256,15 @@ export function WeekPlan(props: Props) {
                 lifting={lift?.id === t.id}
                 onLift={(dy, rowH) => setLift({ id: t.id, dy, rowH })}
                 onDrop={() => { if (liftStepsRef.current !== 0) onReorder(t.id, liftStepsRef.current); setLift(null); }}
+                onMoveToNow={
+                  // unfinished task in a past week: offer to pull it to the top of the backlog
+                  dayIndex(today) >= dayIndex(week) + 7 && !readonly && t.personId === selected && !!t.date && t.status !== 'done' && t.status !== 'cancelled'
+                    ? () => {
+                        const top = tasks.reduce((m, x) => (!x.date && x.personId === t.personId && !x.deletedAt ? Math.min(m, (x.order ?? 0) - 1) : m), 0);
+                        onUpdate(t.id, { date: undefined, end: undefined, order: top });
+                      }
+                    : undefined
+                }
               />
             ))}
             {readonly && visible.length === 0 && <div className="hint wk-empty">Nothing planned this week.</div>}
@@ -316,7 +325,7 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, selCount = 1, onDeleteSel, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop }: {
+function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, selCount = 1, onDeleteSel, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop, onMoveToNow }: {
   task: Task;
   week: ISODate;
   readonly: boolean;
@@ -339,6 +348,7 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
   lifting: boolean;
   onLift: (dy: number, rowH: number) => void;
   onDrop: () => void;
+  onMoveToNow?: () => void; // past weeks: pull this unfinished task to the top of the backlog
 }) {
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number } | null>(null); // right-click menu
@@ -471,6 +481,11 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
         {editing
           ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t, viaEnter) => onRename(task.id, t, viaEnter)} />
           : <button className="task-title" onDoubleClick={() => { if (!readonly && !reviewRow) onEdit?.(task.id); }}>{task.title}</button>}
+        {onMoveToNow && !editing && (
+          <button className="move-now" title="Move to the top of the backlog so it can be planned into this week"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); onMoveToNow(); }}>Move to this week</button>
+        )}
         {creator && (
           <span className="from-chip" title={`Added by ${creator.name}`}>
             <Avatar person={creator} size={14} /> {creator.id === me ? 'you' : shortName(creator.name).split(' ')[0]}

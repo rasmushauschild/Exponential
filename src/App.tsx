@@ -275,6 +275,41 @@ export default function App() {
     return () => { cancelled = true; };
   }, [!!data, calendarOn, googleUser, person, week, calTick]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Five minutes before one of my meetings a system notification fires. Today's own
+  // calendar refreshes every 10 minutes; the countdown check runs every 30 seconds.
+  const [myToday, setMyToday] = useState<CalendarEvent[]>([]);
+  useEffect(() => {
+    if (!calendarOn || !googleUser || !window.exponential) { setMyToday([]); return; }
+    let dead = false;
+    const load = () => {
+      const day = todayISO();
+      window.exponential!.google.events('primary', day, day)
+        .then((ev) => { if (!dead) setMyToday(ev); })
+        .catch(() => {});
+    };
+    load();
+    const iv = window.setInterval(load, 10 * 60_000);
+    return () => { dead = true; window.clearInterval(iv); };
+  }, [calendarOn, googleUser]);
+  const remindedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!myToday.length || !window.exponential?.notify) return;
+    const check = () => {
+      const now = Date.now();
+      for (const ev of myToday) {
+        if (ev.allDay || !ev.start || remindedRef.current.has(ev.id)) continue;
+        const delta = new Date(`${ev.date}T${ev.start}:00`).getTime() - now;
+        if (delta > 0 && delta <= 5 * 60_000) {
+          remindedRef.current.add(ev.id);
+          window.exponential!.notify!({ id: `meeting-${ev.id}`, title: 'Meeting in 5 minutes', body: `${ev.title} starts at ${ev.start}` });
+        }
+      }
+    };
+    check();
+    const iv = window.setInterval(check, 30_000);
+    return () => window.clearInterval(iv);
+  }, [myToday]);
+
   const signIn = useCallback(async () => {
     const g = window.exponential?.google;
     if (!g) return;
@@ -624,7 +659,7 @@ export default function App() {
               return id;
             }}
             onDeleteTask={(id) => update((d) => softDelete(d, [id]))}
-            onClaimTask={(id) => update((d) => claimTask(d, id))}
+            onClaimTask={(id, personId) => update((d) => claimTask(d, id, personId))}
             onUnclaimTask={(id) => update((d) => unclaimTask(d, id))}
             onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
             onUpdateProject={updateProject}

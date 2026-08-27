@@ -43,7 +43,7 @@ interface Props {
   tasks: Task[]; // all tasks of the team
   onCreateLinked: (link: { projectId?: string; parentId?: string }, title: string) => string;
   onDeleteTask: (id: string) => void;
-  onClaimTask: (id: string) => void;
+  onClaimTask: (id: string, personId?: string) => void;
   onUnclaimTask: (id: string) => void;
 }
 

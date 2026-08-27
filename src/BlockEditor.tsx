@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Person, Task } from './types';
 import { STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
@@ -59,7 +60,7 @@ interface Props {
   createTask: (title: string) => string; // returns the new id
   onUpdateTask: (id: string, patch: Partial<Task>) => void;
   onDeleteTask: (id: string) => void;
-  onClaim: (id: string) => void;
+  onClaim: (id: string, personId?: string) => void;
   onUnclaim: (id: string) => void;
   onOpenTask: (id: string) => void;
 }
@@ -77,6 +78,8 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   blocksRef.current = blocks;
   const selRef = useRef(sel);
   selRef.current = sel;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
 
   // Adopt outside changes (undo, another person) but never our own echo.
   useEffect(() => {
@@ -300,17 +303,33 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     window.addEventListener('pointerup', up);
   };
 
-  // While a selection exists: Backspace deletes it, Escape or clicking elsewhere clears it.
+  // While a selection exists: Backspace deletes it, ⌘C/⌘X copy it as portable
+  // Markdown (task blocks become plain checkboxes so a paste elsewhere makes fresh
+  // tasks), Escape or clicking elsewhere clears it.
   useEffect(() => {
     if (!sel) return;
     const lo = Math.min(sel.a, sel.b), hi = Math.max(sel.a, sel.b);
+    const removeSel = () => {
+      const bs = blocksRef.current;
+      for (const b of bs.slice(lo, hi + 1)) if (b.kind === 'task') onDeleteTask(b.taskId);
+      commit(bs.filter((_, j) => j < lo || j > hi));
+      setSel(null);
+    };
     const key = (e: KeyboardEvent) => {
       if (e.key === 'Backspace' || e.key === 'Delete') {
         e.preventDefault();
-        const bs = blocksRef.current;
-        for (const b of bs.slice(lo, hi + 1)) if (b.kind === 'task') onDeleteTask(b.taskId);
-        commit(bs.filter((_, j) => j < lo || j > hi));
-        setSel(null);
+        removeSel();
+      } else if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'x')) {
+        e.preventDefault();
+        const md = blocksRef.current.slice(lo, hi + 1).map((b) => {
+          if (b.kind === 'task') { const t = tasksRef.current.find((x) => x.id === b.taskId); return `- [${t?.status === 'done' ? 'x' : ' '}] ${t?.title ?? ''}`; }
+          if (b.kind === 'img') return `![](${b.src})`;
+          if (b.kind === 'h1') return `# ${b.text}`;
+          if (b.kind === 'h2') return `## ${b.text}`;
+          return b.text;
+        }).join('\n\n');
+        navigator.clipboard.writeText(md);
+        if (e.key.toLowerCase() === 'x') removeSel();
       } else if (e.key === 'Escape') setSel(null);
     };
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.blk-list, .toolbar')) setSel(null); };
@@ -336,7 +355,29 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         className={`blk-list${sel ? ' selecting' : ''}`}
         onDrop={(e) => { const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f, blocks.length); } }}
         onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
-        onPaste={(e) => { const f = Array.from(e.clipboardData.files)[0]; if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f, activeRef.current + 1); } }}
+        onPaste={(e) => {
+          const f = Array.from(e.clipboardData.files)[0];
+          if (f?.type.startsWith('image/')) { e.preventDefault(); insertImage(f, activeRef.current + 1); return; }
+          // Block-shaped text (headings, checkboxes, images) pastes as blocks; checkbox
+          // lines become fresh real tasks. Plain prose still pastes natively.
+          const text = e.clipboardData.getData('text/plain');
+          if (!text || !/(^|\n)(#{1,2} |!\[|- \[( |x)\])/i.test(text)) return;
+          e.preventDefault();
+          const built: Block[] = [];
+          for (const line of text.replace(/\r/g, '').split('\n')) {
+            const m = line.match(/^- \[( |x)\] ?(.*?)(\s*<!--task:[0-9a-f-]{36}-->)?\s*$/i);
+            if (m && m[2].trim()) {
+              const id = createTask(m[2].trim());
+              if (m[1].toLowerCase() === 'x') onUpdateTask(id, { status: 'done' });
+              built.push({ key: newKey(), kind: 'task', taskId: id });
+            } else built.push(...parseBlocks(line));
+          }
+          if (!built.length) return;
+          const s = selRef.current;
+          const at = s ? Math.max(s.a, s.b) + 1 : Math.min(activeRef.current + 1, blocksRef.current.length);
+          commit([...blocksRef.current.slice(0, at), ...built, ...blocksRef.current.slice(at)]);
+          setSel(null);
+        }}
       >
         {blocks.map((b, i) => (
           <div
@@ -360,7 +401,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
                 onTitle={(title) => onUpdateTask(b.taskId, { title })}
                 onUpdate={(patch) => onUpdateTask(b.taskId, patch)}
                 onDelete={() => removeAt(i, false)}
-                onClaim={() => onClaim(b.taskId)}
+                onClaim={(pid) => onClaim(b.taskId, pid)}
                 onUnclaim={() => onUnclaim(b.taskId)}
                 onOpen={() => onOpenTask(b.taskId)}
               />
@@ -467,10 +508,11 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
 function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTitle, onUpdate, onDelete, onClaim, onUnclaim, onOpen }: {
   task: Task | undefined; people: Person[]; me: string; claimable: boolean; focus: Focus; onFocused: () => void;
   onKey: (e: React.KeyboardEvent<HTMLInputElement>, t: Task | undefined) => void;
-  onTitle: (title: string) => void; onUpdate: (patch: Partial<Task>) => void; onDelete: () => void; onClaim: () => void; onUnclaim: () => void; onOpen: () => void;
+  onTitle: (title: string) => void; onUpdate: (patch: Partial<Task>) => void; onDelete: () => void; onClaim: (personId: string) => void; onUnclaim: () => void; onOpen: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [menu, setMenu] = useState<DOMRect | null>(null);
+  const [claimMenu, setClaimMenu] = useState<DOMRect | null>(null);
   const [title, setTitle] = useState(task?.title ?? '');
   const timer = useRef<number | undefined>(undefined);
   useEffect(() => { if (task && task.title !== title && document.activeElement !== ref.current) setTitle(task.title); }, [task?.title]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -502,13 +544,20 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
           <button className="owner-open" title={`${owner.name} · ${STATUS_LABEL[task.status]} — open`} onClick={onOpen}>
             <Avatar person={owner} size={14} /> {owner.id === me ? 'you' : shortName(owner.name).split(' ')[0]}
           </button>
-          {owner.id === me && claimable && (
-            <button className="owner-x" title="Take me off this task" onClick={(e) => { e.stopPropagation(); onUnclaim(); }}>×</button>
+          {claimable && (
+            <button className="owner-x" title={owner.id === me ? 'Take me off this task' : `Remove ${shortName(owner.name)} from this task`}
+              onClick={(e) => { e.stopPropagation(); onUnclaim(); }}>×</button>
           )}
         </span>
       ) : claimable ? (
-        <button className="pill small claim" onClick={onClaim}>+ Add to my week</button>
+        <button className="pill small claim"
+          onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setClaimMenu((m) => (m ? null : r)); }}>+ Add to week</button>
       ) : null}
+      {claimMenu && (
+        <PersonMenu anchor={claimMenu} people={people} me={me}
+          onPick={(pid) => { setClaimMenu(null); onClaim(pid); }}
+          onClose={() => setClaimMenu(null)} />
+      )}
       {menu && (
         <StatusMenu
           value={task.status}
@@ -520,5 +569,30 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
         />
       )}
     </div>
+  );
+}
+
+/** Pick whose week a project task goes to (Me first, then alphabetical). */
+function PersonMenu({ anchor, people, me, onPick, onClose }: {
+  anchor: DOMRect; people: Person[]; me: string; onPick: (personId: string) => void; onClose: () => void;
+}) {
+  useEffect(() => {
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.status-menu')) onClose(); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const ordered = [...people.filter((p) => p.id === me), ...people.filter((p) => p.id !== me).sort((a, b) => a.name.localeCompare(b.name))];
+  const menuH = ordered.length * 36 + 12;
+  const up = anchor.bottom + menuH > window.innerHeight - 8;
+  const style: React.CSSProperties = { position: 'fixed', left: Math.min(anchor.left, window.innerWidth - 200), ...(up ? { bottom: window.innerHeight - anchor.top + 6 } : { top: anchor.bottom + 6 }) };
+  return createPortal(
+    <div className="status-menu" style={style} onPointerDown={(e) => e.stopPropagation()}>
+      {ordered.map((p) => (
+        <button key={p.id} onClick={() => onPick(p.id)}>
+          <Avatar person={p} size={16} /> {p.id === me ? 'Me' : shortName(p.name)}
+        </button>
+      ))}
+    </div>,
+    document.body,
   );
 }

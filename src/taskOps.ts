@@ -107,10 +107,13 @@ export function denyReview(d: Data, id: string): Data {
 }
 
 /** Take a task from a project's (or parent task's) list into my own backlog. */
-export function claimTask(d: Data, id: string): Data {
+export function claimTask(d: Data, id: string, personId?: string): Data {
   const t = d.tasks.find((x) => x.id === id);
   if (!t) return d;
-  return { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, personId: d.me, date: undefined, end: undefined } : x)) };
+  const to = personId ?? d.me;
+  let next = { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, personId: to, date: undefined, end: undefined } : x)) };
+  if (to !== d.me) next = notify(next, { to, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${t.title}” to your backlog`, ref: { kind: 'task', id } });
+  return next;
 }
 
 /** Give a claimed task back: it leaves my week and returns to the project's open list. */

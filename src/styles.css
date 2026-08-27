@@ -207,8 +207,9 @@ img { display: block; -webkit-user-drag: none; }
 .week-band.dragging { transition: background 0.15s, left 0.16s cubic-bezier(0.2, 0.7, 0.2, 1); }
 .week-band:hover, .week-band.dragging { background: rgba(10, 132, 255, 0.12); }
 .week-label {
-  position: absolute; bottom: 10px; left: 0; right: 0; text-align: center; font-size: 12px; font-weight: 700; color: var(--text-3);
-  white-space: nowrap; z-index: 6; padding: 3px 0; border-radius: 999px; transition: color 0.15s;
+  position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 12px; font-weight: 700; color: var(--text-3);
+  white-space: nowrap; z-index: 6; padding: 3px 10px; border-radius: 999px; transition: color 0.15s;
+  background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 2px 8px var(--ov-5); /* legible over project bars */
 }
 .week-label.hover { bottom: 20px; } /* hovered weeks: same baseline as the label inside the band */
 .week-label:hover { color: var(--text); }
@@ -815,6 +816,14 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 }
 .rl-add:hover { background: var(--soft-2); color: var(--text-2); }
 .rl-p.ro, .rl-dot.ro { cursor: default; }
+
+/* past-week rescue: hover a leftover task to pull it forward */
+.move-now {
+  flex: none; font-size: 11px; font-weight: 600; color: var(--text-2); background: var(--soft-2);
+  padding: 3px 8px; border-radius: 999px; cursor: pointer; opacity: 0; transition: opacity 0.12s, background 0.15s;
+}
+.wk-row:hover .move-now { opacity: 1; }
+.move-now:hover { background: var(--ov-6); color: var(--text); }
 
 /* freeze button at the foot of the retro */
 .retro-lock {
