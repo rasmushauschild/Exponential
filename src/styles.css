@@ -697,26 +697,42 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .retro-objective { font-size: 13px; font-weight: 650; margin: 0 0 6px; line-height: 1.45; }
 .kr-row { display: flex; align-items: center; gap: 16px; padding: 4px 0; position: relative; }
 .kr-name { flex: 1; min-width: 0; font-weight: 500; line-height: 1.45; white-space: pre-wrap; color: var(--text-2); }
-/* static so the warp canvas positions against the whole .kr-row, not just the slider */
-.cslider { position: static; display: flex; align-items: center; gap: 10px; width: 152px; flex: none; padding: 6px 0; }
-.cslider-canvas { position: absolute; left: -16px; top: -4px; width: calc(100% + 32px); height: calc(100% + 8px); pointer-events: none; z-index: 2; }
-.cslider-track { position: relative; flex: 1; height: 22px; cursor: pointer; touch-action: none; }
-.cslider-rail, .cslider-fill { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 2px; }
-.cslider-rail { left: 0; right: 0; background: var(--soft-2); }
-.cslider-fill { left: 0; background: var(--text-2); }
-.cslider-thumb {
-  position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
-  transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--soft); pointer-events: none;
+/* static so the warp canvas positions against the whole .kr-row, not just the stepper */
+.cstep { position: static; display: flex; align-items: center; gap: 2px; flex: none; padding: 2px 0; }
+.cstep-canvas { position: absolute; left: -16px; top: -4px; width: calc(100% + 32px); height: calc(100% + 8px); pointer-events: none; z-index: 2; }
+.cstep-btn {
+  width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center;
+  font-size: 14px; font-weight: 700; color: var(--text-3); cursor: pointer; transition: background 0.15s, color 0.15s;
 }
-.cslider-value {
-  width: 16px; flex: none; text-align: right; font-size: 12px; font-weight: 700;
-  font-variant-numeric: tabular-nums; transition: color 0.2s;
+.cstep-btn:hover { background: var(--soft-2); color: var(--text); }
+.cstep-btn:disabled { opacity: 0.3; cursor: default; background: none; }
+.cstep-value {
+  width: 28px; text-align: center; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;
+  color: var(--text); text-shadow: 0 0 10px var(--gc);
 }
+.cstep-value.unrated { color: var(--text-3); text-shadow: none; }
+.cstep.danger .cstep-value { color: #ff3b30; }
 /* low confidence: a slow red glow breathing in and out — no flashing */
-.cslider.danger .cslider-fill { animation: dial-breathe 3s ease-in-out infinite; }
-@keyframes dial-breathe {
-  0%, 100% { box-shadow: 0 0 5px 0 rgba(255, 59, 48, 0.15); }
-  50% { box-shadow: 0 0 14px 3px rgba(255, 59, 48, 0.55); }
+.cstep.danger .cstep-value:not(.fx-up):not(.fx-down) { animation: step-breathe 3s ease-in-out infinite; }
+@keyframes step-breathe {
+  0%, 100% { text-shadow: 0 0 4px rgba(255, 59, 48, 0.2); }
+  50% { text-shadow: 0 0 16px rgba(255, 59, 48, 0.75); }
+}
+/* stepping up thumps, stepping down shakes */
+.cstep-value.fx-up { animation: step-pop 0.34s cubic-bezier(0.3, 1.4, 0.5, 1); }
+.cstep-value.fx-down { animation: step-shake 0.36s ease; }
+@keyframes step-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.55); text-shadow: 0 0 20px var(--gc); }
+  65% { transform: scale(0.92); }
+  100% { transform: scale(1); }
+}
+@keyframes step-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-3.5px); }
+  45% { transform: translateX(3px); }
+  70% { transform: translateX(-2px); }
+  85% { transform: translateX(1.5px); }
 }
 
 /* list fields */

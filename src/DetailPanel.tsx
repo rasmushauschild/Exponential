@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Deadline, Group, HealthMark, ISODate, Notification, Person, Project, Retro, RetroAnswers, RetroField, RetroTemplate, Status, Task } from './types';
 import { DEFAULT_HEALTH_METRICS } from './types';
-import { ConfidenceSlider } from './ConfidenceSlider';
+import { ConfidenceStepper } from './ConfidenceStepper';
 import { htmlToMarkdown } from './store';
 import { NO_GROUP_COLOR, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
@@ -254,16 +254,10 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
           {tpl.keyResults.map((kr) => (
             <div key={kr.key} className="kr-row">
               <div className="kr-name">{kr.name}</div>
-              <ConfidenceSlider value={confidence[kr.key]}
+              <ConfidenceStepper value={confidence[kr.key]}
                 onChange={(v) => save({ confidence: { ...confidence, [kr.key]: v } }, 'confidence')} />
             </div>
           ))}
-        </div>
-
-        <div className="retro-sec">
-          <div className="retro-sec-title">Next four weeks</div>
-          <RetroList value={(a.focus as string) ?? ''} placeholder="New focus area"
-            onChange={(v) => save({ focus: v }, 'focus')} />
         </div>
 
         <div className="retro-sec">
@@ -313,17 +307,6 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
           </div>
         )}
       </div>
-      <SendToAgent doc={() => [
-        `# Retro — Week ${isoWeekNumber(week)} (${formatRange(week, addDays(week, 6))})`, '',
-        ...(carried ? ['## Last week\u2019s improvements', '', carried, ''] : []),
-        '## Priorities this week', '', ((a.priorities as string) ?? '').trim() || '_(empty)_', '',
-        `## OKR confidence${tpl.objective ? ` — ${tpl.objective}` : ''}`, '',
-        ...tpl.keyResults.map((kr) => `- ${kr.name}: ${confidence[kr.key] ?? '–'}/10`), '',
-        '## Next four weeks', '', ((a.focus as string) ?? '').trim() || '_(empty)_', '',
-        '## Health', '',
-        ...tpl.healthMetrics.map((m) => `- ${m.label}: ${people.filter((p) => health[p.id]?.[m.key]).map((p) => `${shortName(p.name)} ${markLabel[health[p.id][m.key]]}`).join(', ') || '–'}`), '',
-        '## Improvements for next week', '', ((a.improvements as string) ?? '').trim() || '_(empty)_',
-      ].join('\n')} />
     </aside>
   );
 }

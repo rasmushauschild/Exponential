@@ -1,25 +1,31 @@
 import { useEffect, useRef, useState } from 'react';
 
 /**
- * A linear confidence slider, 0–10. Drag (or click) along the track to set it.
- * The slider itself stays neutral — the signal is a glow: red (worry) / amber
- * (shaky) / green (on track), and at ≤2 it pulses like a warning light. Above 7
- * the row flies at warp speed — a continuous field of star streaks races past —
- * and a 10 jumps to hyperspace: Star Wars blue-white.
+ * Confidence as a stepper: − and + around a big number, 0–10. The signal is a
+ * glow behind the number — red (worry) / amber (shaky) / green (on track) /
+ * hyperspace blue at 10 — breathing slowly when it's ≤2. Stepping up thumps the
+ * number; stepping down shakes it. From 7 the whole key-result row flies at
+ * warp speed, streaks growing longer and faster the higher it goes.
  */
 
 export const dialColor = (v: number) => (v <= 2 ? '#ff3b30' : v <= 6 ? '#ff9500' : v < 10 ? '#34c759' : '#5aa2ff');
 
 type Star = { x: number; y: number; speed: number; len: number; width: number; life: number };
 
-export function ConfidenceSlider({ value, onChange }: {
+export function ConfidenceStepper({ value, onChange }: {
   value: number | undefined;
   onChange: (v: number) => void;
 }) {
-  const committed = value ?? 0;
-  const [live, setLive] = useState<number | null>(null); // while dragging
-  const v = live ?? committed;
-  const rated = value !== undefined || live !== null;
+  const v = value ?? 0;
+  const rated = value !== undefined;
+  const [fx, setFx] = useState<{ dir: 'up' | 'down'; n: number } | null>(null);
+
+  const bump = (delta: number) => {
+    const next = Math.max(0, Math.min(10, v + delta));
+    if (next === v && rated) return;
+    onChange(next);
+    setFx((f) => ({ dir: delta > 0 ? 'up' : 'down', n: (f?.n ?? 0) + 1 }));
+  };
 
   /* ── warp field ── */
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -108,52 +114,19 @@ export function ConfidenceSlider({ value, onChange }: {
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, [warp]);
 
-  /* ── interaction ── */
-  const trackRef = useRef<HTMLDivElement>(null);
-  const valueAt = (clientX: number) => {
-    const r = trackRef.current!.getBoundingClientRect();
-    return Math.round(Math.min(10, Math.max(0, ((clientX - r.left) / r.width) * 10)));
-  };
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    setLive(valueAt(e.clientX));
-    const move = (ev: PointerEvent) => setLive(valueAt(ev.clientX));
-    const up = (ev: PointerEvent) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-      const final = valueAt(ev.clientX);
-      setLive(null);
-      onChange(final);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-
-  const color = dialColor(v);
   const danger = rated && v <= 2;
-  const pct = (v / 10) * 100;
-  const glowTransition = live !== null ? 'none' : 'box-shadow 0.25s';
 
   return (
-    <div className={`cslider${danger ? ' danger' : ''}`} title={'drag to rate confidence 0–10'}>
-      <canvas ref={canvasRef} className="cslider-canvas" />
-      <div ref={trackRef} className="cslider-track" onPointerDown={onPointerDown}>
-        <div className="cslider-rail" />
-        {rated && v > 0 && (
-          <div className="cslider-fill" style={{ width: `${pct}%`, boxShadow: `0 0 9px 1px ${color}90`, transition: glowTransition }} />
-        )}
-        <div
-          className="cslider-thumb"
-          style={{
-            left: `${pct}%`,
-            background: rated ? 'var(--text)' : 'var(--text-3)',
-            boxShadow: rated ? `0 0 0 2px var(--soft), 0 0 10px 2px ${color}a6` : '0 0 0 2px var(--soft)',
-            transition: glowTransition,
-          }}
-        />
-      </div>
-      <span className="cslider-value" style={{ color: danger ? '#ff3b30' : rated ? 'var(--text)' : 'var(--text-3)' }}>{rated ? v : '–'}</span>
+    <div className={`cstep${danger ? ' danger' : ''}`}>
+      <canvas ref={canvasRef} className="cstep-canvas" />
+      <button className="cstep-btn" title="Less confident" disabled={rated && v <= 0} onClick={() => bump(-1)}>−</button>
+      <span
+        key={fx?.n ?? 'still'}
+        className={`cstep-value${rated ? '' : ' unrated'}${fx ? ` fx-${fx.dir}` : ''}`}
+        style={rated ? { ['--gc' as string]: `${dialColor(v)}cc` } : undefined}
+        onAnimationEnd={(e) => { if (e.animationName.startsWith('step-pop') || e.animationName.startsWith('step-shake')) setFx(null); }}
+      >{rated ? v : '–'}</span>
+      <button className="cstep-btn" title="More confident" disabled={rated && v >= 10} onClick={() => bump(1)}>+</button>
     </div>
   );
 }
