@@ -69,6 +69,8 @@ export function ConfidenceStepper({ value, onChange }: {
       const W = c.width, H = c.height;
       const hyper = hyperRef.current;
       const t = intRef.current;
+      // light mode needs darker, saturated streaks — pale ones look like stains on white
+      const dark = document.documentElement.dataset.theme === 'dark';
       for (let i = 0; i < 2 + Math.round(t * 2); i++) {
         if (stars.current.length < 40 + t * 35 && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 40, H));
       }
@@ -87,17 +89,31 @@ export function ConfidenceStepper({ value, onChange }: {
         if (a <= 0.01) continue;
         const g = ctx.createLinearGradient(head, s.y, tail, s.y);
         if (hyper) {
-          g.addColorStop(0, `rgba(225, 240, 255, ${a})`);
-          g.addColorStop(0.25, `rgba(140, 190, 255, ${a * 0.8})`);
-          g.addColorStop(1, 'rgba(90, 162, 255, 0)');
-          ctx.shadowColor = 'rgba(90, 162, 255, 0.9)';
-          ctx.shadowBlur = 6;
-        } else {
+          if (dark) {
+            g.addColorStop(0, `rgba(225, 240, 255, ${a})`);
+            g.addColorStop(0.25, `rgba(140, 190, 255, ${a * 0.8})`);
+            g.addColorStop(1, 'rgba(90, 162, 255, 0)');
+            ctx.shadowColor = 'rgba(90, 162, 255, 0.9)';
+            ctx.shadowBlur = 6;
+          } else {
+            g.addColorStop(0, `rgba(37, 99, 235, ${a})`);
+            g.addColorStop(0.25, `rgba(96, 165, 250, ${a * 0.75})`);
+            g.addColorStop(1, 'rgba(59, 130, 246, 0)');
+            ctx.shadowColor = 'rgba(59, 130, 246, 0.3)';
+            ctx.shadowBlur = 2;
+          }
+        } else if (dark) {
           g.addColorStop(0, `rgba(190, 240, 200, ${a})`);
           g.addColorStop(0.3, `rgba(90, 210, 120, ${a * 0.7})`);
           g.addColorStop(1, 'rgba(52, 199, 89, 0)');
           ctx.shadowColor = 'rgba(52, 199, 89, 0.55)';
           ctx.shadowBlur = 4;
+        } else {
+          g.addColorStop(0, `rgba(21, 128, 61, ${a})`);
+          g.addColorStop(0.3, `rgba(34, 160, 84, ${a * 0.7})`);
+          g.addColorStop(1, 'rgba(52, 199, 89, 0)');
+          ctx.shadowColor = 'rgba(34, 160, 84, 0.25)';
+          ctx.shadowBlur = 2;
         }
         ctx.strokeStyle = g;
         ctx.lineWidth = s.width;
@@ -123,7 +139,7 @@ export function ConfidenceStepper({ value, onChange }: {
       <span
         key={fx?.n ?? 'still'}
         className={`cstep-value${rated ? '' : ' unrated'}${fx ? ` fx-${fx.dir}` : ''}`}
-        style={rated ? { ['--gc' as string]: `${dialColor(v)}cc` } : undefined}
+        style={rated ? { ['--gc' as string]: dialColor(v) } : undefined}
         onAnimationEnd={(e) => { if (e.animationName.startsWith('step-pop') || e.animationName.startsWith('step-shake')) setFx(null); }}
       >{rated ? v : '–'}</span>
       <button className="cstep-btn" title="More confident" disabled={rated && v >= 10} onClick={() => bump(1)}>+</button>

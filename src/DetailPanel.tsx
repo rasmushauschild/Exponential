@@ -262,7 +262,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Health</div>
-          <div className="health-table" style={{ gridTemplateColumns: `1fr repeat(${people.length}, 24px)` }}>
+          <div className="health-table" style={{ gridTemplateColumns: `minmax(96px, 1.5fr) repeat(${people.length}, minmax(22px, 1fr))` }}>
             <span />
             {ordered.map((p) => (
               <span key={p.id} className={`health-head${p.id === me ? ' mine' : ''}`} title={p.name}>

@@ -708,12 +708,15 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .cstep-btn:disabled { opacity: 0.3; cursor: default; background: none; }
 .cstep-value {
   width: 28px; text-align: center; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;
-  color: var(--text); text-shadow: 0 0 10px var(--gc);
+  color: var(--gc, var(--text)); /* light mode: the number itself carries the color — glows smudge on white */
 }
-.cstep-value.unrated { color: var(--text-3); text-shadow: none; }
+[data-theme='dark'] .cstep-value { color: var(--text); text-shadow: 0 0 10px color-mix(in srgb, var(--gc) 80%, transparent); }
+.cstep-value.unrated, [data-theme='dark'] .cstep-value.unrated { color: var(--text-3); text-shadow: none; }
 .cstep.danger .cstep-value { color: #ff3b30; }
-/* low confidence: a slow red glow breathing in and out — no flashing */
-.cstep.danger .cstep-value:not(.fx-up):not(.fx-down) { animation: step-breathe 3s ease-in-out infinite; }
+/* low confidence breathes slowly: a red glow in dark, a gentle dim in light — no flashing */
+.cstep.danger .cstep-value:not(.fx-up):not(.fx-down) { animation: step-breathe-light 3s ease-in-out infinite; }
+[data-theme='dark'] .cstep.danger .cstep-value:not(.fx-up):not(.fx-down) { animation: step-breathe 3s ease-in-out infinite; }
+@keyframes step-breathe-light { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 @keyframes step-breathe {
   0%, 100% { text-shadow: 0 0 4px rgba(255, 59, 48, 0.2); }
   50% { text-shadow: 0 0 16px rgba(255, 59, 48, 0.75); }
@@ -723,7 +726,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .cstep-value.fx-down { animation: step-shake 0.36s ease; }
 @keyframes step-pop {
   0% { transform: scale(1); }
-  35% { transform: scale(1.55); text-shadow: 0 0 20px var(--gc); }
+  35% { transform: scale(1.55); }
   65% { transform: scale(0.92); }
   100% { transform: scale(1); }
 }
