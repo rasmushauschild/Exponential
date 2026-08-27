@@ -121,6 +121,7 @@ img { display: block; -webkit-user-drag: none; }
   font-weight: 500; color: var(--text-2); width: 100%; text-align: left; white-space: nowrap;
 }
 .nav-item svg { flex: none; }
+.sidebar-inner > .nav-item + .nav-item { margin-top: 3px; }
 .nav-item.active { background: var(--ov-6); color: var(--text); }
 .nav-item:hover:not(.active) { background: var(--ov-35); }
 .sidebar-bottom { margin-top: auto; display: flex; flex-direction: column; gap: 2px; }
