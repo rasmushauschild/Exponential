@@ -679,14 +679,15 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 @keyframes splash-out { to { opacity: 0; transform: translateY(-52px); } }
 
 /* ─── Retro (redesigned) ───────────────────────────── */
-/* One quiet type scale: 11px caps titles, 13px/500 content, 12px tabular numbers. */
-.retro-sec { margin-bottom: 28px; font-size: 13px; }
+/* One quiet type scale: 11px caps titles, 13px/500 content, 12px tabular numbers.
+   Each section is a soft inset card so the boundaries read at a glance. */
+.retro-sec { margin-bottom: 10px; font-size: 13px; padding: 14px 16px; border-radius: 16px; background: var(--soft); }
 .retro-sec-title {
   font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
   letter-spacing: 0.07em; margin-bottom: 10px;
 }
 .retro-carried {
-  margin-bottom: 28px; padding: 10px 14px; border-radius: 12px; background: var(--soft);
+  margin-bottom: 10px; padding: 14px 16px; border-radius: 16px; background: var(--soft);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 .retro-carried .retro-sec-title { margin-bottom: 3px; }
@@ -704,7 +705,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .cslider-fill { left: 0; }
 .cslider-thumb {
   position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
-  transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--panel); pointer-events: none;
+  transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--soft); pointer-events: none;
 }
 .cslider-value {
   width: 16px; flex: none; text-align: right; font-size: 12px; font-weight: 700;
@@ -735,7 +736,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   align-self: flex-start; font-size: 12px; font-weight: 600; color: var(--text-3); padding: 4px 7px; margin: 0 0 0 -7px;
   border-radius: 8px; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
-.rl-add:hover { background: var(--soft); color: var(--text-2); }
+.rl-add:hover { background: var(--soft-2); color: var(--text-2); }
 
 /* health matrix: avatar header row, one dot per person per question */
 .health-table { display: grid; align-items: center; }
