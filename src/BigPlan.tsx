@@ -368,7 +368,7 @@ export function BigPlan(props: Props) {
             {hovered && m !== dayIndex(week) && ppd * 7 >= 70 && (
               <button
                 className="week-label hover"
-                style={{ left: (m - origin) * ppd, width: ppd * 7 }}
+                style={{ left: (m - origin + 3.5) * ppd }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => onOpenRetro(fromDayIndex(m))}
                 title="Open this week's retro"
