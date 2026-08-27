@@ -105,6 +105,9 @@ export interface RetroAnswers {
   confidence?: Record<string, number>; // KeyResult.key -> 0..10
   health?: Record<string, Record<string, HealthMark>>; // person id -> HealthMetric.key -> mark
   template?: RetroTemplate; // snapshot: past weeks keep the template as it was
+  locked?: boolean; // frozen by the Lock button: page renders read-only from its snapshots
+  lockedAt?: string; // ISO timestamp of the lock
+  people?: Person[]; // snapshot of the team at lock time (health matrix stays as it was)
   [legacy: string]: unknown; // pre-redesign free-text answers by RetroField.key
 }
 

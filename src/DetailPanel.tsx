@@ -202,11 +202,14 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
   people: Person[]; me: string; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number;
 }) {
   // Past weeks read from their frozen template; the current week follows Team settings
-  // (and re-freezes its snapshot with every edit).
+  // (and re-freezes its snapshot with every edit). Locking freezes people too and
+  // renders the whole page read-only from its snapshots.
+  const a: RetroAnswers = retro?.answers ?? {};
+  const locked = !!a.locked;
   const isPast = week < weekStart(todayISO());
   const current: RetroTemplate = { objective: '', keyResults: [], healthMetrics: DEFAULT_HEALTH_METRICS, ...liveTemplate };
-  const tpl: RetroTemplate = isPast && retro?.answers.template ? retro.answers.template : current;
-  const a: RetroAnswers = retro?.answers ?? {};
+  const tpl: RetroTemplate = (locked || isPast) && retro?.answers.template ? retro.answers.template : current;
+  const ppl = locked && Array.isArray(a.people) && a.people.length ? (a.people as Person[]) : people;
   const save = (patch: RetroAnswers, key: string) => onUpdate(week, { answers: { ...patch, template: tpl } }, `retro:${week}:${key}`);
 
   const health = (a.health ?? {}) as NonNullable<RetroAnswers['health']>;
@@ -219,7 +222,8 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
   const confidence = (a.confidence ?? {}) as Record<string, number>;
   const markColor: Record<HealthMark, string> = { g: '#34c759', y: '#ffcc00', r: '#ff3b30' };
   const markLabel: Record<HealthMark, string> = { g: 'Good', y: 'So-so', r: 'Rough' };
-  const ordered = [...people.filter((p) => p.id === me), ...people.filter((p) => p.id !== me)];
+  const ordered = [...ppl.filter((p) => p.id === me), ...ppl.filter((p) => p.id !== me)];
+  const lockedDate = a.lockedAt ? new Date(a.lockedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '';
 
   const carried = (prevRetro?.answers.improvements as string | undefined)?.trim();
   const legacy = legacyFields.filter((f) => typeof a[f.key] === 'string' && (a[f.key] as string).trim());
@@ -243,7 +247,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Priorities this week</div>
-          <RetroList value={(a.priorities as string) ?? ''} withPriority placeholder="New priority"
+          <RetroList value={(a.priorities as string) ?? ''} withPriority placeholder="New priority" readOnly={locked}
             onChange={(v) => save({ priorities: v }, 'priorities')} />
         </div>
 
@@ -254,7 +258,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
           {tpl.keyResults.map((kr) => (
             <div key={kr.key} className="kr-row">
               <div className="kr-name">{kr.name}</div>
-              <ConfidenceStepper value={confidence[kr.key]}
+              <ConfidenceStepper value={confidence[kr.key]} readOnly={locked}
                 onChange={(v) => save({ confidence: { ...confidence, [kr.key]: v } }, 'confidence')} />
             </div>
           ))}
@@ -262,7 +266,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Health</div>
-          <div className="health-table" style={{ gridTemplateColumns: `minmax(96px, 1.5fr) repeat(${people.length}, minmax(22px, 1fr))` }}>
+          <div className="health-table" style={{ gridTemplateColumns: `minmax(96px, 1.5fr) repeat(${ppl.length}, minmax(22px, 1fr))` }}>
             <span />
             {ordered.map((p) => (
               <span key={p.id} className={`health-head${p.id === me ? ' mine' : ''}`} title={p.name}>
@@ -274,7 +278,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
                 <span className="health-label">{m.label}</span>
                 {ordered.map((p) => {
                   const mark = health[p.id]?.[m.key];
-                  const mineCol = p.id === me;
+                  const mineCol = p.id === me && !locked;
                   return (
                     <button key={p.id} className={`health-cell${mineCol ? ' mine' : ''}`}
                       title={`${p.name} — ${mark ? markLabel[mark] : 'not answered'}${mineCol ? ' · click to change' : ''}`}
@@ -291,7 +295,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Improvements for next week</div>
-          <RetroList value={(a.improvements as string) ?? ''} placeholder="New improvement"
+          <RetroList value={(a.improvements as string) ?? ''} placeholder="New improvement" readOnly={locked}
             onChange={(v) => save({ improvements: v }, 'improvements')} />
         </div>
 
@@ -306,6 +310,20 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
             ))}
           </div>
         )}
+
+        <button className={`retro-lock${locked ? ' on' : ''}`}
+          title={locked ? 'Unlock to edit this retro again' : 'Freeze this page exactly as it is — later changes to OKRs or the team won’t touch it'}
+          onClick={() => locked
+            ? save({ locked: false }, 'lock')
+            : save({ locked: true, lockedAt: new Date().toISOString(), people }, 'lock')}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="4" y="11" width="16" height="10" rx="2.5" />
+            {locked
+              ? <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+              : <path d="M8 11V7a4 4 0 0 1 7.6-1.7" />}
+          </svg>
+          {locked ? `Locked${lockedDate ? ` ${lockedDate}` : ''} — click to unlock` : 'Lock this retro'}
+        </button>
       </div>
     </aside>
   );
@@ -330,9 +348,10 @@ const parseList = (v: string, withP: boolean): ListItem[] =>
 const serializeList = (items: ListItem[], withP: boolean) =>
   items.filter((i) => i.text.trim()).map((i) => (withP ? `P${i.p}${i.r === 'y' ? '✓' : i.r === 'n' ? '✗' : ''} ${i.text.trim()}` : i.text.trim())).join('\n');
 
-function RetroList({ value, onChange, withPriority, placeholder }: {
-  value: string; onChange: (v: string) => void; withPriority?: boolean; placeholder: string;
+function RetroList({ value, onChange, withPriority, placeholder, readOnly }: {
+  value: string; onChange: (v: string) => void; withPriority?: boolean; placeholder: string; readOnly?: boolean;
 }) {
+  const ro = !!readOnly;
   const withP = !!withPriority;
   const [items, setItems] = useState<ListItem[]>(() => parseList(value, withP));
   const lastSent = useRef(value);
@@ -399,31 +418,35 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
           className={`rl-row${dragging === i ? ' dragging' : ''}${withP && it.r === 'y' ? ' done' : ''}${withP && it.r === 'n' ? ' missed' : ''}`}>
           {withP ? (
             <button
-              className="rl-p"
+              className={`rl-p${ro ? ' ro' : ''}`}
               style={{ ['--pc' as string]: P_COLORS[it.p] }}
-              title={`Priority ${it.p} — click to change, drag to reorder`}
-              onPointerDown={(e) => startDrag(i, e, () => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, p: (x.p % 3) + 1 as 1 | 2 | 3 } : x))))}
+              title={ro ? `Priority ${it.p}` : `Priority ${it.p} — click to change, drag to reorder`}
+              onPointerDown={ro ? undefined : (e) => startDrag(i, e, () => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, p: (x.p % 3) + 1 as 1 | 2 | 3 } : x))))}
             >P{it.p}</button>
           ) : (
-            <button className="rl-dot" title="Drag to reorder" onPointerDown={(e) => startDrag(i, e)} />
+            <button className={`rl-dot${ro ? ' ro' : ''}`} title={ro ? undefined : 'Drag to reorder'} onPointerDown={ro ? undefined : (e) => startDrag(i, e)} />
           )}
           <input
             ref={(el) => { inputs.current[i] = el; }}
             className="rl-text"
             value={it.text}
             placeholder={placeholder}
-            onChange={(e) => commit(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
-            onKeyDown={(e) => {
+            readOnly={ro}
+            onChange={(e) => !ro && commit(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
+            onKeyDown={ro ? undefined : (e) => {
               if (e.key === 'Enter') { e.preventDefault(); insertAt(i + 1, it.p); }
               else if (e.key === 'Backspace' && it.text === '') { e.preventDefault(); removeAt(i, true); }
               else if (e.key === 'ArrowUp') { e.preventDefault(); inputs.current[i - 1]?.focus(); }
               else if (e.key === 'ArrowDown') { e.preventDefault(); inputs.current[i + 1]?.focus(); }
             }}
-            onBlur={(e) => {
+            onBlur={ro ? undefined : (e) => {
               if (it.text.trim() === '' && !(e.relatedTarget instanceof Node && e.currentTarget.parentElement?.contains(e.relatedTarget))) removeAt(i, false);
             }}
           />
-          {withP && (
+          {withP && ro && it.r && (
+            <span className={`rl-mark ${it.r === 'y' ? 'yes' : 'no'} on`}>{it.r === 'y' ? '✓' : '✗'}</span>
+          )}
+          {withP && !ro && (
             <>
               <button className={`rl-mark yes${it.r === 'y' ? ' on' : ''}`} title="Reached"
                 onClick={() => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'y' ? undefined : 'y' as const } : x)))}>✓</button>
@@ -431,10 +454,10 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
                 onClick={() => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'n' ? undefined : 'n' as const } : x)))}>✗</button>
             </>
           )}
-          <button className="rl-x" title="Delete" onClick={() => removeAt(i, false)}>×</button>
+          {!ro && <button className="rl-x" title="Delete" onClick={() => removeAt(i, false)}>×</button>}
         </div>
       ))}
-      <button className="rl-add" onClick={() => insertAt(items.length, withP ? (items[items.length - 1]?.p ?? 1) : 1)}>+ Add</button>
+      {!ro && <button className="rl-add" onClick={() => insertAt(items.length, withP ? (items[items.length - 1]?.p ?? 1) : 1)}>+ Add</button>}
     </div>
   );
 }

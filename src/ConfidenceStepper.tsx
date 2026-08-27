@@ -12,9 +12,10 @@ export const dialColor = (v: number) => (v <= 3 ? '#ff3b30' : v <= 6 ? '#ff9500'
 
 type Star = { x: number; y: number; speed: number; len: number; width: number; life: number };
 
-export function ConfidenceStepper({ value, onChange }: {
+export function ConfidenceStepper({ value, onChange, readOnly }: {
   value: number | undefined;
   onChange: (v: number) => void;
+  readOnly?: boolean;
 }) {
   const v = value ?? 0;
   const rated = value !== undefined;
@@ -115,14 +116,14 @@ export function ConfidenceStepper({ value, onChange }: {
   return (
     <div className={`cstep${danger ? ' danger' : ''}${warp ? ` warp w${v}` : ''}`}>
       <canvas ref={canvasRef} className="cstep-canvas" />
-      <button className="cstep-btn" title="Less confident" disabled={rated && v <= 0} onClick={() => bump(-1)}>−</button>
+      {!readOnly && <button className="cstep-btn" title="Less confident" disabled={rated && v <= 0} onClick={() => bump(-1)}>−</button>}
       <span
         key={fx?.n ?? 'still'}
         className={`cstep-value${rated ? '' : ' unrated'}${fx ? ` fx-${fx.dir}` : ''}`}
         style={rated ? { ['--gc' as string]: dialColor(v) } : undefined}
         onAnimationEnd={(e) => { if (e.animationName.startsWith('step-pop') || e.animationName.startsWith('step-shake')) setFx(null); }}
       >{rated ? v : '–'}</span>
-      <button className="cstep-btn" title="More confident" disabled={rated && v >= 10} onClick={() => bump(1)}>+</button>
+      {!readOnly && <button className="cstep-btn" title="More confident" disabled={rated && v >= 10} onClick={() => bump(1)}>+</button>}
     </div>
   );
 }

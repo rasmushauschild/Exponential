@@ -813,6 +813,16 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   border-radius: 8px; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
 .rl-add:hover { background: var(--soft-2); color: var(--text-2); }
+.rl-p.ro, .rl-dot.ro { cursor: default; }
+
+/* freeze button at the foot of the retro */
+.retro-lock {
+  display: flex; align-items: center; gap: 7px; margin: 6px auto 10px; padding: 8px 14px; border-radius: 12px;
+  font-size: 12.5px; font-weight: 600; color: var(--text-3); background: var(--soft); cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.retro-lock:hover { background: var(--soft-2); color: var(--text-2); }
+.retro-lock.on { color: var(--accent); }
 
 /* health matrix: avatar header row, one dot per person per question */
 .health-table { display: grid; align-items: center; }
