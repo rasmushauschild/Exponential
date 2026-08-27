@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from 'react';
 
 /**
  * A linear confidence slider, 0–10. Drag (or click) along the track to set it.
- * Low values shift through amber into red — at ≤2 the fill pulses like a warning
- * light — and above 7 the whole row flies at warp speed: a continuous field of
- * star streaks races past for as long as confidence stays that high.
+ * The slider itself stays neutral — the signal is a glow: red (worry) / amber
+ * (shaky) / green (on track), and at ≤2 it pulses like a warning light. Above 7
+ * the row flies at warp speed — a continuous field of star streaks races past —
+ * and a 10 jumps to hyperspace: Star Wars blue-white.
  */
 
-// Discrete, matching the health marks: red (worry) / amber (shaky) / green (on track).
-export const dialColor = (v: number) => (v <= 2 ? '#ff3b30' : v <= 6 ? '#ff9500' : '#34c759');
+export const dialColor = (v: number) => (v <= 2 ? '#ff3b30' : v <= 6 ? '#ff9500' : v < 10 ? '#34c759' : '#5aa2ff');
 
-type Star = { x: number; y: number; speed: number; len: number; life: number };
+type Star = { x: number; y: number; speed: number; len: number; width: number; life: number };
 
 export function ConfidenceSlider({ value, onChange }: {
   value: number | undefined;
@@ -24,6 +24,8 @@ export function ConfidenceSlider({ value, onChange }: {
   /* ── warp field ── */
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stars = useRef<Star[]>([]);
+  const hyperRef = useRef(false);
+  hyperRef.current = v >= 10;
   const warp = rated && v > 7;
 
   useEffect(() => {
@@ -34,37 +36,60 @@ export function ConfidenceSlider({ value, onChange }: {
       c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
       return;
     }
+    const W = c.width, H = c.height;
+    const spawn = (x: number) => ({
+      x,
+      y: H / 2 + (Math.random() + Math.random() - 1) * H * 0.46,
+      speed: 2.2 + Math.random() * 5,
+      len: 8 + Math.random() * 22,
+      width: 1 + Math.random() * 1.4,
+      life: 0,
+    });
+    // start with a field already in flight, not an empty screen filling up
+    if (!stars.current.length) for (let i = 0; i < 16; i++) stars.current.push({ ...spawn(Math.random() * W), life: 1 });
+
     let raf = 0;
     const step = () => {
       const ctx = c.getContext('2d')!;
-      const W = c.width, H = c.height;
-      // new stars enter from the right, biased toward the track's centerline
-      for (let i = 0; i < 2; i++) {
-        if (stars.current.length < 60 && Math.random() < 0.75) {
-          const spread = (Math.random() + Math.random() - 1) * 0.5; // triangular, denser mid
-          stars.current.push({
-            x: W + Math.random() * 40,
-            y: H / 2 + spread * H * 0.9,
-            speed: 3 + Math.random() * 7,
-            len: 10 + Math.random() * 30,
-            life: 0,
-          });
-        }
+      const hyper = hyperRef.current;
+      for (let i = 0; i < (hyper ? 3 : 2); i++) {
+        if (stars.current.length < (hyper ? 70 : 48) && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 30));
       }
       ctx.clearRect(0, 0, W, H);
-      stars.current = stars.current.filter((s) => s.x + s.len > -10);
+      stars.current = stars.current.filter((s) => s.x + s.len + s.speed * 3 > -10);
       for (const s of stars.current) {
-        s.x -= s.speed;
-        s.speed *= 1.015; // ever accelerating = warp
-        s.life = Math.min(1, s.life + 0.12);
-        ctx.strokeStyle = `rgba(52, 199, 89, ${0.5 * s.life})`;
-        ctx.lineWidth = 1.4;
+        s.x -= s.speed * (hyper ? 1.5 : 1);
+        s.speed = Math.min(13, s.speed * 1.012); // ever accelerating = warp
+        s.life = Math.min(1, s.life + 0.08);
+        const len = s.len + s.speed * 2.4; // speed stretches the streak
+        const head = s.x, tail = s.x + len;
+        // soft alpha falloff toward every canvas edge — nothing clips hard
+        const edge = Math.min(1, s.y / 16, (H - s.y) / 16, (tail + 20) / 60, (W + 20 - head) / 50);
+        const a = 0.55 * s.life * Math.max(0, edge);
+        if (a <= 0.01) continue;
+        const g = ctx.createLinearGradient(head, s.y, tail, s.y);
+        if (hyper) {
+          g.addColorStop(0, `rgba(225, 240, 255, ${a})`);
+          g.addColorStop(0.25, `rgba(140, 190, 255, ${a * 0.8})`);
+          g.addColorStop(1, 'rgba(90, 162, 255, 0)');
+          ctx.shadowColor = 'rgba(90, 162, 255, 0.9)';
+          ctx.shadowBlur = 6;
+        } else {
+          g.addColorStop(0, `rgba(190, 240, 200, ${a})`);
+          g.addColorStop(0.3, `rgba(90, 210, 120, ${a * 0.7})`);
+          g.addColorStop(1, 'rgba(52, 199, 89, 0)');
+          ctx.shadowColor = 'rgba(52, 199, 89, 0.55)';
+          ctx.shadowBlur = 4;
+        }
+        ctx.strokeStyle = g;
+        ctx.lineWidth = s.width;
         ctx.lineCap = 'round';
         ctx.beginPath();
-        ctx.moveTo(s.x, s.y);
-        ctx.lineTo(s.x + s.len, s.y);
+        ctx.moveTo(head, s.y);
+        ctx.lineTo(tail, s.y);
         ctx.stroke();
       }
+      ctx.shadowBlur = 0;
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
@@ -96,21 +121,27 @@ export function ConfidenceSlider({ value, onChange }: {
   const color = dialColor(v);
   const danger = rated && v <= 2;
   const pct = (v / 10) * 100;
+  const glowTransition = live !== null ? 'none' : 'box-shadow 0.25s';
 
   return (
     <div className={`cslider${danger ? ' danger' : ''}`} title={'drag to rate confidence 0–10'}>
-      <canvas ref={canvasRef} className="cslider-canvas" width={400} height={88} />
+      <canvas ref={canvasRef} className="cslider-canvas" width={368} height={124} />
       <div ref={trackRef} className="cslider-track" onPointerDown={onPointerDown}>
         <div className="cslider-rail" />
         {rated && v > 0 && (
-          <div className="cslider-fill" style={{ width: `${pct}%`, background: color, transition: live !== null ? 'none' : 'background 0.2s' }} />
+          <div className="cslider-fill" style={{ width: `${pct}%`, boxShadow: `0 0 9px 1px ${color}90`, transition: glowTransition }} />
         )}
         <div
           className="cslider-thumb"
-          style={{ left: `${pct}%`, background: rated ? color : 'var(--text-3)', transition: live !== null ? 'none' : 'background 0.2s' }}
+          style={{
+            left: `${pct}%`,
+            background: rated ? 'var(--text)' : 'var(--text-3)',
+            boxShadow: rated ? `0 0 0 2px var(--soft), 0 0 10px 2px ${color}a6` : '0 0 0 2px var(--soft)',
+            transition: glowTransition,
+          }}
         />
       </div>
-      <span className="cslider-value" style={{ color: rated ? color : 'var(--text-3)' }}>{rated ? v : '–'}</span>
+      <span className="cslider-value" style={{ color: danger ? '#ff3b30' : rated ? 'var(--text)' : 'var(--text-3)' }}>{rated ? v : '–'}</span>
     </div>
   );
 }

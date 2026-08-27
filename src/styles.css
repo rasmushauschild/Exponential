@@ -698,11 +698,11 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .kr-row { display: flex; align-items: center; gap: 16px; padding: 4px 0; }
 .kr-name { flex: 1; min-width: 0; font-weight: 500; line-height: 1.45; white-space: pre-wrap; color: var(--text-2); }
 .cslider { position: relative; display: flex; align-items: center; gap: 10px; width: 152px; flex: none; padding: 6px 0; }
-.cslider-canvas { position: absolute; left: -16px; top: -10px; width: calc(100% + 16px); height: calc(100% + 20px); pointer-events: none; z-index: 2; }
+.cslider-canvas { position: absolute; left: -24px; top: -14px; width: 184px; height: 62px; pointer-events: none; z-index: 2; }
 .cslider-track { position: relative; flex: 1; height: 22px; cursor: pointer; touch-action: none; }
 .cslider-rail, .cslider-fill { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 2px; }
 .cslider-rail { left: 0; right: 0; background: var(--soft-2); }
-.cslider-fill { left: 0; }
+.cslider-fill { left: 0; background: var(--text-2); }
 .cslider-thumb {
   position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
   transform: translate(-50%, -50%); box-shadow: 0 0 0 2px var(--soft); pointer-events: none;
