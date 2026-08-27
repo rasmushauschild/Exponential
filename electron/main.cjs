@@ -235,7 +235,7 @@ ipcMain.handle('mcp:connect', () => {
       try { cfg = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { /* fresh */ }
       cfg.mcpServers = { ...cfg.mcpServers, exponential: entry };
       fs.writeFileSync(f, JSON.stringify(cfg, null, 2));
-      messages.push('Claude Desktop — connected. Restart Claude Desktop and Exponential appears in its tools.');
+      messages.push('Claude Desktop — connected. Quit Claude Desktop fully (⌘Q) and reopen it: Exponential then appears in the chat’s tools menu and under Settings → Developer (not in the Connectors gallery).');
     }
   } catch (e) { messages.push(`Claude Desktop: ${e.message}`); }
 
