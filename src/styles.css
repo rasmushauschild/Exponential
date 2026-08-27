@@ -695,10 +695,11 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 
 /* confidence sliders */
 .retro-objective { font-size: 13px; font-weight: 650; margin: 0 0 6px; line-height: 1.45; }
-.kr-row { display: flex; align-items: center; gap: 16px; padding: 4px 0; }
+.kr-row { display: flex; align-items: center; gap: 16px; padding: 4px 0; position: relative; }
 .kr-name { flex: 1; min-width: 0; font-weight: 500; line-height: 1.45; white-space: pre-wrap; color: var(--text-2); }
-.cslider { position: relative; display: flex; align-items: center; gap: 10px; width: 152px; flex: none; padding: 6px 0; }
-.cslider-canvas { position: absolute; left: -24px; top: -14px; width: 184px; height: 62px; pointer-events: none; z-index: 2; }
+/* static so the warp canvas positions against the whole .kr-row, not just the slider */
+.cslider { position: static; display: flex; align-items: center; gap: 10px; width: 152px; flex: none; padding: 6px 0; }
+.cslider-canvas { position: absolute; left: -16px; top: -4px; width: calc(100% + 32px); height: calc(100% + 8px); pointer-events: none; z-index: 2; }
 .cslider-track { position: relative; flex: 1; height: 22px; cursor: pointer; touch-action: none; }
 .cslider-rail, .cslider-fill { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 2px; }
 .cslider-rail { left: 0; right: 0; background: var(--soft-2); }
@@ -711,13 +712,12 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   width: 16px; flex: none; text-align: right; font-size: 12px; font-weight: 700;
   font-variant-numeric: tabular-nums; transition: color 0.2s;
 }
-.cslider.danger .cslider-fill { animation: dial-alarm 0.9s ease-in-out infinite; }
-.cslider.danger .cslider-value { animation: dial-blink 0.9s step-end infinite; }
-@keyframes dial-alarm {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
-  50% { box-shadow: 0 0 10px 1px rgba(255, 59, 48, 0.5); }
+/* low confidence: a slow red glow breathing in and out — no flashing */
+.cslider.danger .cslider-fill { animation: dial-breathe 3s ease-in-out infinite; }
+@keyframes dial-breathe {
+  0%, 100% { box-shadow: 0 0 5px 0 rgba(255, 59, 48, 0.15); }
+  50% { box-shadow: 0 0 14px 3px rgba(255, 59, 48, 0.55); }
 }
-@keyframes dial-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 /* list fields */
 .rl { display: flex; flex-direction: column; }

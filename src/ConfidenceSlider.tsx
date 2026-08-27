@@ -26,7 +26,9 @@ export function ConfidenceSlider({ value, onChange }: {
   const stars = useRef<Star[]>([]);
   const hyperRef = useRef(false);
   hyperRef.current = v >= 10;
-  const warp = rated && v > 7;
+  const intRef = useRef(0); // 0 at 7 → 1 at 10: longer, faster streaks the higher it goes
+  intRef.current = Math.max(0, Math.min(1, (v - 7) / 3));
+  const warp = rated && v >= 7;
 
   useEffect(() => {
     const c = canvasRef.current;
@@ -36,8 +38,15 @@ export function ConfidenceSlider({ value, onChange }: {
       c.getContext('2d')?.clearRect(0, 0, c.width, c.height);
       return;
     }
-    const W = c.width, H = c.height;
-    const spawn = (x: number) => ({
+    // the canvas spans the whole key-result row (CSS) — keep the bitmap in sync at 2x
+    const fit = () => {
+      const w = Math.round(c.clientWidth * 2), h = Math.round(c.clientHeight * 2);
+      if (w && h && (c.width !== w || c.height !== h)) { c.width = w; c.height = h; }
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(c);
+    const spawn = (x: number, H: number) => ({
       x,
       y: H / 2 + (Math.random() + Math.random() - 1) * H * 0.46,
       speed: 2.2 + Math.random() * 5,
@@ -46,25 +55,28 @@ export function ConfidenceSlider({ value, onChange }: {
       life: 0,
     });
     // start with a field already in flight, not an empty screen filling up
-    if (!stars.current.length) for (let i = 0; i < 16; i++) stars.current.push({ ...spawn(Math.random() * W), life: 1 });
+    if (!stars.current.length) for (let i = 0; i < 20; i++) stars.current.push({ ...spawn(Math.random() * c.width, c.height), life: 1 });
 
     let raf = 0;
     const step = () => {
       const ctx = c.getContext('2d')!;
+      const W = c.width, H = c.height;
       const hyper = hyperRef.current;
-      for (let i = 0; i < (hyper ? 3 : 2); i++) {
-        if (stars.current.length < (hyper ? 70 : 48) && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 30));
+      const t = intRef.current;
+      for (let i = 0; i < 2 + Math.round(t * 2); i++) {
+        if (stars.current.length < 40 + t * 35 && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 40, H));
       }
       ctx.clearRect(0, 0, W, H);
-      stars.current = stars.current.filter((s) => s.x + s.len + s.speed * 3 > -10);
+      stars.current = stars.current.filter((s) => s.x + s.len + s.speed * 8 > -10);
       for (const s of stars.current) {
-        s.x -= s.speed * (hyper ? 1.5 : 1);
+        s.x -= s.speed * (1 + t * 1.4);
         s.speed = Math.min(13, s.speed * 1.012); // ever accelerating = warp
         s.life = Math.min(1, s.life + 0.08);
-        const len = s.len + s.speed * 2.4; // speed stretches the streak
+        const len = (s.len + s.speed * 2.2) * (1 + t * 1.8); // higher score = longer streaks
         const head = s.x, tail = s.x + len;
-        // soft alpha falloff toward every canvas edge — nothing clips hard
-        const edge = Math.min(1, s.y / 16, (H - s.y) / 16, (tail + 20) / 60, (W + 20 - head) / 50);
+        // gentle fade over ~15% of the row at BOTH ends, and toward top/bottom — nothing clips
+        const fadeX = W * 0.15;
+        const edge = Math.min(1, s.y / 14, (H - s.y) / 14, tail / fadeX, (W - head) / fadeX);
         const a = 0.55 * s.life * Math.max(0, edge);
         if (a <= 0.01) continue;
         const g = ctx.createLinearGradient(head, s.y, tail, s.y);
@@ -93,7 +105,7 @@ export function ConfidenceSlider({ value, onChange }: {
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, [warp]);
 
   /* ── interaction ── */
@@ -125,7 +137,7 @@ export function ConfidenceSlider({ value, onChange }: {
 
   return (
     <div className={`cslider${danger ? ' danger' : ''}`} title={'drag to rate confidence 0–10'}>
-      <canvas ref={canvasRef} className="cslider-canvas" width={368} height={124} />
+      <canvas ref={canvasRef} className="cslider-canvas" />
       <div ref={trackRef} className="cslider-track" onPointerDown={onPointerDown}>
         <div className="cslider-rail" />
         {rated && v > 0 && (
