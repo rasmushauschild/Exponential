@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react';
  * star streaks races past for as long as confidence stays that high.
  */
 
-export const dialColor = (v: number) => `hsl(${Math.round(v * 12.2)} 80% ${46 + v * 0.8}%)`;
+// Discrete, matching the health marks: red (worry) / amber (shaky) / green (on track).
+export const dialColor = (v: number) => (v <= 2 ? '#ff3b30' : v <= 6 ? '#ff9500' : '#34c759');
 
 type Star = { x: number; y: number; speed: number; len: number; life: number };
 
@@ -23,8 +24,6 @@ export function ConfidenceSlider({ value, onChange }: {
   /* ── warp field ── */
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stars = useRef<Star[]>([]);
-  const hueRef = useRef(0);
-  hueRef.current = v * 12.2;
   const warp = rated && v > 7;
 
   useEffect(() => {
@@ -58,7 +57,7 @@ export function ConfidenceSlider({ value, onChange }: {
         s.x -= s.speed;
         s.speed *= 1.015; // ever accelerating = warp
         s.life = Math.min(1, s.life + 0.12);
-        ctx.strokeStyle = `hsla(${hueRef.current}, 85%, 62%, ${0.55 * s.life})`;
+        ctx.strokeStyle = `rgba(52, 199, 89, ${0.5 * s.life})`;
         ctx.lineWidth = 1.4;
         ctx.lineCap = 'round';
         ctx.beginPath();

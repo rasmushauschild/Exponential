@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import type { Deadline, Group, HealthMark, ISODate, Notification, Person, Project, Retro, RetroAnswers, RetroField, RetroTemplate, Status, Task } from './types';
 import { DEFAULT_HEALTH_METRICS } from './types';
 import { ConfidenceSlider } from './ConfidenceSlider';
@@ -218,6 +218,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
   const confidence = (a.confidence ?? {}) as Record<string, number>;
   const markColor: Record<HealthMark, string> = { g: '#34c759', y: '#ffcc00', r: '#ff3b30' };
   const markLabel: Record<HealthMark, string> = { g: 'Good', y: 'So-so', r: 'Rough' };
+  const ordered = [...people.filter((p) => p.id === me), ...people.filter((p) => p.id !== me)];
 
   const carried = (prevRetro?.answers.improvements as string | undefined)?.trim();
   const legacy = legacyFields.filter((f) => typeof a[f.key] === 'string' && (a[f.key] as string).trim());
@@ -242,7 +243,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Priorities this week</div>
-          <RetroList value={(a.priorities as string) ?? ''} withPriority placeholder="What has to happen this week?"
+          <RetroList value={(a.priorities as string) ?? ''} withPriority placeholder="New priority"
             onChange={(v) => save({ priorities: v }, 'priorities')} />
         </div>
 
@@ -261,39 +262,42 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
 
         <div className="retro-sec">
           <div className="retro-sec-title">Next four weeks</div>
-          <RetroList value={(a.focus as string) ?? ''} placeholder="A key area for the coming month"
+          <RetroList value={(a.focus as string) ?? ''} placeholder="New focus area"
             onChange={(v) => save({ focus: v }, 'focus')} />
         </div>
 
         <div className="retro-sec">
           <div className="retro-sec-title">Health</div>
-          <div className="health-grid">
+          <div className="health-table" style={{ gridTemplateColumns: `1fr repeat(${people.length}, 24px)` }}>
+            <span />
+            {ordered.map((p) => (
+              <span key={p.id} className={`health-head${p.id === me ? ' mine' : ''}`} title={p.name}>
+                <Avatar person={p} size={20} />
+              </span>
+            ))}
             {tpl.healthMetrics.map((m) => (
-              <div key={m.key} className="health-row">
+              <Fragment key={m.key}>
                 <span className="health-label">{m.label}</span>
-                <span className="health-people">
-                  {[...people.filter((p) => p.id === me), ...people.filter((p) => p.id !== me)].map((p) => {
-                    const mark = health[p.id]?.[m.key];
-                    const mineRow = p.id === me;
-                    return (
-                      <button key={p.id} className={`health-avatar${mineRow ? ' mine' : ''}${mark ? '' : ' blank'}`}
-                        style={{ ['--hc' as string]: mark ? markColor[mark] : 'var(--soft-2)' }}
-                        title={`${p.name}${mark ? ` — ${markLabel[mark]}` : ' — not answered'}${mineRow ? ' · click to change' : ''}`}
-                        disabled={!mineRow}
-                        onClick={() => mineRow && cycleMark(m.key)}>
-                        <Avatar person={p} size={mineRow ? 24 : 22} />
-                      </button>
-                    );
-                  })}
-                </span>
-              </div>
+                {ordered.map((p) => {
+                  const mark = health[p.id]?.[m.key];
+                  const mineCol = p.id === me;
+                  return (
+                    <button key={p.id} className={`health-cell${mineCol ? ' mine' : ''}`}
+                      title={`${p.name} — ${mark ? markLabel[mark] : 'not answered'}${mineCol ? ' · click to change' : ''}`}
+                      disabled={!mineCol}
+                      onClick={() => mineCol && cycleMark(m.key)}>
+                      <span className={`health-dot${mark ? ' on' : ''}`} style={mark ? { background: markColor[mark] } : undefined} />
+                    </button>
+                  );
+                })}
+              </Fragment>
             ))}
           </div>
         </div>
 
         <div className="retro-sec">
           <div className="retro-sec-title">Improvements for next week</div>
-          <RetroList value={(a.improvements as string) ?? ''} placeholder={'What we\u2019ll do better \u2014 this comes back up next Monday'}
+          <RetroList value={(a.improvements as string) ?? ''} placeholder="New improvement"
             onChange={(v) => save({ improvements: v }, 'improvements')} />
         </div>
 
@@ -412,9 +416,7 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
           />
         </div>
       ))}
-      <button className="rl-add" onClick={() => insertAt(items.length, withP ? (items[items.length - 1]?.p ?? 1) : 1)}>
-        {items.length === 0 ? `+ ${placeholder}` : '+ Add'}
-      </button>
+      <button className="rl-add" onClick={() => insertAt(items.length, withP ? (items[items.length - 1]?.p ?? 1) : 1)}>+ Add</button>
     </div>
   );
 }
