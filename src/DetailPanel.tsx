@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Deadline, Group, ISODate, Notification, Person, Project, Retro, RetroField, Status, Task } from './types';
+import type { Deadline, Group, HealthMark, ISODate, Notification, Person, Project, Retro, RetroAnswers, RetroField, RetroTemplate, Status, Task } from './types';
+import { DEFAULT_HEALTH_METRICS } from './types';
+import { ConfidenceDial } from './ConfidenceDial';
 import { htmlToMarkdown } from './store';
 import { NO_GROUP_COLOR, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { BlockEditor } from './BlockEditor';
-import { addDays, formatRange, isoWeekNumber } from './dates';
+import { addDays, formatRange, isoWeekNumber, todayISO, weekStart } from './dates';
 
 export type Selection =
   | { kind: 'project'; id: string }
@@ -32,6 +34,8 @@ interface Props {
   onUpdateDeadline: (id: string, patch: Partial<Deadline>, coalesce?: string) => void;
   onUpdateRetro: (week: ISODate, patch: Partial<Retro>, coalesce?: string) => void;
   retroFields: RetroField[];
+  retroTemplate?: RetroTemplate;
+  prevRetro?: Retro;
   onOpen: (sel: Selection) => void;
   onMarkRead: (ids: string[]) => void;
   onDelete: () => void;
@@ -47,7 +51,7 @@ export function DetailPanel(p: Props) {
 
   const style = { width: p.width };
   if (selection.kind === 'inbox') return <Inbox {...p} />;
-  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} fields={p.retroFields} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
+  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} prevRetro={p.prevRetro} liveTemplate={p.retroTemplate} legacyFields={p.retroFields} people={people} me={me} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
 
   const item = project ?? task ?? deadline;
   if (!item) return null;
@@ -192,7 +196,29 @@ export function DetailPanel(p: Props) {
 
 /* ─── Retro ─────────────────────────────────────────── */
 
-function RetroDoc({ week, retro, fields, onUpdate, onClose, width }: { week: ISODate; retro?: Retro; fields: RetroField[]; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number }) {
+function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, me, onUpdate, onClose, width }: {
+  week: ISODate; retro?: Retro; prevRetro?: Retro; liveTemplate?: RetroTemplate; legacyFields: RetroField[];
+  people: Person[]; me: string; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number;
+}) {
+  // Past weeks read from their frozen template; the current week follows Team settings
+  // (and re-freezes its snapshot with every edit).
+  const isPast = week < weekStart(todayISO());
+  const current: RetroTemplate = { objective: '', keyResults: [], healthMetrics: DEFAULT_HEALTH_METRICS, ...liveTemplate };
+  const tpl: RetroTemplate = isPast && retro?.answers.template ? retro.answers.template : current;
+  const a: RetroAnswers = retro?.answers ?? {};
+  const save = (patch: RetroAnswers, key: string) => onUpdate(week, { answers: { ...patch, template: tpl } }, `retro:${week}:${key}`);
+
+  const health = (a.health ?? {}) as NonNullable<RetroAnswers['health']>;
+  const mine = health[me] ?? {};
+  const setMark = (metric: string, m: HealthMark) =>
+    save({ health: { ...health, [me]: { ...mine, [metric]: mine[metric] === m ? undefined as unknown as HealthMark : m } } }, 'health');
+  const confidence = (a.confidence ?? {}) as Record<string, number>;
+  const markColor: Record<HealthMark, string> = { g: '#34c759', y: '#ffcc00', r: '#ff3b30' };
+  const markLabel: Record<HealthMark, string> = { g: 'Good', y: 'So-so', r: 'Rough' };
+
+  const carried = (prevRetro?.answers.improvements as string | undefined)?.trim();
+  const legacy = legacyFields.filter((f) => typeof a[f.key] === 'string' && (a[f.key] as string).trim());
+
   return (
     <aside className="detail" style={{ width }}>
       <div className="detail-top">
@@ -202,24 +228,95 @@ function RetroDoc({ week, retro, fields, onUpdate, onClose, width }: { week: ISO
       </div>
       <div className="detail-scroll">
         <h1 className="detail-title static">Week {isoWeekNumber(week)}</h1>
-        <div className="retro-fields">
-          {fields.map((f) => (
-            <label key={f.key} className="retro-field">
-              <span className="retro-label">{f.label}</span>
-              <AutoTextarea
-                value={retro?.answers[f.key] ?? ''}
-                placeholder={f.hint}
-                onChange={(v) => onUpdate(week, { answers: { [f.key]: v } }, `retro:${week}:${f.key}`)}
-              />
-            </label>
-          ))}
+        <p className="hint" style={{ margin: '-6px 0 14px' }}>{formatRange(week, addDays(week, 6))}</p>
+
+        {carried && (
+          <div className="retro-carried">
+            <div className="retro-sec-title">Last week we said we&rsquo;d improve</div>
+            <div className="retro-carried-text">{carried}</div>
+          </div>
+        )}
+
+        <div className="retro-sec">
+          <div className="retro-sec-title">Demos</div>
+          <AutoTextarea value={(a.demos as string) ?? ''} placeholder="The coolest things built this week — big or small…"
+            onChange={(v) => save({ demos: v }, 'demos')} />
         </div>
-        <div className="retro-label" style={{ marginTop: 22 }}>Notes</div>
-        <MarkdownEditor key={`retro-${week}`} value={retro?.notes ?? ''} onChange={(md) => onUpdate(week, { notes: md }, `retro:${week}:notes`)} />
+
+        <div className="retro-sec">
+          <div className="retro-sec-title">OKR confidence</div>
+          {tpl.objective ? <div className="retro-objective">{tpl.objective}</div>
+            : <p className="hint" style={{ margin: '2px 0 6px' }}>Set the objective and key results in Team settings.</p>}
+          {tpl.keyResults.length > 0 && (
+            <div className="dial-row">
+              {tpl.keyResults.map((kr) => (
+                <ConfidenceDial key={kr.key} label={kr.name} value={confidence[kr.key]}
+                  onChange={(v) => save({ confidence: { ...confidence, [kr.key]: v } }, 'confidence')} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="retro-sec">
+          <div className="retro-sec-title">Focus</div>
+          <AutoTextarea value={(a.focus as string) ?? ''} placeholder="The key areas for the next four weeks…"
+            onChange={(v) => save({ focus: v }, 'focus')} />
+        </div>
+
+        <div className="retro-sec">
+          <div className="retro-sec-title">Health</div>
+          <div className="health-grid">
+            {tpl.healthMetrics.map((m) => (
+              <div key={m.key} className="health-row">
+                <span className="health-label">{m.label}</span>
+                <span className="health-team">
+                  {people.filter((p) => p.id !== me && health[p.id]?.[m.key]).map((p) => (
+                    <span key={p.id} className="health-peer" title={`${p.name} — ${markLabel[health[p.id][m.key]]}`}
+                      style={{ ['--hc' as string]: markColor[health[p.id][m.key]] }}>
+                      <Avatar person={p} size={16} />
+                    </span>
+                  ))}
+                </span>
+                <span className="health-pick">
+                  {(['g', 'y', 'r'] as HealthMark[]).map((mk) => (
+                    <button key={mk} className={`health-dot${mine[m.key] === mk ? ' on' : ''}`} title={markLabel[mk]}
+                      style={{ ['--hc' as string]: markColor[mk] }} onClick={() => setMark(m.key, mk)} />
+                  ))}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="retro-sec">
+          <div className="retro-sec-title">Improvements for next week</div>
+          <AutoTextarea value={(a.improvements as string) ?? ''} placeholder="What we&rsquo;ll do better — this comes back up next Monday…"
+            onChange={(v) => save({ improvements: v }, 'improvements')} />
+        </div>
+
+        {legacy.length > 0 && (
+          <div className="retro-sec">
+            <div className="retro-sec-title">Earlier format</div>
+            {legacy.map((f) => (
+              <div key={f.key} style={{ marginBottom: 10 }}>
+                <div className="retro-label">{f.label}</div>
+                <p style={{ margin: '2px 0 0', whiteSpace: 'pre-wrap' }}>{a[f.key] as string}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-      <SendToAgent doc={() => [`# Retro — Week ${isoWeekNumber(week)} (${formatRange(week, addDays(week, 6))})`, '',
-        ...fields.flatMap((f) => [`## ${f.label}`, '', retro?.answers[f.key]?.trim() || '_(empty)_', '']),
-        ...(retro?.notes?.trim() ? ['## Notes', '', retro.notes.trim()] : [])].join('\n')} />
+      <SendToAgent doc={() => [
+        `# Retro — Week ${isoWeekNumber(week)} (${formatRange(week, addDays(week, 6))})`, '',
+        ...(carried ? ['## Last week\u2019s improvements', '', carried, ''] : []),
+        '## Demos', '', ((a.demos as string) ?? '').trim() || '_(empty)_', '',
+        `## OKR confidence${tpl.objective ? ` — ${tpl.objective}` : ''}`, '',
+        ...tpl.keyResults.map((kr) => `- ${kr.name}: ${confidence[kr.key] ?? '–'}/10`), '',
+        '## Focus (next four weeks)', '', ((a.focus as string) ?? '').trim() || '_(empty)_', '',
+        '## Health', '',
+        ...tpl.healthMetrics.map((m) => `- ${m.label}: ${people.filter((p) => health[p.id]?.[m.key]).map((p) => `${shortName(p.name)} ${markLabel[health[p.id][m.key]]}`).join(', ') || '–'}`), '',
+        '## Improvements for next week', '', ((a.improvements as string) ?? '').trim() || '_(empty)_',
+      ].join('\n')} />
     </aside>
   );
 }

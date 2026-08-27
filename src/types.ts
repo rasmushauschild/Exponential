@@ -80,9 +80,37 @@ export const DEFAULT_RETRO_FIELDS: RetroField[] = [
   { key: 'nextFocus', label: 'Focus for next week', hint: 'The one or two things that matter most…' },
 ];
 
+/* ── Retro (weekly team review) ──
+   The structure is fixed: Demos, OKR confidence, Focus, Health, Improvements. What varies —
+   the objective, its key results, and the health checks — lives in the team's RetroTemplate.
+   Each retro stores a frozen copy of the template so past weeks read as they were. */
+export interface KeyResult { key: string; name: string }
+export interface HealthMetric { key: string; label: string }
+export interface RetroTemplate {
+  objective: string;
+  keyResults: KeyResult[];
+  healthMetrics: HealthMetric[];
+}
+export const DEFAULT_HEALTH_METRICS: HealthMetric[] = [
+  { key: 'stress', label: 'Stress level' },
+  { key: 'sleep', label: 'Sleep quality' },
+  { key: 'office', label: 'Happy to be in the office' },
+];
+export type HealthMark = 'g' | 'y' | 'r';
+
+export interface RetroAnswers {
+  demos?: string;
+  focus?: string;
+  improvements?: string;
+  confidence?: Record<string, number>; // KeyResult.key -> 0..10
+  health?: Record<string, Record<string, HealthMark>>; // person id -> HealthMetric.key -> mark
+  template?: RetroTemplate; // snapshot: past weeks keep the template as it was
+  [legacy: string]: unknown; // pre-redesign free-text answers by RetroField.key
+}
+
 export interface Retro {
   week: ISODate; // Monday
-  answers: Record<string, string>; // by RetroField.key
+  answers: RetroAnswers;
   notes?: string;
 }
 
@@ -90,7 +118,8 @@ export interface Data {
   id: string;
   name: string;
   icon?: string; // image data URL; falls back to the first letter of the name
-  retroFields?: RetroField[]; // defaults to DEFAULT_RETRO_FIELDS
+  retroFields?: RetroField[]; // legacy question list (pre-redesign retros)
+  retroTemplate?: RetroTemplate;
   moderators: string[]; // person ids allowed to manage members
   people: Person[];
   groups?: Group[];

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { TeamMark } from './App';
 import type { Data, Person } from './types';
-import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, type RetroField } from './types';
+import { DEFAULT_HEALTH_METRICS, PROJECT_COLORS, type RetroTemplate } from './types';
 import { Avatar } from './WeekPlan';
 import { uid } from './store';
 import { isPending, pendingId } from './cloud';
@@ -126,8 +126,8 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
   const toggleMod = (id: string) =>
     onUpdate((d) => ({ ...d, moderators: d.moderators.includes(id) ? d.moderators.filter((m) => m !== id) : [...d.moderators, id] }));
 
-  const fields = team.retroFields ?? DEFAULT_RETRO_FIELDS;
-  const setFields = (next: RetroField[]) => onUpdate((d) => ({ ...d, retroFields: next }));
+  const tpl: RetroTemplate = { objective: '', keyResults: [], healthMetrics: DEFAULT_HEALTH_METRICS, ...team.retroTemplate };
+  const setTpl = (next: RetroTemplate) => onUpdate((d) => ({ ...d, retroTemplate: next }));
   const fileRef = useRef<HTMLInputElement>(null);
   const pickIcon = (file: File) => {
     // downscale to 256px so the data URL stays small in the saved file
@@ -229,20 +229,41 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
         {!isMod && <p className="hint" style={{ padding: '10px 12px 2px' }}>Ask a moderator to add or remove people.</p>}
       </div>
 
-      {/* ── Retro template ── */}
+      {/* ── Retro template: objective + key results + health checks ── */}
       {isMod && (
         <div className="panel team-card">
-          <div className="settings-title">Retro questions</div>
-          <p className="hint" style={{ margin: '0 0 8px' }}>These are the prompts everyone answers in each week's retro.</p>
+          <div className="settings-title">Retro</div>
+          <p className="hint" style={{ margin: '0 0 14px' }}>
+            The weekly retro's structure is fixed — Demos, OKR confidence, Focus, Health, Improvements. What's reviewed lives here.
+            Past weeks keep whatever was set at the time.
+          </p>
+          <div className="retro-label" style={{ marginBottom: 6 }}>Objective</div>
+          <input className="member-input" style={{ width: '100%', maxWidth: 720 }} value={tpl.objective}
+            placeholder="The objective the team is driving at, e.g. First customer flight by December"
+            onChange={(e) => setTpl({ ...tpl, objective: e.target.value })} />
+          <div className="retro-label" style={{ margin: '16px 0 6px' }}>Key results</div>
           <div className="retro-config">
-            {fields.map((f, i) => (
-              <div key={f.key} className="retro-config-row">
-                <input className="member-input" value={f.label} placeholder="Question" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)))} />
-                <input className="member-input" value={f.hint} placeholder="Hint shown when empty" onChange={(e) => setFields(fields.map((x, j) => (j === i ? { ...x, hint: e.target.value } : x)))} />
-                <button className="icon-btn" title="Remove" disabled={fields.length <= 1} onClick={() => setFields(fields.filter((_, j) => j !== i))}>×</button>
+            {tpl.keyResults.map((kr, i) => (
+              <div key={kr.key} className="retro-config-row">
+                <input className="member-input" value={kr.name} placeholder="Key result"
+                  onChange={(e) => setTpl({ ...tpl, keyResults: tpl.keyResults.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
+                <button className="icon-btn" title="Remove" onClick={() => setTpl({ ...tpl, keyResults: tpl.keyResults.filter((_, j) => j !== i) })}>×</button>
               </div>
             ))}
-            <button className="add-task" onClick={() => setFields([...fields, { key: uid(), label: '', hint: '' }])}><span className="plus">+</span> Add question</button>
+            <button className="add-task" onClick={() => setTpl({ ...tpl, keyResults: [...tpl.keyResults, { key: uid(), name: '' }] })}><span className="plus">+</span> Add key result</button>
+          </div>
+          <div className="retro-label" style={{ margin: '16px 0 6px' }}>Health checks</div>
+          <p className="hint" style={{ margin: '0 0 8px' }}>Everyone marks each of these green, yellow or red in the retro.</p>
+          <div className="retro-config">
+            {tpl.healthMetrics.map((m, i) => (
+              <div key={m.key} className="retro-config-row">
+                <input className="member-input" value={m.label} placeholder="e.g. Stress level"
+                  onChange={(e) => setTpl({ ...tpl, healthMetrics: tpl.healthMetrics.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} />
+                <button className="icon-btn" title="Remove" disabled={tpl.healthMetrics.length <= 1}
+                  onClick={() => setTpl({ ...tpl, healthMetrics: tpl.healthMetrics.filter((_, j) => j !== i) })}>×</button>
+              </div>
+            ))}
+            <button className="add-task" onClick={() => setTpl({ ...tpl, healthMetrics: [...tpl.healthMetrics, { key: uid(), label: '' }] })}><span className="plus">+</span> Add health check</button>
           </div>
         </div>
       )}

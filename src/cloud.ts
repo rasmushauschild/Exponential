@@ -45,7 +45,7 @@ export async function signOutCloud() {
 /* ─── Row shapes ───────────────────────────────────────────────────────── */
 
 type ProfileRow = { id: string; email: string; name: string; photo: string | null; color: string };
-type TeamRow = { id: string; name: string; icon: string | null; retro_fields: Data['retroFields'] | null };
+type TeamRow = { id: string; name: string; icon: string | null; retro_fields: Data['retroFields'] | null; retro_template: Data['retroTemplate'] | null };
 type MemberRow = { team_id: string; email: string; user_id: string | null; role: 'moderator' | 'member'; color: string; profiles: ProfileRow | null };
 type ProjectRow = { id: string; team_id: string; name: string; start_date: string; end_date: string; lane: number; color: string | null; notes: string | null; assignees: string[]; group_id: string | null; deleted_at: string | null };
 type GroupRow = { id: string; team_id: string; name: string; color: string; sort: number };
@@ -93,7 +93,7 @@ export async function deleteTeam(id: string) {
 
 export async function loadTeam(teamId: string, me: string): Promise<Data> {
   const [team, members, projects, deadlines, tasks, retros, notifications, groups] = await Promise.all([
-    supabase.from('teams').select('id, name, icon, retro_fields').eq('id', teamId).single(),
+    supabase.from('teams').select('id, name, icon, retro_fields, retro_template').eq('id', teamId).single(),
     supabase.from('team_members').select('team_id, email, user_id, role, color, profiles(id, email, name, photo, color)').eq('team_id', teamId).order('created_at'),
     supabase.from('projects').select('*').eq('team_id', teamId),
     supabase.from('deadlines').select('*').eq('team_id', teamId),
@@ -113,6 +113,7 @@ export async function loadTeam(teamId: string, me: string): Promise<Data> {
     name: t.name,
     icon: und(t.icon),
     retroFields: t.retro_fields ?? undefined,
+    retroTemplate: t.retro_template ?? undefined,
     moderators: rows.filter((m) => m.role === 'moderator').map((m) => m.user_id ?? pendingId(m.email)),
     me,
     people,
@@ -185,8 +186,8 @@ export async function persistDiff(prev: Data, next: Data) {
   for (const n of changed) ops.push(run('notifications-update', supabase.from('notifications').update({ read: n.read }).eq('id', n.id)));
   if (nt.remove.length) ops.push(run('notifications-del', supabase.from('notifications').delete().in('id', nt.remove)));
 
-  if (prev.name !== next.name || prev.icon !== next.icon || JSON.stringify(prev.retroFields) !== JSON.stringify(next.retroFields)) {
-    ops.push(run('team', supabase.from('teams').update({ name: next.name, icon: next.icon ?? null, retro_fields: next.retroFields ?? null }).eq('id', teamId)));
+  if (prev.name !== next.name || prev.icon !== next.icon || JSON.stringify(prev.retroFields) !== JSON.stringify(next.retroFields) || JSON.stringify(prev.retroTemplate) !== JSON.stringify(next.retroTemplate)) {
+    ops.push(run('team', supabase.from('teams').update({ name: next.name, icon: next.icon ?? null, retro_fields: next.retroFields ?? null, retro_template: next.retroTemplate ?? null }).eq('id', teamId)));
   }
 
   // Roster: people added/removed by email; role changes via the moderators list.

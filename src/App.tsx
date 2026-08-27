@@ -595,6 +595,8 @@ export default function App() {
             task={selTask}
             deadline={selDeadline}
             retro={selection.kind === 'retro' ? data.retros?.[selection.id] : undefined}
+            prevRetro={selection.kind === 'retro' ? data.retros?.[addDays(selection.id, -7)] : undefined}
+            retroTemplate={data.retroTemplate}
             notifications={data.notifications ?? []}
             people={data.people}
             me={data.me}

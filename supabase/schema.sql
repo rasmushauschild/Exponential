@@ -281,6 +281,8 @@ alter table public.projects add column if not exists group_id uuid references pu
 do $$ begin
   execute 'alter publication supabase_realtime add table public.groups';
 exception when duplicate_object then null; end $$;
+-- 009: The retro template (objective, key results, health checks) lives on the team.
+alter table public.teams add column if not exists retro_template jsonb;
 -- 008: Soft deletion — deleted projects/tasks keep their row for 7 days ("Recently deleted").
 alter table public.projects add column if not exists deleted_at timestamptz;
 alter table public.tasks add column if not exists deleted_at timestamptz;
