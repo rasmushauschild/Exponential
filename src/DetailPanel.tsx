@@ -316,19 +316,19 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
  * carried improvements, and the MCP server keep working); priorities lines
  * carry a leading "P1 " / "P2 " / "P3 " tag rendered as a clickable chip.
  */
-type ListItem = { text: string; p: 1 | 2 | 3 };
+type ListItem = { text: string; p: 1 | 2 | 3; r?: 'y' | 'n' }; // r: reached / not reached
 const P_COLORS: Record<1 | 2 | 3, string> = { 1: '#ff3b30', 2: '#ff9500', 3: '#8e8e93' };
 
 const parseList = (v: string, withP: boolean): ListItem[] =>
   v.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
     if (withP) {
-      const m = /^P([123])[\s.:—-]*(.*)$/i.exec(l);
-      if (m) return { text: m[2], p: Number(m[1]) as 1 | 2 | 3 };
+      const m = /^P([123])([✓✗]?)[\s.:—-]*(.*)$/i.exec(l);
+      if (m) return { text: m[3], p: Number(m[1]) as 1 | 2 | 3, r: m[2] === '✓' ? 'y' as const : m[2] === '✗' ? 'n' as const : undefined };
     }
     return { text: l.replace(/^[-•]\s*/, ''), p: 1 };
   });
 const serializeList = (items: ListItem[], withP: boolean) =>
-  items.filter((i) => i.text.trim()).map((i) => (withP ? `P${i.p} ${i.text.trim()}` : i.text.trim())).join('\n');
+  items.filter((i) => i.text.trim()).map((i) => (withP ? `P${i.p}${i.r === 'y' ? '✓' : i.r === 'n' ? '✗' : ''} ${i.text.trim()}` : i.text.trim())).join('\n');
 
 function RetroList({ value, onChange, withPriority, placeholder }: {
   value: string; onChange: (v: string) => void; withPriority?: boolean; placeholder: string;
@@ -395,7 +395,8 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
   return (
     <div className="rl">
       {items.map((it, i) => (
-        <div key={i} ref={(el) => { rows.current[i] = el; }} className={`rl-row${dragging === i ? ' dragging' : ''}`}>
+        <div key={i} ref={(el) => { rows.current[i] = el; }}
+          className={`rl-row${dragging === i ? ' dragging' : ''}${withP && it.r === 'y' ? ' done' : ''}${withP && it.r === 'n' ? ' missed' : ''}`}>
           {withP ? (
             <button
               className="rl-p"
@@ -422,6 +423,14 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
               if (it.text.trim() === '' && !(e.relatedTarget instanceof Node && e.currentTarget.parentElement?.contains(e.relatedTarget))) removeAt(i, false);
             }}
           />
+          {withP && (
+            <>
+              <button className={`rl-mark yes${it.r === 'y' ? ' on' : ''}`} title="Reached"
+                onClick={() => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'y' ? undefined : 'y' as const } : x)))}>✓</button>
+              <button className={`rl-mark no${it.r === 'n' ? ' on' : ''}`} title="Not reached"
+                onClick={() => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'n' ? undefined : 'n' as const } : x)))}>✗</button>
+            </>
+          )}
           <button className="rl-x" title="Delete" onClick={() => removeAt(i, false)}>×</button>
         </div>
       ))}

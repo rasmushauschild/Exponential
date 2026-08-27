@@ -701,11 +701,18 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   border-radius: 12px; background: var(--panel); transition: background 0.4s;
 }
 .kr-row + .kr-row { margin-top: 8px; }
-.kr-row:has(.cstep.warp) { background: #0c1120; }
+/* every warp level goes deeper into space */
+.kr-row:has(.cstep.warp) { background: #1a2138; }
+.kr-row:has(.cstep.w8) { background: #10162b; }
+.kr-row:has(.cstep.w9) { background: #090e20; }
+.kr-row:has(.cstep.w10) { background: #050916; }
 .kr-row:has(.cstep.warp) .kr-name { color: #d8e2f5; }
-.kr-row:has(.cstep.warp) .cstep-btn { color: rgba(216, 226, 245, 0.55); }
-.kr-row:has(.cstep.warp) .cstep-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.kr-row:has(.cstep.danger) { background: color-mix(in srgb, #ff3b30 6%, var(--panel)); }
+.kr-row:has(.cstep.warp) .cstep-btn, .kr-row:has(.cstep.danger) .cstep-btn { color: rgba(220, 226, 240, 0.5); }
+.kr-row:has(.cstep.warp) .cstep-btn:hover, .kr-row:has(.cstep.danger) .cstep-btn:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+/* low confidence: the box itself goes dark red */
+.kr-row:has(.cstep.danger) { background: #2b0d0e; }
+.kr-row:has(.cstep.danger) .kr-name { color: #ecbeba; }
+.kr-row:has(.cstep.danger) .cstep-value { background: color-mix(in srgb, #ff3b30 26%, transparent); color: #ff6b60; }
 .kr-name { flex: 1; min-width: 0; font-weight: 500; line-height: 1.45; white-space: pre-wrap; color: var(--text-2); position: relative; z-index: 1; transition: color 0.4s; }
 .cstep { position: static; display: flex; align-items: center; gap: 4px; flex: none; }
 .cstep-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
@@ -722,6 +729,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   color: var(--gc, var(--text-3)); background: color-mix(in srgb, var(--gc, var(--text-3)) 14%, transparent);
 }
 .kr-row:has(.cstep.warp) .cstep-value { background: color-mix(in srgb, var(--gc) 22%, transparent); }
+/* the chip glows brighter the deeper the warp */
+.cstep.w8 .cstep-value { box-shadow: 0 0 10px color-mix(in srgb, var(--gc) 50%, transparent); }
+.cstep.w9 .cstep-value { box-shadow: 0 0 16px 2px color-mix(in srgb, var(--gc) 65%, transparent); }
+.cstep.w10 .cstep-value { box-shadow: 0 0 22px 4px color-mix(in srgb, var(--gc) 75%, transparent); }
 .cstep-value.unrated { color: var(--text-3); background: var(--soft-2); }
 .cstep.danger .cstep-value { color: #ff3b30; }
 /* low confidence: the chip breathes a slow red glow — no flashing */
@@ -749,8 +760,31 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 
 /* list fields */
 .rl { display: flex; flex-direction: column; }
-.rl-row { display: flex; align-items: center; gap: 10px; min-height: 32px; border-radius: 10px; }
+.rl-row { display: flex; align-items: center; gap: 10px; min-height: 32px; border-radius: 10px; padding: 0 8px; margin: 0 -8px; }
 .rl-row.dragging { background: var(--soft-2); }
+/* priorities marked reached sweep green; not reached go red */
+.rl-row.done { background: color-mix(in srgb, #34c759 12%, transparent); animation: prio-reach 0.8s ease; }
+.rl-row.done .rl-text { color: #34c759; }
+.rl-row.missed { background: color-mix(in srgb, #ff3b30 10%, transparent); animation: prio-miss 0.45s ease; }
+.rl-row.missed .rl-text { color: #ff3b30; }
+@keyframes prio-reach {
+  0% { background: color-mix(in srgb, #34c759 0%, transparent); }
+  45% { background: color-mix(in srgb, #34c759 34%, transparent); }
+  100% { background: color-mix(in srgb, #34c759 12%, transparent); }
+}
+@keyframes prio-miss {
+  0% { background: color-mix(in srgb, #ff3b30 0%, transparent); }
+  100% { background: color-mix(in srgb, #ff3b30 10%, transparent); }
+}
+.rl-mark {
+  flex: none; width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity 0.12s, background 0.15s, color 0.15s;
+}
+.rl-row:hover .rl-mark { opacity: 1; }
+.rl-mark:hover { background: var(--soft-2); }
+.rl-mark.yes:hover, .rl-mark.yes.on { color: #34c759; }
+.rl-mark.no:hover, .rl-mark.no.on { color: #ff3b30; }
+.rl-mark.on { opacity: 1; }
 .rl-p {
   flex: none; width: 26px; height: 18px; border-radius: 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
   color: var(--pc); background: color-mix(in srgb, var(--pc) 13%, transparent); cursor: grab; transition: background 0.15s;

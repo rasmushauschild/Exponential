@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from 'react';
  * warp speed, streaks growing longer and faster the higher it goes.
  */
 
-export const dialColor = (v: number) => (v <= 2 ? '#ff3b30' : v <= 6 ? '#ff9500' : v < 10 ? '#34c759' : '#5aa2ff');
+export const dialColor = (v: number) => (v <= 3 ? '#ff3b30' : v <= 6 ? '#ff9500' : v < 10 ? '#34c759' : '#5aa2ff');
 
 type Star = { x: number; y: number; speed: number; len: number; width: number; life: number };
 
@@ -55,8 +55,8 @@ export function ConfidenceStepper({ value, onChange }: {
     const spawn = (x: number, H: number) => ({
       x,
       y: H / 2 + (Math.random() + Math.random() - 1) * H * 0.46,
-      speed: 2.2 + Math.random() * 5,
-      len: 8 + Math.random() * 22,
+      speed: 1.6 + Math.random() * 3.2,
+      len: 6 + Math.random() * 18,
       width: 1 + Math.random() * 1.4,
       life: 0,
     });
@@ -69,8 +69,9 @@ export function ConfidenceStepper({ value, onChange }: {
       const W = c.width, H = c.height;
       const hyper = hyperRef.current;
       const t = intRef.current;
-      for (let i = 0; i < 2 + Math.round(t * 2); i++) {
-        if (stars.current.length < 30 + t * 20 && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 40, H));
+      // every level from 7 up is a big jump: far denser, faster, longer
+      for (let i = 0; i < 1 + Math.round(t * 3); i++) {
+        if (stars.current.length < 12 + t * 45 && Math.random() < 0.7) stars.current.push(spawn(W + Math.random() * 40, H));
       }
       ctx.clearRect(0, 0, W, H);
       ctx.lineCap = 'round';
@@ -80,10 +81,10 @@ export function ConfidenceStepper({ value, onChange }: {
       const tailCol = hyper ? '110, 170, 255' : '80, 205, 115';
       stars.current = stars.current.filter((s) => s.x + s.len + s.speed * 8 > -10);
       for (const s of stars.current) {
-        s.x -= s.speed * (1 + t * 1.4);
-        s.speed = Math.min(13, s.speed * 1.012); // ever accelerating = warp
+        s.x -= s.speed * (1 + t * 2.4);
+        s.speed = Math.min(13, s.speed * (1.008 + t * 0.01)); // ever accelerating = warp
         s.life = Math.min(1, s.life + 0.08);
-        const len = (s.len + s.speed * 2.2) * (1 + t * 1.8); // higher score = longer streaks
+        const len = (s.len + s.speed * 2.2) * (1 + t * 2.6); // higher score = much longer streaks
         const head = s.x, tail = s.x + len;
         // gentle fade over ~15% of the box at BOTH ends, and toward top/bottom — nothing clips
         const fadeX = W * 0.15;
@@ -109,10 +110,10 @@ export function ConfidenceStepper({ value, onChange }: {
     return () => { cancelAnimationFrame(raf); ro.disconnect(); };
   }, [warp]);
 
-  const danger = rated && v <= 2;
+  const danger = rated && v <= 3;
 
   return (
-    <div className={`cstep${danger ? ' danger' : ''}${warp ? ' warp' : ''}`}>
+    <div className={`cstep${danger ? ' danger' : ''}${warp ? ` warp w${v}` : ''}`}>
       <canvas ref={canvasRef} className="cstep-canvas" />
       <button className="cstep-btn" title="Less confident" disabled={rated && v <= 0} onClick={() => bump(-1)}>−</button>
       <span
