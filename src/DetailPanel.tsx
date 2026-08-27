@@ -6,7 +6,8 @@ import { htmlToMarkdown } from './store';
 import { NO_GROUP_COLOR, STATUS_LABEL, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { BlockEditor } from './BlockEditor';
-import { addDays, formatRange, isoWeekNumber, todayISO, weekStart } from './dates';
+import { isoWeekNumber, todayISO, weekStart } from './dates';
+import { dragRows } from './rowDrag';
 
 export type Selection =
   | { kind: 'project'; id: string }
@@ -232,7 +233,6 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
       </div>
       <div className="detail-scroll">
         <h1 className="detail-title static">Week {isoWeekNumber(week)}</h1>
-        <p className="hint" style={{ margin: '-6px 0 14px' }}>{formatRange(week, addDays(week, 6))}</p>
 
         {carried && (
           <div className="retro-carried">
@@ -341,7 +341,11 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
     if (value !== lastSent.current) { lastSent.current = value; setItems(parseList(value, withP)); }
   }, [value, withP]);
 
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
   const inputs = useRef<(HTMLInputElement | null)[]>([]);
+  const rows = useRef<(HTMLDivElement | null)[]>([]);
+  const [dragging, setDragging] = useState<number | null>(null);
   const focusAt = useRef<number | null>(null);
   useEffect(() => {
     if (focusAt.current != null) {
@@ -353,6 +357,7 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
 
   const commit = (next: ListItem[]) => {
     setItems(next);
+    itemsRef.current = next;
     const s = serializeList(next, withP);
     if (s !== lastSent.current) { lastSent.current = s; onChange(s); }
   };
@@ -366,20 +371,40 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
     commit(items.filter((_, j) => j !== i));
     if (refocus && i > 0) focusAt.current = i - 1;
   };
+  // handle press: a tap taps (cycle the chip), a pull reorders
+  const startDrag = (i: number, e: React.PointerEvent, tap?: () => void) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    dragRows(e, {
+      index: i,
+      rowAt: (j) => rows.current[j],
+      count: () => itemsRef.current.length,
+      onMove: (from, to) => {
+        const next = [...itemsRef.current];
+        const [it] = next.splice(from, 1);
+        next.splice(to, 0, it);
+        itemsRef.current = next;
+        setItems(next);
+      },
+      onState: setDragging,
+      onTap: tap,
+      onDone: () => commit(itemsRef.current),
+    });
+  };
 
   return (
     <div className="rl">
       {items.map((it, i) => (
-        <div key={i} className="rl-row">
+        <div key={i} ref={(el) => { rows.current[i] = el; }} className={`rl-row${dragging === i ? ' dragging' : ''}`}>
           {withP ? (
             <button
               className="rl-p"
               style={{ ['--pc' as string]: P_COLORS[it.p] }}
-              title={`Priority ${it.p} — click to change`}
-              onClick={() => commit(items.map((x, j) => (j === i ? { ...x, p: (x.p % 3) + 1 as 1 | 2 | 3 } : x)))}
+              title={`Priority ${it.p} — click to change, drag to reorder`}
+              onPointerDown={(e) => startDrag(i, e, () => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, p: (x.p % 3) + 1 as 1 | 2 | 3 } : x))))}
             >P{it.p}</button>
           ) : (
-            <span className="rl-dot" />
+            <button className="rl-dot" title="Drag to reorder" onPointerDown={(e) => startDrag(i, e)} />
           )}
           <input
             ref={(el) => { inputs.current[i] = el; }}
@@ -397,6 +422,7 @@ function RetroList({ value, onChange, withPriority, placeholder }: {
               if (it.text.trim() === '' && !(e.relatedTarget instanceof Node && e.currentTarget.parentElement?.contains(e.relatedTarget))) removeAt(i, false);
             }}
           />
+          <button className="rl-x" title="Delete" onClick={() => removeAt(i, false)}>×</button>
         </div>
       ))}
       <button className="rl-add" onClick={() => insertAt(items.length, withP ? (items[items.length - 1]?.p ?? 1) : 1)}>+ Add</button>

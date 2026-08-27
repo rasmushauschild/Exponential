@@ -5,6 +5,7 @@ import { DEFAULT_HEALTH_METRICS, PROJECT_COLORS, type RetroTemplate } from './ty
 import { Avatar } from './WeekPlan';
 import { uid } from './store';
 import { isPending, pendingId } from './cloud';
+import { dragRows } from './rowDrag';
 
 interface Props {
   team: Data;
@@ -78,11 +79,86 @@ function ClaudeConnect() {
   );
 }
 
-/** A member-input that grows with its content (objectives and key results run long). */
-function GrowInput({ value, placeholder, onChange, style }: { value: string; placeholder: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
+/** A text input that grows with its content (objectives and key results run long). */
+function GrowInput({ value, placeholder, onChange, style, className = 'member-input grow-input', onKeyDown }: {
+  value: string; placeholder: string; onChange: (v: string) => void; style?: React.CSSProperties;
+  className?: string; onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+}) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { const el = ref.current; if (el) { el.style.height = '0'; el.style.height = `${el.scrollHeight}px`; } }, [value]);
-  return <textarea ref={ref} rows={1} className="member-input grow-input" style={style} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />;
+  const fit = () => { const el = ref.current; if (el) { el.style.height = '0'; el.style.height = `${el.scrollHeight}px`; } };
+  useEffect(fit, [value]);
+  // re-fit when the box's width settles/changes — a measure taken mid-layout wildly over-wraps
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let w = el.clientWidth;
+    const ro = new ResizeObserver(() => { if (el.clientWidth !== w) { w = el.clientWidth; fit(); } });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return <textarea ref={ref} rows={1} className={className} style={style} value={value} placeholder={placeholder} onKeyDown={onKeyDown} onChange={(e) => onChange(e.target.value)} />;
+}
+
+/**
+ * Template rows styled exactly like the retro side panel's lists: dot handle
+ * (drag to reorder), borderless text, hover ×, ghost "+ Add".
+ */
+function TemplateList<T extends { key: string }>({ items, text, setText, make, onChange, addLabel, placeholder, minRows = 0 }: {
+  items: T[]; text: (x: T) => string; setText: (x: T, v: string) => T; make: () => T;
+  onChange: (next: T[]) => void; addLabel: string; placeholder: string; minRows?: number;
+}) {
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const rows = useRef<(HTMLDivElement | null)[]>([]);
+  const [dragging, setDragging] = useState<number | null>(null);
+  const focusKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (focusKey.current != null) {
+      const i = items.findIndex((x) => x.key === focusKey.current);
+      focusKey.current = null;
+      rows.current[i]?.querySelector('textarea')?.focus();
+    }
+  }, [items]);
+  const insertAt = (i: number) => {
+    const it = make();
+    const next = [...items];
+    next.splice(i, 0, it);
+    onChange(next);
+    focusKey.current = it.key;
+  };
+  return (
+    <div className="rl">
+      {items.map((x, i) => (
+        <div key={x.key} ref={(el) => { rows.current[i] = el; }} className={`rl-row${dragging === i ? ' dragging' : ''}`}>
+          <button className="rl-dot" title="Drag to reorder" onPointerDown={(e) => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            dragRows(e, {
+              index: i,
+              rowAt: (j) => rows.current[j],
+              count: () => itemsRef.current.length,
+              onMove: (from, to) => {
+                const next = [...itemsRef.current];
+                const [it] = next.splice(from, 1);
+                next.splice(to, 0, it);
+                onChange(next);
+              },
+              onState: setDragging,
+            });
+          }} />
+          <GrowInput className="rl-text grow-input" value={text(x)} placeholder={placeholder}
+            onChange={(v) => onChange(items.map((y, j) => (j === i ? setText(y, v) : y)))}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.preventDefault(); insertAt(i + 1); }
+              else if (e.key === 'Backspace' && text(x) === '' && items.length > minRows) { e.preventDefault(); onChange(items.filter((_, j) => j !== i)); }
+            }} />
+          <button className="rl-x" title="Delete" disabled={items.length <= minRows}
+            onClick={() => onChange(items.filter((_, j) => j !== i))}>×</button>
+        </div>
+      ))}
+      <button className="rl-add" onClick={() => insertAt(items.length)}>{addLabel}</button>
+    </div>
+  );
 }
 
 /** Members of the current team. Moderators can add, remove, and promote/demote. */
@@ -241,37 +317,22 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
         <div className="panel team-card">
           <div className="settings-title">Retro</div>
           <p className="hint" style={{ margin: '0 0 14px' }}>
-            The weekly retro's structure is fixed — Demos, OKR confidence, Focus, Health, Improvements. What's reviewed lives here.
+            The weekly retro's structure is fixed — Priorities, OKR confidence, Health, Improvements. What's reviewed lives here.
             Past weeks keep whatever was set at the time.
           </p>
-          <div className="retro-label" style={{ marginBottom: 6 }}>Objective</div>
-          <GrowInput style={{ width: '100%', maxWidth: 720 }} value={tpl.objective}
+          <div className="retro-sec-title">Objective</div>
+          <GrowInput className="rl-text grow-input" style={{ width: '100%', maxWidth: 720 }} value={tpl.objective}
             placeholder="The objective the team is driving at, e.g. First customer flight by December"
             onChange={(v) => setTpl({ ...tpl, objective: v })} />
-          <div className="retro-label" style={{ margin: '16px 0 6px' }}>Key results</div>
-          <div className="retro-config">
-            {tpl.keyResults.map((kr, i) => (
-              <div key={kr.key} className="retro-config-row">
-                <GrowInput value={kr.name} placeholder="Key result"
-                  onChange={(v) => setTpl({ ...tpl, keyResults: tpl.keyResults.map((x, j) => (j === i ? { ...x, name: v } : x)) })} />
-                <button className="icon-btn" title="Remove" onClick={() => setTpl({ ...tpl, keyResults: tpl.keyResults.filter((_, j) => j !== i) })}>×</button>
-              </div>
-            ))}
-            <button className="add-task" onClick={() => setTpl({ ...tpl, keyResults: [...tpl.keyResults, { key: uid(), name: '' }] })}><span className="plus">+</span> Add key result</button>
-          </div>
-          <div className="retro-label" style={{ margin: '16px 0 6px' }}>Health checks</div>
-          <p className="hint" style={{ margin: '0 0 8px' }}>Everyone marks each of these green, yellow or red in the retro.</p>
-          <div className="retro-config">
-            {tpl.healthMetrics.map((m, i) => (
-              <div key={m.key} className="retro-config-row">
-                <input className="member-input" value={m.label} placeholder="e.g. Stress level"
-                  onChange={(e) => setTpl({ ...tpl, healthMetrics: tpl.healthMetrics.map((x, j) => (j === i ? { ...x, label: e.target.value } : x)) })} />
-                <button className="icon-btn" title="Remove" disabled={tpl.healthMetrics.length <= 1}
-                  onClick={() => setTpl({ ...tpl, healthMetrics: tpl.healthMetrics.filter((_, j) => j !== i) })}>×</button>
-              </div>
-            ))}
-            <button className="add-task" onClick={() => setTpl({ ...tpl, healthMetrics: [...tpl.healthMetrics, { key: uid(), label: '' }] })}><span className="plus">+</span> Add health check</button>
-          </div>
+          <div className="retro-sec-title" style={{ margin: '18px 0 4px' }}>Key results</div>
+          <TemplateList items={tpl.keyResults} text={(x) => x.name} setText={(x, v) => ({ ...x, name: v })}
+            make={() => ({ key: uid(), name: '' })} addLabel="+ Add key result" placeholder="Key result"
+            onChange={(keyResults) => setTpl({ ...tpl, keyResults })} />
+          <div className="retro-sec-title" style={{ margin: '18px 0 2px' }}>Health checks</div>
+          <p className="hint" style={{ margin: '0 0 4px' }}>Everyone marks each of these green, yellow or red in the retro.</p>
+          <TemplateList items={tpl.healthMetrics} text={(x) => x.label} setText={(x, v) => ({ ...x, label: v })}
+            make={() => ({ key: uid(), label: '' })} addLabel="+ Add health check" placeholder="e.g. Stress level" minRows={1}
+            onChange={(healthMetrics) => setTpl({ ...tpl, healthMetrics })} />
         </div>
       )}
 
