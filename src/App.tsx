@@ -25,6 +25,8 @@ const savePrefs = (p: typeof DEFAULT_PREFS) => localStorage.setItem(PREFS_KEY, J
 // the splash holds for whole cycles so it always exits right as the stripes clear.
 const SPLASH_SPEED = 1.28;
 const SPLASH_CYCLE_MS = 1000 / (0.3 * SPLASH_SPEED); // ≈2.6s per sweep, from the shader's time scale
+// Start the shader one second earlier in its own timeline (expressed positively as cycle − 1s of playback).
+const SPLASH_FRAME = 1000 / 0.3 - 1000 * SPLASH_SPEED;
 
 export default function App() {
   const { data, teams, update, undo, redo, switchTeam, createTeam, deleteTeam, connectCloud, cloudMode } = useData();
@@ -324,6 +326,7 @@ export default function App() {
             contour={0.49}
             angle={70}
             speed={SPLASH_SPEED}
+            frame={SPLASH_FRAME}
             scale={0.66}
             fit="contain"
             style={{ width: 150, height: 100 }}
