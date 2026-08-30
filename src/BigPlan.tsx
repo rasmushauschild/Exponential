@@ -9,8 +9,8 @@ const ROW_H = 38;
 const DEADLINE_ROW_H = 30;
 const HEADER_H = 44; // month + day labels; tints and the band start below this
 const RETRO_H = 30; // strip along the bottom that shows week labels / opens the retro
-const GROUP_H = 26; // group label row above each section
-const GROUP_GAP = 2;
+const GROUP_H = 38; // group label row above each section — one full lane, so the dot grid stays aligned
+const GROUP_GAP = 0; // any gap would knock sections off the 19px dot grid
 const MIN_PPD = 4;
 const MAX_PPD = 90;
 const EDGE = 10; // px from a bar's end that acts as a resize handle
@@ -444,7 +444,7 @@ export function BigPlan(props: Props) {
         </div>
       )}
       {sections.map((sec) => (groups.length > 0 || !locked) && (
-        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}`} style={{ top: sec.headerTop - projectTop + 6 - scrollY }}
+        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}`} style={{ top: sec.headerTop - projectTop + 9 - scrollY }}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); else if (!locked) onAddGroup(); }}>
           {sec.groupId || locked
