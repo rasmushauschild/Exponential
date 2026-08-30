@@ -1,7 +1,7 @@
 :root {
   /* flat supabase-style light theme: near-white ground, hairline dark borders,
      small radii, brand green, no glass/gradients/heavy shadows */
-  --bg: #f0f0f3;
+  --bg: #f6f6f8;
   --panel: #ffffff;
   --surface: #ffffff;
   --text: #171717;
