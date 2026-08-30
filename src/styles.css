@@ -25,7 +25,7 @@
   --dot: rgba(0, 0, 0, 0.16);
   --dot-fade: #f6f6f8; /* matches the panel fill: fades dots out under text areas */
   --frost: #f6f6f8;  /* panel fill, a shade lighter than the ground */
-  --frost-deep: rgba(234, 235, 240, 0.9); /* dialogs: darker glass so the white frame reads */
+  --frost-deep: rgba(241, 242, 246, 0.9); /* dialogs: slightly deeper glass so the white frame reads */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --rim: rgba(20, 20, 30, 0.12);       /* super-thin dark line just outside the white edge */
   --scrim: rgba(0, 0, 0, 0.25);
