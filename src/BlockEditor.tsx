@@ -361,7 +361,13 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         // closed one means sibling; otherwise match the visible block above.
         const prevVis = prevVisibleFor(latest.ins);
         const pb = prevVis ? bs[prevVis.j] : undefined;
-        const destInd = pb ? Math.min(MAX_IND, (pb.indent ?? 0) + (pb.kind === 'tog' && !closed.has(pb.key) ? 1 : 0)) : 0;
+        let destInd = pb ? Math.min(MAX_IND, (pb.indent ?? 0) + (pb.kind === 'tog' && !closed.has(pb.key) ? 1 : 0)) : 0;
+        // dropping just below a toggle's trailing empty line steps OUT of the toggle:
+        // the depth follows whatever comes next instead of the filler line
+        if (pb && pb.kind === 'p' && pb.text === '' && (pb.indent ?? 0) > 0) {
+          const nextVis = vis.find((o) => o.k0 >= latest.ins);
+          destInd = nextVis ? (bs[nextVis.j].indent ?? 0) : 0;
+        }
         const delta = destInd - (group[0].indent ?? 0);
         const shifted = group.map((g) => ({ ...g, indent: Math.max(0, Math.min(MAX_IND, (g.indent ?? 0) + delta)) }));
         commit([...rest.slice(0, latest.ins), ...shifted, ...rest.slice(latest.ins)]);

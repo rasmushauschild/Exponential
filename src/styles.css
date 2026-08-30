@@ -434,7 +434,7 @@ img { display: block; -webkit-user-drag: none; }
   background: var(--panel); transition: color 0.15s, background 0.15s;
 }
 .fab { box-shadow: 0 0 0 1.5px var(--edge), 0 2px 10px rgba(0, 0, 0, 0.08); }
-.fab:hover { color: var(--text); background: var(--soft-2); }
+.fab:hover { color: var(--text); background: var(--row-hov); }
 .fab .plus { font-size: 17px; line-height: 14px; width: 18px; text-align: center; }
 .wk-rows { padding-bottom: 56px; } /* keep the last rows clear of the floating button */
 
