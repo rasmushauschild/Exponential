@@ -1,7 +1,7 @@
 :root {
   /* flat supabase-style light theme: near-white ground, hairline dark borders,
      small radii, brand green, no glass/gradients/heavy shadows */
-  --bg: #f6f6f8;
+  --bg: #fafafa;
   --panel: #ffffff;
   --surface: #ffffff;
   --text: #171717;
@@ -25,7 +25,7 @@
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --scrim: rgba(0, 0, 0, 0.25);
   --radius-xl: 18px;
-  --shadow: 0 2px 6px rgba(0, 0, 0, 0.04), 0 14px 36px rgba(0, 0, 0, 0.1); /* soft drop below */
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 10px 28px rgba(0, 0, 0, 0.06); /* soft drop below */
   --menu-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
   color-scheme: light;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable', 'Segoe UI', Inter, system-ui, sans-serif;
@@ -560,7 +560,7 @@ img { display: block; -webkit-user-drag: none; }
 .md-preview img, .rich-body img { max-width: 100%; border-radius: 14px; margin: 8px 0; display: block; }
 .md-preview input[type='checkbox'], .rich-body input[type='checkbox'] { margin: 0 6px 0 0; vertical-align: -2px; accent-color: var(--text); }
 .md-preview code, .rich-body code { background: var(--soft); padding: 1px 5px; border-radius: 6px; font-size: 12.5px; }
-.detail-foot { flex: none; padding: 12px 26px 18px; display: flex; justify-content: flex-end; background: linear-gradient(to bottom, transparent, var(--surface) 40%); }
+.detail-foot { flex: none; padding: 12px 26px 18px; display: flex; justify-content: flex-end; background: var(--surface); }
 
 /* ─── Team page ─────────────────────────────────────── */
 
