@@ -102,6 +102,13 @@ function createMainWindow() {
   });
   loadRenderer(mainWin, null);
   mainWin.on('moved', applyZoom); // moving to a display with different scaling re-fits the UI
+  // Closing hides instead of destroying: reopening from the Dock is instant, with no reload
+  // (so the launch splash only ever plays after a real quit).
+  mainWin.on('close', (e) => {
+    if (reallyQuit || process.platform !== 'darwin') return;
+    e.preventDefault();
+    mainWin.hide();
+  });
   mainWin.on('closed', () => { mainWin = null; });
   return mainWin;
 }
@@ -359,7 +366,7 @@ app.whenReady().then(() => {
 app.on('before-quit', (e) => {
   if (process.platform !== 'darwin' || reallyQuit) return;
   e.preventDefault();
-  if (mainWin && !mainWin.isDestroyed()) mainWin.close();
+  if (mainWin && !mainWin.isDestroyed()) mainWin.hide();
   if (widgetWin && !widgetWin.isDestroyed()) widgetWin.hide();
   app.dock?.hide();
 });

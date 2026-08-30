@@ -113,9 +113,9 @@ export function DetailPanel(p: Props) {
             <>
               <Prop label="Dates">
                 <DateRange start={project.start} end={project.end}
-                  onChange={(start, end) => p.onUpdateProject(project.id, { start, end })} />
-                <button className="chip-x" title="Reset dates to this week"
-                  onClick={() => { const w = weekStart(todayISO()); p.onUpdateProject(project.id, { start: w, end: addDays(w, 6) }); }}>×</button>
+                  onChange={(start, end) => p.onUpdateProject(project.id, { start, end })}
+                  clearTitle="Reset dates to this week"
+                  onClear={() => { const w = weekStart(todayISO()); p.onUpdateProject(project.id, { start: w, end: addDays(w, 6) }); }} />
               </Prop>
               <Prop label="People">
                 <AssigneePicker people={people} me={me} assignees={project.assignees ?? []} onToggle={(id) => p.onToggleAssignee(project.id, id)} />
@@ -149,8 +149,9 @@ export function DetailPanel(p: Props) {
                 {task.date ? (
                   <>
                     <DateRange start={task.date} end={task.end ?? task.date}
-                      onChange={(start, end) => p.onUpdateTask(task.id, { date: start, end: end === start ? undefined : end })} />
-                    <button className="chip-x" title="Move to backlog" onClick={() => p.onUpdateTask(task.id, { date: undefined, end: undefined })}>×</button>
+                      onChange={(start, end) => p.onUpdateTask(task.id, { date: start, end: end === start ? undefined : end })}
+                      clearTitle="Move to backlog"
+                      onClear={() => p.onUpdateTask(task.id, { date: undefined, end: undefined })} />
                   </>
                 ) : (
                   <label className="date-pill empty" title="Pick a date">
@@ -520,12 +521,15 @@ function relTime(iso: string) {
 /* ─── Shared bits ───────────────────────────────────── */
 
 /** One pill holding both ends of a range; moving the start past the end (or vice versa) drags the other along. */
-function DateRange({ start, end, onChange }: { start: string; end: string; onChange: (start: string, end: string) => void }) {
+function DateRange({ start, end, onChange, onClear, clearTitle }: {
+  start: string; end: string; onChange: (start: string, end: string) => void; onClear?: () => void; clearTitle?: string;
+}) {
   return (
     <span className="date-pill">
       <input type="date" value={start} onChange={(e) => { const v = e.target.value; if (v) onChange(v, v > end ? v : end); }} />
       <span className="dash">–</span>
       <input type="date" value={end} onChange={(e) => { const v = e.target.value; if (v) onChange(v < start ? v : start, v); }} />
+      {onClear && <button className="chip-x" title={clearTitle} onClick={onClear}>×</button>}
     </span>
   );
 }
