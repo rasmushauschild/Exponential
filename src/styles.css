@@ -208,7 +208,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .timeline {
   flex: 1; position: relative; overflow: hidden; cursor: grab;
-  background-image: radial-gradient(circle, var(--dot) 0.75px, transparent 0.75px);
+  background-image: radial-gradient(circle, var(--dot) 0.5px, transparent 0.5px);
   background-size: 19px 19px; background-position: 9px 8px;
 }
 .timeline.panning { cursor: grabbing; }
@@ -302,14 +302,16 @@ img { display: block; -webkit-user-drag: none; }
 
 .wk-body {
   flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; padding: 0 18px 14px 14px; overflow-x: hidden;
-  background-image: radial-gradient(circle, var(--dot) 0.75px, transparent 0.75px);
-  background-size: 18px 18px; background-position: 9px 14px;
 }
 .wk-body.narrow { overflow-x: auto; }
 .wk-row { display: grid; grid-template-columns: minmax(170px, 34%) minmax(0, 1fr); align-items: center; min-height: 36px; flex: none; }
 .wk-rows > .wk-row.task, .wk-rows > .wk-row.event { flex: none; }
 .wk-header { min-height: 28px; margin-bottom: 4px; }
-.wk-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.wk-rows {
+  flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
+  background-image: radial-gradient(circle, var(--dot) 0.5px, transparent 0.5px);
+  background-size: 18px 18px; background-position: 9px 0; background-attachment: local; /* dots scroll with the rows */
+}
 .wk-rows::-webkit-scrollbar { width: 0; }
 .wk-list { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px; position: relative; height: 100%; }
 .wk-days { position: relative; height: 100%; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); min-height: 36px; }
