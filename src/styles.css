@@ -28,7 +28,7 @@
   --frost-deep: rgba(241, 242, 246, 0.9); /* dialogs: slightly deeper glass so the white frame reads */
   --tint: #ffffff; /* colour-mix base for fills/edges: white in light, near-black in dark */
   --bar: #f6f6f8; /* opaque scroll-edge bars */
-  --veil: rgba(255, 255, 255, 0.55); /* soft tint riding the gradient blur */
+  --veil: rgba(255, 255, 255, 0.75); /* soft tint riding the gradient blur */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --rim: rgba(20, 20, 30, 0.12);       /* super-thin dark line just outside the white edge */
   --scrim: rgba(0, 0, 0, 0.25);
