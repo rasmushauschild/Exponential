@@ -36,7 +36,7 @@ Team planning app (Electron + React + TS + Vite, Supabase backend). Repo: https:
 - Current released: v0.2.6. package.json version must match.
 
 ## Conventions & gotchas
-- All colours via CSS tokens incl. `--line` (hairline outlines) and `--ov-*` overlays; dark mode `[data-theme='dark']`; panels radius 32, hairline+small shadow (must fit in 18px shell padding or it clips).
+- All colours via CSS tokens incl. `--line` (hairline outlines), `--ov-*` overlays, and `--glass` (liquid-glass: translucent + backdrop-filter blur(24px) saturate(1.7) on menus/sheets/fab/week-pills/toolbar); light theme = pure white bg, translucent cool tints for --soft/--soft-2 (NO solid greys), feather shadows; dark mode `[data-theme='dark']`; panels radius 32, hairline+small shadow (must fit in 18px shell padding or it clips).
 - Dates are `YYYY-MM-DD` strings, day math via dayIndex/fromDayIndex (UTC-based) in src/dates.ts; weeks start Monday.
 - uid() = crypto.randomUUID (DB needs uuids).
 - Commit style: descriptive one-liner + `Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>`; push after every accepted change; git identity set per-command with -c.

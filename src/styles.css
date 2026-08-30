@@ -1,26 +1,29 @@
 :root {
-  --bg: #f2f2f4;
+  /* airy liquid-glass light theme: pure white ground, translucent cool tints
+     instead of solid greys, hairline borders, feather-light shadows */
+  --bg: #ffffff;
   --panel: #ffffff;
   --surface: #ffffff;
   --text: #1c1c1e;
   --text-2: #6e6e73;
   --text-3: #aeaeb2;
-  --soft: #f4f4f6;
-  --soft-2: #e9e9ec;
+  --soft: rgba(30, 42, 72, 0.032);
+  --soft-2: rgba(30, 42, 72, 0.07);
   --accent: #0a84ff;
   --today: #ff3b30;
-  --ov-2: rgba(0, 0, 0, 0.025);
-  --ov-3: rgba(0, 0, 0, 0.03);
-  --ov-35: rgba(0, 0, 0, 0.035);
-  --ov-4: rgba(0, 0, 0, 0.04);
-  --ov-5: rgba(0, 0, 0, 0.05);
-  --ov-6: rgba(0, 0, 0, 0.06);
-  --ov-18: rgba(0, 0, 0, 0.18);
+  --ov-2: rgba(10, 20, 50, 0.02);
+  --ov-3: rgba(10, 20, 50, 0.025);
+  --ov-35: rgba(10, 20, 50, 0.03);
+  --ov-4: rgba(10, 20, 50, 0.035);
+  --ov-5: rgba(10, 20, 50, 0.045);
+  --ov-6: rgba(10, 20, 50, 0.055);
+  --ov-18: rgba(10, 20, 50, 0.16);
   --sel-blk: rgba(10, 132, 255, 0.1);
-  --line: rgba(0, 0, 0, 0.07);
+  --line: rgba(15, 25, 55, 0.08);
+  --glass: rgba(255, 255, 255, 0.62);
   --radius-xl: 32px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.05);
-  --menu-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 16px 40px rgba(0, 0, 0, 0.14);
+  --shadow: 0 1px 2px rgba(15, 25, 55, 0.02), 0 12px 32px rgba(15, 25, 55, 0.05);
+  --menu-shadow: 0 2px 10px rgba(15, 25, 55, 0.05), 0 18px 50px rgba(15, 25, 55, 0.12);
   color-scheme: light;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable', 'Segoe UI', Inter, system-ui, sans-serif;
 }
@@ -45,6 +48,7 @@
   --ov-18: rgba(255, 255, 255, 0.22);
   --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.09);
+  --glass: rgba(28, 28, 32, 0.6);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.35);
   --menu-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
@@ -209,7 +213,7 @@ img { display: block; -webkit-user-drag: none; }
 .week-label {
   position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 12px; font-weight: 700; color: var(--text-3);
   white-space: nowrap; z-index: 6; padding: 3px 10px; border-radius: 999px; transition: color 0.15s;
-  background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 2px 8px var(--ov-5); /* legible over project bars */
+  background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7); box-shadow: 0 0 0 1px var(--line), 0 2px 8px var(--ov-5); /* legible over project bars */
 }
 .week-label.hover { bottom: 20px; } /* hovered weeks: same baseline as the label inside the band */
 .week-label:hover { color: var(--text); }
@@ -354,8 +358,8 @@ img { display: block; -webkit-user-drag: none; }
 }
 
 .status-menu {
-  position: absolute; z-index: 500; background: var(--surface); border-radius: 16px;
-  box-shadow: 0 2px 8px var(--ov-6), 0 16px 40px rgba(0, 0, 0, 0.14); padding: 6px; min-width: 170px; animation: pop 0.14s ease-out;
+  position: absolute; z-index: 500; border-radius: 16px; background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7);
+  box-shadow: var(--menu-shadow), 0 0 0 1px var(--line); padding: 6px; min-width: 170px; animation: pop 0.14s ease-out;
 }
 .status-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px; text-align: left; font-weight: 500; }
 .status-menu button:hover, .status-menu button.current { background: var(--soft); }
@@ -363,8 +367,8 @@ img { display: block; -webkit-user-drag: none; }
 .status-item { position: relative; }
 .status-item .chev { margin-left: auto; color: var(--text-3); font-size: 14px; }
 .submenu {
-  position: absolute; left: calc(100% - 2px); top: -6px; background: var(--surface); border-radius: 16px; padding: 6px; min-width: 190px;
-  box-shadow: 0 2px 8px var(--ov-6), 0 16px 40px rgba(0, 0, 0, 0.14); animation: pop 0.12s ease-out;
+  position: absolute; left: calc(100% - 2px); top: -6px; border-radius: 16px; padding: 6px; min-width: 190px; background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7);
+  box-shadow: var(--menu-shadow), 0 0 0 1px var(--line); animation: pop 0.12s ease-out;
   max-height: min(360px, 60vh); overflow-y: auto;
 }
 .submenu::before { content: ''; position: absolute; left: -12px; top: 0; bottom: 0; width: 12px; }
@@ -387,7 +391,7 @@ img { display: block; -webkit-user-drag: none; }
 .fab {
   position: absolute; left: 26px; bottom: 14px; z-index: 20; display: inline-flex; align-items: center; gap: 8px;
   padding: 7px 13px 7px 10px; border-radius: 999px; color: var(--text-2); font-weight: 600;
-  background: var(--soft); transition: color 0.15s, background 0.15s;
+  background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7); transition: color 0.15s, background 0.15s;
 }
 .fab { box-shadow: inset 0 0 0 1px var(--line); }
 .fab:hover { color: var(--text); background: var(--soft-2); }
@@ -456,7 +460,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
-.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: -6px; z-index: 10; background: var(--surface); padding: 8px 0 4px; }
+.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: -6px; z-index: 10; background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7); border-radius: 0 0 12px 12px; padding: 8px 0 4px; }
 .toolbar button { padding: 4px 7px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; box-shadow: inset 0 0 0 1px var(--line); background: var(--panel); }
 .toolbar button:hover { background: var(--soft); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }
@@ -628,7 +632,7 @@ img { display: block; -webkit-user-drag: none; }
 /* ─── Sheets ────────────────────────────────────────── */
 
 .backdrop { position: fixed; inset: 0; background: var(--ov-18); display: grid; place-items: center; z-index: 100; animation: fade 0.15s ease-out; }
-.sheet { background: var(--surface); border-radius: 28px; padding: 26px 28px 22px; width: 380px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.25), 0 0 0 1px var(--line); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.sheet { border-radius: 28px; padding: 26px 28px 22px; width: 380px; background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7); box-shadow: 0 30px 80px rgba(15, 25, 55, 0.18), 0 0 0 1px var(--line); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
 .sheet h2 { margin: 0 0 16px; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-size: 12px; font-weight: 600; color: var(--text-2); }
@@ -683,14 +687,14 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 /* ─── Retro (redesigned) ───────────────────────────── */
 /* One quiet type scale: 11px caps titles, 13px/500 content, 12px tabular numbers.
    Each section is a soft inset card so the boundaries read at a glance. */
-.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 16px; background: var(--soft); }
+.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 16px; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); }
 .retro-sec-title {
   font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
   letter-spacing: 0.07em; margin-bottom: 12px;
 }
 .retro-carried {
   margin-bottom: 12px; padding: 16px 18px; border-radius: 16px; background: var(--soft);
-  box-shadow: inset 2px 0 0 var(--accent);
+  box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 1px var(--line);
 }
 .retro-carried .retro-sec-title { margin-bottom: 3px; }
 .retro-carried-text { white-space: pre-wrap; color: var(--text-2); font-size: 13px; font-weight: 500; line-height: 1.5; }
@@ -700,7 +704,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .retro-objective { font-size: 13px; font-weight: 650; margin: 0 0 10px; line-height: 1.45; }
 .kr-row {
   display: flex; align-items: center; gap: 16px; padding: 10px 12px; position: relative; overflow: hidden;
-  border-radius: 12px; background: var(--panel); transition: background 0.4s;
+  border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); transition: background 0.4s;
 }
 .kr-row + .kr-row { margin-top: 8px; }
 /* every warp level goes deeper into space */
