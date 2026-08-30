@@ -408,7 +408,7 @@ img { display: block; -webkit-user-drag: none; }
 .chip-x { color: var(--text-3); font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 6px; }
 .chip-x:hover { color: var(--text); }
 .chip.add { padding: 0; width: 26px; height: 26px; justify-content: center; color: var(--text-2); font-size: 18px; }
-.chip.add:hover { background: var(--soft-2); color: var(--text); }
+.chip.add:hover { background: var(--soft); color: var(--text); }
 .swatch.small { width: 16px; height: 16px; opacity: 1; margin-left: 2px; }
 .swatch-menu { display: flex; gap: 6px; padding: 10px; min-width: 0; }
 .status-menu button.danger { color: var(--today); }
@@ -473,7 +473,7 @@ img { display: block; -webkit-user-drag: none; }
 .retro-field { display: flex; flex-direction: column; gap: 6px; }
 .retro-label { font-size: 12px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.04em; }
 .retro-input {
-  font: inherit; color: var(--text); background: var(--soft); border: 0; outline: 0; resize: none; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line);
+  font: inherit; color: var(--text); background: var(--panel); border: 0; outline: 0; resize: none; border-radius: 14px; box-shadow: inset 0 0 0 1px var(--line);
   padding: 10px 12px; line-height: 1.5; user-select: text; min-height: 42px; overflow: hidden;
   width: 100%; display: block;
 }
@@ -492,7 +492,7 @@ img { display: block; -webkit-user-drag: none; }
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
 .toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: -6px; z-index: 10; background: var(--panel); padding: 8px 0 4px; }
-.toolbar button { padding: 4px 7px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; box-shadow: inset 0 0 0 1px var(--line); background: var(--panel); }
+.toolbar button { padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; box-shadow: inset 0 0 0 1px var(--line); background: var(--panel); }
 .toolbar button:hover { background: var(--soft); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }
 .tb-sep { width: 1px; height: 14px; background: var(--soft-2); margin: 0 2px; }
@@ -672,9 +672,9 @@ img { display: block; -webkit-user-drag: none; }
 .row { display: flex; gap: 12px; }
 .row .field { flex: 1; }
 .sheet-actions { display: flex; gap: 8px; margin-top: 8px; }
-.btn { padding: 9px 16px; border-radius: 999px; font-weight: 600; background: var(--soft); transition: background 0.15s; display: inline-flex; align-items: center; gap: 8px; box-shadow: inset 0 0 0 1px var(--line); }
+.btn { padding: 9px 16px; border-radius: 999px; font-weight: 600; background: var(--panel); color: var(--text-2); transition: background 0.15s, color 0.15s; display: inline-flex; align-items: center; gap: 8px; box-shadow: inset 0 0 0 1px var(--line); }
 .btn.primary { box-shadow: none; }
-.btn:hover { background: var(--soft-2); }
+.btn:hover { background: var(--soft); color: var(--text); }
 .btn.primary { background: var(--text); color: var(--bg); }
 .btn.primary:hover { opacity: 0.85; }
 
@@ -863,10 +863,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 /* freeze button at the foot of the retro */
 .retro-lock {
   display: flex; align-items: center; gap: 7px; margin: 6px auto 10px; padding: 8px 14px; border-radius: 999px;
-  font-size: 12.5px; font-weight: 600; color: var(--text-3); background: var(--soft); cursor: pointer;
+  font-size: 12.5px; font-weight: 600; color: var(--text-3); background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
-.retro-lock:hover { background: var(--soft-2); color: var(--text-2); }
+.retro-lock:hover { background: var(--soft); color: var(--text-2); }
 .retro-lock.on { color: var(--accent); }
 
 /* health matrix: avatar header row, one dot per person per question */
