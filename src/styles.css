@@ -29,7 +29,7 @@
   --wash: radial-gradient(55vmax 55vmax at -4% -18%, rgba(124, 92, 255, 0.16), transparent 65%),
     radial-gradient(44vmax 44vmax at 106% -8%, rgba(255, 92, 138, 0.1), transparent 65%),
     radial-gradient(48vmax 48vmax at 35% 118%, rgba(56, 212, 192, 0.1), transparent 65%);
-  --radius-xl: 32px;
+  --radius-xl: 20px;
   --shadow: 0 1px 2px rgba(23, 23, 31, 0.03), 0 14px 40px rgba(96, 80, 180, 0.07);
   --menu-shadow: 0 2px 10px rgba(15, 25, 55, 0.05), 0 18px 50px rgba(15, 25, 55, 0.12);
   color-scheme: light;
