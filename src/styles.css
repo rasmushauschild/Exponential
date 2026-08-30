@@ -451,7 +451,25 @@ img { display: block; -webkit-user-drag: none; }
   border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; overflow: hidden; animation: fade 0.25s ease-out;
 }
-.detail-top { display: flex; align-items: center; gap: 4px; padding: 18px 18px 0 26px; }
+.detail-top { display: flex; align-items: center; gap: 4px; padding: 18px 18px 0 26px; position: relative; z-index: 6; }
+/* content blur-fades out under the panel's top bar, the sticky toolbar, and the foot,
+   instead of clipping hard at the scroll edge */
+.detail-top::after, .detail-foot::before, .toolbar::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 26px; pointer-events: none;
+  -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
+}
+.detail-top::after, .toolbar::after {
+  top: 100%;
+  background: linear-gradient(to bottom, var(--frost), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 15%, transparent);
+  mask-image: linear-gradient(to bottom, #000 15%, transparent);
+}
+.detail-foot::before {
+  bottom: 100%;
+  background: linear-gradient(to top, var(--frost), transparent);
+  -webkit-mask-image: linear-gradient(to top, #000 15%, transparent);
+  mask-image: linear-gradient(to top, #000 15%, transparent);
+}
 .detail-kind { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .icon-btn { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color: var(--text-2); transition: background 0.15s; }
 .icon-btn:hover { background: var(--soft); color: var(--text); }
@@ -608,7 +626,7 @@ img { display: block; -webkit-user-drag: none; }
 .md-preview img, .rich-body img { max-width: 100%; border-radius: 14px; margin: 8px 0; display: block; }
 .md-preview input[type='checkbox'], .rich-body input[type='checkbox'] { margin: 0 6px 0 0; vertical-align: -2px; accent-color: var(--text); }
 .md-preview code, .rich-body code { background: var(--soft); padding: 1px 5px; border-radius: 6px; font-size: 12.5px; }
-.detail-foot { flex: none; padding: 12px 26px 18px; display: flex; justify-content: flex-end; background: var(--frost); }
+.detail-foot { flex: none; padding: 12px 26px 18px; display: flex; justify-content: flex-end; background: var(--frost); position: relative; z-index: 6; }
 
 /* ─── Team page ─────────────────────────────────────── */
 
