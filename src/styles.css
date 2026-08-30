@@ -64,7 +64,7 @@
   --frost: rgba(30, 30, 32, 0.85);
   --frost-deep: rgba(22, 22, 24, 0.92);
   --tint: #101012;
-  --edge: rgba(255, 255, 255, 0.09);
+  --edge: rgba(255, 255, 255, 0.15);
   --rim: rgba(0, 0, 0, 0.55);
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.5);
   --scrim: rgba(0, 0, 0, 0.5);
