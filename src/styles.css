@@ -21,6 +21,7 @@
   --sel-blk: rgba(10, 132, 255, 0.1);
   --line: rgba(0, 0, 0, 0.09);
   --dot: rgba(0, 0, 0, 0.22);
+  --dot-fade: #fafafa; /* matches the panel ground: fades dots out under text areas */
   --frost: #fafafa;  /* panels match the background; the edge ring + shadow carry the separation */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --scrim: rgba(0, 0, 0, 0.25);
@@ -52,6 +53,7 @@
   --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.1);
   --dot: rgba(255, 255, 255, 0.24);
+  --dot-fade: #1d1d1f;
   --frost: rgba(30, 30, 32, 0.85);
   --edge: rgba(255, 255, 255, 0.09);
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.5);
@@ -208,8 +210,10 @@ img { display: block; -webkit-user-drag: none; }
 
 .timeline {
   flex: 1; position: relative; overflow: hidden; cursor: grab;
-  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
-  background-size: 19px 19px; background-position: 9px 8px;
+  /* fade layer keeps the date header clean; the dot layer pans via inline background-position */
+  background-image: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 72px, transparent 102px),
+    radial-gradient(circle, var(--dot) 0.8px, transparent 0.8px);
+  background-size: auto, 19px 19px; background-position: 0 0, 9px 8px;
 }
 .timeline.panning { cursor: grabbing; }
 .timeline.dragging-item { cursor: grabbing; }
@@ -309,8 +313,10 @@ img { display: block; -webkit-user-drag: none; }
 .wk-header { min-height: 28px; margin-bottom: 4px; }
 .wk-rows {
   flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
-  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
-  background-size: 18px 18px; background-position: 9px 0; background-attachment: local; /* dots scroll with the rows */
+  /* left fade shrinks the dots away under the task-title column */
+  background-image: linear-gradient(to right, var(--dot-fade) 0, var(--dot-fade) 15%, transparent 36%),
+    radial-gradient(circle, var(--dot) 0.8px, transparent 0.8px);
+  background-size: auto, 18px 18px; background-position: 0 0, 9px 0; background-attachment: local, local; /* dots scroll with the rows */
 }
 .wk-rows::-webkit-scrollbar { width: 0; }
 .wk-list { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px; position: relative; height: 100%; }

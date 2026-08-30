@@ -355,7 +355,7 @@ export function BigPlan(props: Props) {
     <div
       ref={ref}
       className={`timeline${panning ? ' panning' : ''}${drag || dlDrag ? ' dragging-item' : ''}`}
-      style={{ backgroundPosition: `${9 - origin * ppd}px ${8 - scrollY}px` }} /* dots pan/scroll with the plan */
+      style={{ backgroundPosition: `0 0, ${9 - origin * ppd}px ${8 - scrollY}px` }} /* header fade stays put; dots pan/scroll with the plan */
       onPointerDown={onPointerDown}
       onPointerMove={onHover}
       onPointerLeave={() => { setGhost(null); setHoverWeek(null); }}
