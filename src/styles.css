@@ -220,12 +220,12 @@ img { display: block; -webkit-user-drag: none; }
 .tl-day.weekend { color: var(--text-3); opacity: 0.6; }
 
 .week-band {
-  position: absolute; top: 44px; bottom: 10px; border-radius: 10px; background: rgba(10, 132, 255, 0.07);
+  position: absolute; top: 44px; bottom: 10px; border-radius: 10px; background: transparent;
   cursor: ew-resize; transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1);
 }
 .week-band.no-anim { transition: background 0.15s; }
 .week-band.dragging { transition: background 0.15s, left 0.16s cubic-bezier(0.2, 0.7, 0.2, 1); }
-.week-band:hover, .week-band.dragging { background: rgba(10, 132, 255, 0.12); }
+.week-band:hover, .week-band.dragging { background: rgba(10, 132, 255, 0.07); }
 .week-label {
   position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 12px; font-weight: 700; color: var(--text-3);
   white-space: nowrap; z-index: 6; padding: 3px 10px; border-radius: 6px; transition: color 0.15s;
