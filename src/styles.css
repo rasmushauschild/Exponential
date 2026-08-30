@@ -23,10 +23,6 @@
   --glass: rgba(255, 255, 255, 0.6);
   --panel-glass: rgba(247, 248, 251, 0.62);
   --scrim: rgba(255, 255, 255, 0.35);
-  /* a whisper of cool colour behind the glass so blur has something to catch */
-  --wash: radial-gradient(1100px 700px at 12% -8%, rgba(10, 132, 255, 0.055), transparent 60%),
-    radial-gradient(900px 650px at 108% 28%, rgba(130, 90, 255, 0.045), transparent 62%),
-    radial-gradient(800px 600px at 45% 115%, rgba(10, 200, 190, 0.04), transparent 60%);
   --radius-xl: 32px;
   --shadow: 0 2px 6px rgba(15, 25, 55, 0.03), 0 18px 44px rgba(15, 25, 55, 0.07);
   --menu-shadow: 0 2px 10px rgba(15, 25, 55, 0.05), 0 18px 50px rgba(15, 25, 55, 0.12);
@@ -57,8 +53,6 @@
   --glass: rgba(28, 28, 32, 0.6);
   --panel-glass: rgba(30, 30, 34, 0.66);
   --scrim: rgba(0, 0, 0, 0.42);
-  --wash: radial-gradient(1100px 700px at 12% -8%, rgba(60, 130, 255, 0.07), transparent 60%),
-    radial-gradient(900px 650px at 108% 28%, rgba(140, 100, 255, 0.05), transparent 62%);
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 12px rgba(0, 0, 0, 0.35);
   --menu-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.6);
   color-scheme: dark;
@@ -68,12 +62,11 @@
 html, body, #root { height: 100%; margin: 0; }
 /* Transparent macOS window: the page itself is the rounded window body. */
 .mac-window, .mac-window body { background: transparent; }
-.mac-window #root { background: var(--bg); background-image: var(--wash); border-radius: 26px; overflow: hidden; }
+.mac-window #root { background: var(--bg); border-radius: 26px; overflow: hidden; }
 body {
   font-family: var(--font);
   color: var(--text);
   background: var(--bg);
-  background-image: var(--wash);
   -webkit-font-smoothing: antialiased;
   font-size: 14px;
   overflow: hidden;
@@ -177,7 +170,7 @@ img { display: block; -webkit-user-drag: none; }
 .panel-head .pill.toggle { margin-left: 6px; }
 
 .pill {
-  padding: 7px 13px; border-radius: 999px; background: transparent; font-weight: 600; color: var(--text-2);
+  padding: 7px 13px; border-radius: 999px; background: var(--glass); font-weight: 600; color: var(--text-2);
   display: inline-flex; align-items: center; gap: 7px; transition: background 0.15s, color 0.15s; white-space: nowrap;
   box-shadow: inset 0 0 0 1px var(--line);
 }
@@ -248,15 +241,18 @@ img { display: block; -webkit-user-drag: none; }
   position: absolute; height: 30px; display: flex; align-items: center; gap: 10px;
   border-radius: 999px; padding: 0 12px; font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden;
   background: var(--surface); color: var(--text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 60%, var(--surface)), 0 1px 2px var(--ov-4);
+  box-shadow: inset 0 0 0 1px var(--line), 0 1px 3px var(--ov-4);
   transition: box-shadow 0.15s, background 0.15s;
   z-index: 2;
 }
-.tl-project::before { content: ''; position: absolute; inset: 0; background: var(--pc); opacity: 0.07; pointer-events: none; }
-.tl-project:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 80%, var(--surface)), 0 2px 8px var(--ov-6); }
-.tl-project.selected { box-shadow: inset 0 0 0 2px var(--pc), 0 2px 8px var(--ov-6); }
+.tl-project::before { content: ''; position: absolute; inset: 0; background: var(--pc); opacity: 0.16; pointer-events: none; transition: opacity 0.15s; }
+.tl-project:hover { box-shadow: inset 0 0 0 1px var(--line), 0 2px 8px var(--ov-6); }
+.tl-project:hover::before { opacity: 0.24; }
+.tl-project.selected { box-shadow: inset 0 0 0 1.5px var(--line), 0 2px 8px var(--ov-6); }
+.tl-project.selected::before { opacity: 0.32; }
 /* left/width/top ease so day and lane snaps glide; the base class must NOT transition position (panning). */
-.tl-project.live { box-shadow: inset 0 0 0 2px var(--pc), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; transition: box-shadow 0.15s, background 0.15s, left 0.12s ease-out, width 0.12s ease-out, top 0.12s ease-out; }
+.tl-project.live { box-shadow: inset 0 0 0 1.5px var(--line), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; transition: box-shadow 0.15s, background 0.15s, left 0.12s ease-out, width 0.12s ease-out, top 0.12s ease-out; }
+.tl-project.live::before { opacity: 0.32; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
 .bar-avatars { display: inline-flex; flex: none; }
@@ -285,7 +281,7 @@ img { display: block; -webkit-user-drag: none; }
 .wk-free .wk-days { height: 100%; min-height: 36px; cursor: copy; }
 .ghost-zone .wk-block.ghost { top: 9px; bottom: auto; height: 18px; }
 .wk-block.ghost, .tl-project.ghost { opacity: 0.45; pointer-events: none; --sc: var(--accent); --pc: var(--accent); color: var(--accent); }
-.tl-project.ghost { box-shadow: inset 0 0 0 1.5px var(--pc); z-index: 1; transition: left 0.12s ease-out, top 0.12s ease-out; }
+.tl-project.ghost { box-shadow: inset 0 0 0 1px var(--line); z-index: 1; transition: left 0.12s ease-out, top 0.12s ease-out; }
 .wk-block.cut-l { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
 .wk-block.cut-r { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 .inline-name { flex: 1; min-width: 0; font-weight: 600; color: var(--text); background: transparent; user-select: text; }
@@ -326,13 +322,13 @@ img { display: block; -webkit-user-drag: none; }
   position: absolute; top: 5px; bottom: 5px; width: calc(100% / 7 - 6px); margin-left: 3px;
   border-radius: 999px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  background: var(--surface); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc) 72%, var(--surface)), 0 1px 3px var(--ov-4);
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--line), 0 1px 3px var(--ov-4);
   transition: left 0.12s ease-out, box-shadow 0.15s;
 }
 .wk-block::before { content: ''; position: absolute; inset: 0; background: var(--sc); opacity: 0.16; pointer-events: none; }
 .wk-block:not(.ev) { top: 9px; bottom: 9px; }
 /* Dragging eases between day snaps, like the hover ghost does. */
-.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 2px var(--sc), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
+.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 1.5px var(--line), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
 .wk-row.done .wk-block, .wk-row.cancelled .wk-block { color: var(--text-2); }
 
 /* The next upcoming event rides the bottom edge while its real row is below the fold; the
@@ -358,9 +354,9 @@ img { display: block; -webkit-user-drag: none; }
 /* Quiet toggle in the header's empty left cell: tucks completed tasks away. Faded like a done task's title. */
 .done-toggle { font-size: 14px; font-weight: 500; color: var(--text-3); padding: 3px 9px; margin-left: -9px; border-radius: 9px; transition: color 0.15s, background 0.15s; }
 .done-toggle:hover { color: var(--text-2); background: var(--ov-35); }
-.wk-row.from-other .wk-block { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc) 72%, var(--surface)); }
+.wk-row.from-other .wk-block { box-shadow: inset 0 0 0 1px var(--line); }
 .wk-row.from-other .wk-block::before { opacity: 0.04; background-image: repeating-linear-gradient(135deg, var(--sc) 0 3px, transparent 3px 8px); }
-.wk-row.from-other .wk-block { border: 1.5px dashed color-mix(in srgb, var(--sc) 70%, var(--surface)); box-shadow: none; }
+.wk-row.from-other .wk-block { border: 1.5px dashed color-mix(in srgb, var(--sc) 40%, var(--surface)); box-shadow: none; }
 
 .status-btn { width: 18px; height: 18px; flex: none; border-radius: 50%; display: grid; place-items: center; transition: transform 0.12s; }
 .status-btn:hover { transform: scale(1.15); }
@@ -386,7 +382,7 @@ img { display: block; -webkit-user-drag: none; }
 .submenu::before { content: ''; position: absolute; left: -12px; top: 0; bottom: 0; width: 12px; }
 .submenu-title { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; padding: 6px 10px 4px; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
-.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 4px; border-radius: 999px; background: transparent; font-weight: 600; font-size: 13px; box-shadow: inset 0 0 0 1px var(--line); }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px 3px 4px; border-radius: 999px; background: var(--glass); font-weight: 600; font-size: 13px; box-shadow: inset 0 0 0 1px var(--line); }
 .chip-x { color: var(--text-3); font-size: 15px; line-height: 1; padding: 0 2px; border-radius: 6px; }
 .chip-x:hover { color: var(--text); }
 .chip.add { padding: 0; width: 26px; height: 26px; justify-content: center; color: var(--text-2); font-size: 18px; }
@@ -433,7 +429,7 @@ img { display: block; -webkit-user-drag: none; }
 .prop { display: flex; align-items: center; gap: 12px; min-height: 32px; }
 .prop-label { width: 72px; flex: none; font-size: 13px; color: var(--text-3); font-weight: 600; }
 .prop-text { font-weight: 500; }
-.date-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: transparent; font-weight: 600; font-size: 13px; color: var(--text-2); transition: background 0.15s; box-shadow: inset 0 0 0 1px var(--line); }
+.date-pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: var(--glass); font-weight: 600; font-size: 13px; color: var(--text-2); transition: background 0.15s; box-shadow: inset 0 0 0 1px var(--line); }
 .date-pill:hover { background: var(--soft); color: var(--text); }
 .date-pill .dash { color: var(--text-3); padding: 0 2px; }
 .date-pill.empty { color: var(--text-3); font-weight: 500; cursor: pointer; position: relative; overflow: hidden; }
@@ -474,7 +470,7 @@ img { display: block; -webkit-user-drag: none; }
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
 .toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: -6px; z-index: 10; background: var(--glass); -webkit-backdrop-filter: blur(24px) saturate(1.7); backdrop-filter: blur(24px) saturate(1.7); border-radius: 0 0 12px 12px; padding: 8px 0 4px; }
-.toolbar button { padding: 4px 7px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; box-shadow: inset 0 0 0 1px var(--line); background: transparent; }
+.toolbar button { padding: 4px 7px; border-radius: 8px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; box-shadow: inset 0 0 0 1px var(--line); background: var(--glass); }
 .toolbar button:hover { background: var(--soft); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }
 .tb-sep { width: 1px; height: 14px; background: var(--soft-2); margin: 0 2px; }
