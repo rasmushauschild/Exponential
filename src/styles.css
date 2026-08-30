@@ -459,12 +459,33 @@ img { display: block; -webkit-user-drag: none; }
   display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: 58px;
   position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: height 0.18s ease-out;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
-  /* the blur region itself dissolves at its lower edge — no sharp blur boundary */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  /* blur strength ramps down 22 → 9 → 3.5 → sharp across the lower edge: stepping the
+     radius avoids the double-image ghost a single strong-blur cross-fade produces */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent calc(100% - 14px));
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent calc(100% - 14px));
 }
+/* ramp layers are SIBLINGS of the bars (a backdrop-filtered element is a backdrop root:
+   its children's backdrop filters can't see behind it) */
+.detail { --barH: 58px; }
+.detail.tb-stuck { --barH: 94px; }
+.detail::before, .detail::after, .edge-ramp {
+  content: ''; position: absolute; left: 0; right: 0; z-index: 5; pointer-events: none;
+}
+.detail::before { top: calc(var(--barH) - 28px); height: 20px; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 65%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 65%, transparent); }
+.detail::after { top: calc(var(--barH) - 13px); height: 12px; -webkit-backdrop-filter: blur(3.5px); backdrop-filter: blur(3.5px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 40%, #000 70%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 40%, #000 70%, transparent); }
+.edge-ramp.fa { bottom: 54px; height: 20px; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 35%, #000 65%, transparent);
+  mask-image: linear-gradient(to top, transparent, #000 35%, #000 65%, transparent); }
+.edge-ramp.fb { bottom: 69px; height: 12px; -webkit-backdrop-filter: blur(3.5px); backdrop-filter: blur(3.5px);
+  -webkit-mask-image: linear-gradient(to top, transparent, #000 40%, #000 70%, transparent);
+  mask-image: linear-gradient(to top, transparent, #000 40%, #000 70%, transparent); }
 /* while the formatting toolbar is stuck it lives INSIDE this bar's blur box — one
    seamless blur behind header + toolbar */
+.detail-top { height: var(--barH); }
 .detail.tb-stuck .detail-top { height: 94px; }
 .toolbar::after {
   content: ''; position: absolute; left: 0; right: 0; height: 22px; top: 100%; pointer-events: none;
@@ -633,8 +654,8 @@ img { display: block; -webkit-user-drag: none; }
   padding: 30px 26px 18px; display: flex; justify-content: flex-end;
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
-  -webkit-mask-image: linear-gradient(to top, #000 calc(100% - 24px), transparent);
-  mask-image: linear-gradient(to top, #000 calc(100% - 24px), transparent);
+  -webkit-mask-image: linear-gradient(to top, #000 calc(100% - 26px), transparent calc(100% - 14px));
+  mask-image: linear-gradient(to top, #000 calc(100% - 26px), transparent calc(100% - 14px));
 }
 
 /* ─── Team page ─────────────────────────────────────── */

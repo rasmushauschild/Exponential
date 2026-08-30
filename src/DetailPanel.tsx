@@ -820,11 +820,15 @@ function SendToAgent({ doc }: { doc: () => string }) {
     copied: 'Copied as Markdown',
   }[state];
   return (
-    <div className="detail-foot">
-      <button className="btn" onClick={send}>
-        <SparkIcon /> {label}
-      </button>
-    </div>
+    <>
+      <div className="edge-ramp fa" />
+      <div className="edge-ramp fb" />
+      <div className="detail-foot">
+        <button className="btn" onClick={send}>
+          <SparkIcon /> {label}
+        </button>
+      </div>
+    </>
   );
 }
 
