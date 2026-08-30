@@ -114,7 +114,7 @@ export function DetailPanel(p: Props) {
               <Prop label="Dates">
                 <DateRange start={project.start} end={project.end}
                   onChange={(start, end) => p.onUpdateProject(project.id, { start, end })} />
-                <button className="icon-btn small" title="Reset dates to this week"
+                <button className="chip-x" title="Reset dates to this week"
                   onClick={() => { const w = weekStart(todayISO()); p.onUpdateProject(project.id, { start: w, end: addDays(w, 6) }); }}>×</button>
               </Prop>
               <Prop label="People">
@@ -150,7 +150,7 @@ export function DetailPanel(p: Props) {
                   <>
                     <DateRange start={task.date} end={task.end ?? task.date}
                       onChange={(start, end) => p.onUpdateTask(task.id, { date: start, end: end === start ? undefined : end })} />
-                    <button className="icon-btn small" title="Move to backlog" onClick={() => p.onUpdateTask(task.id, { date: undefined, end: undefined })}>×</button>
+                    <button className="chip-x" title="Move to backlog" onClick={() => p.onUpdateTask(task.id, { date: undefined, end: undefined })}>×</button>
                   </>
                 ) : (
                   <label className="date-pill empty" title="Pick a date">

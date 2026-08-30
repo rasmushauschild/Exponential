@@ -323,9 +323,17 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     const rects = rows.map((r) => r.getBoundingClientRect());
     const h = rects.slice(from, from + count).reduce((s, r) => s + r.height, 0) + 4 * count;
     // Everything is computed against the list without the dragged group: `ins` is where it lands.
-    const others = rects.map((r, j) => ({ r, j })).filter(({ j }) => j < from || j >= from + count);
-    const insAt = (y: number) => { let ins = 0; others.forEach(({ r }, k) => { if (y > r.top + r.height / 2) ins = k + 1; }); return ins; };
-    const homeIns = others.filter(({ j }) => j < from).length;
+    // Collapsed toggle children render display:none (zero rects): drops only consider visible
+    // rows, and the insertion index lands after any hidden subtree — never inside a closed toggle.
+    const othersAll = rects.map((r, j) => ({ r, j })).filter(({ j }) => j < from || j >= from + count);
+    const vis = othersAll.map((o, k0) => ({ ...o, k0 })).filter((o) => o.r.height > 0);
+    const insAt = (y: number) => {
+      let vk = 0;
+      vis.forEach((o, k) => { if (y > o.r.top + o.r.height / 2) vk = k + 1; });
+      return vk < vis.length ? vis[vk].k0 : othersAll.length;
+    };
+    const prevVisibleFor = (ins: number) => { let p: (typeof vis)[number] | undefined; for (const o of vis) { if (o.k0 < ins) p = o; else break; } return p; };
+    const homeIns = othersAll.filter(({ j }) => j < from).length;
     const mid0 = (rects[from].top + rects[from + count - 1].bottom) / 2;
     let latest = { from, count, ins: homeIns, dy: 0, h };
     let moved = false;
@@ -349,10 +357,11 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         const bs = blocksRef.current;
         const group = bs.slice(from, from + count);
         const rest = [...bs.slice(0, from), ...bs.slice(from + count)];
-        // The landing spot decides the depth: right under a toggle means inside it,
-        // otherwise match the block above; the whole group shifts by the same amount.
-        const prev = rest[latest.ins - 1];
-        const destInd = prev ? Math.min(MAX_IND, (prev.indent ?? 0) + (prev.kind === 'tog' ? 1 : 0)) : 0;
+        // The landing spot decides the depth: under an OPEN toggle means inside it, under a
+        // closed one means sibling; otherwise match the visible block above.
+        const prevVis = prevVisibleFor(latest.ins);
+        const pb = prevVis ? bs[prevVis.j] : undefined;
+        const destInd = pb ? Math.min(MAX_IND, (pb.indent ?? 0) + (pb.kind === 'tog' && !closed.has(pb.key) ? 1 : 0)) : 0;
         const delta = destInd - (group[0].indent ?? 0);
         const shifted = group.map((g) => ({ ...g, indent: Math.max(0, Math.min(MAX_IND, (g.indent ?? 0) + delta)) }));
         commit([...rest.slice(0, latest.ins), ...shifted, ...rest.slice(latest.ins)]);
@@ -576,9 +585,19 @@ function withOrphans(blocks: Block[], tasks: Task[]): Block[] {
 }
 
 function ensureTrailing(blocks: Block[]): Block[] {
-  const last = blocks[blocks.length - 1];
-  if (last && last.kind === 'p' && last.text === '') return blocks;
-  return [...blocks, { key: newKey(), kind: 'p', text: '' }];
+  const out: Block[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const b = blocks[i];
+    out.push(b);
+    // a toggle always holds at least one line
+    if (b.kind === 'tog') {
+      const nxt = blocks[i + 1];
+      if (!nxt || (nxt.indent ?? 0) <= (b.indent ?? 0)) out.push({ key: newKey(), kind: 'p', text: '', indent: Math.min(MAX_IND, (b.indent ?? 0) + 1) });
+    }
+  }
+  const last = out[out.length - 1];
+  if (last && last.kind === 'p' && last.text === '' && !(last.indent ?? 0)) return out;
+  return [...out, { key: newKey(), kind: 'p', text: '' }];
 }
 
 /* ── links inside text blocks ── */
