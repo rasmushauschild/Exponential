@@ -96,7 +96,7 @@ img { display: block; -webkit-user-drag: none; }
 .backdrop, .sheet, .status-menu, .submenu, .gate-card { -webkit-app-region: no-drag; }
 
 .sidebar {
-  width: 72px; flex: none; position: relative; z-index: 200; -webkit-app-region: drag;
+  width: 88px; flex: none; position: relative; z-index: 200; -webkit-app-region: drag;
   transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .sidebar:hover { width: 232px; } /* expands in the layout, squeezing the panels beside it */
