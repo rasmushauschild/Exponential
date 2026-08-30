@@ -458,8 +458,14 @@ img { display: block; -webkit-user-drag: none; }
 .detail-title, .field input, .inline-name { user-select: text; }
 
 .props { display: flex; flex-direction: column; gap: 4px; margin-bottom: 22px; }
-/* value selectors (dates / people / group / status) are quiet text until hovered */
+/* value selectors (dates / people / group / status) are quiet text until hovered; their
+   padding is pulled back so the contents share one left edge */
 .props .pill, .props .date-pill, .props .chip { background: transparent; box-shadow: none; }
+.props .pill { margin-left: -13px; }
+.props .pill.small { margin-left: -10px; }
+.props .date-pill { margin-left: -10px; }
+.props .chip { margin-left: -4px; }
+.props .chip + .chip, .props .pill + .pill { margin-left: 2px; }
 .props .pill:hover, .props .date-pill:hover, .props .chip:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
 .prop { display: flex; align-items: center; gap: 12px; min-height: 32px; }
 .prop-label { width: 72px; flex: none; font-size: 13px; color: var(--text-3); font-weight: 600; }
@@ -741,14 +747,14 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 /* ─── Retro (redesigned) ───────────────────────────── */
 /* One quiet type scale: 11px caps titles, 13px/500 content, 12px tabular numbers.
    Each section is a soft inset card so the boundaries read at a glance. */
-.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 16px; background: var(--panel); box-shadow: 0 0 0 0.5px var(--rim), 0 2px 10px rgba(0, 0, 0, 0.04); }
+.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 16px; background: transparent; box-shadow: 0 0 0 0.5px var(--rim); }
 .retro-sec-title {
   font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
   letter-spacing: 0.07em; margin-bottom: 12px;
 }
 .retro-carried {
-  margin-bottom: 12px; padding: 16px 18px; border-radius: 16px; background: var(--panel);
-  box-shadow: inset 2px 0 0 var(--accent), 0 0 0 0.5px var(--rim), 0 2px 10px rgba(0, 0, 0, 0.04);
+  margin-bottom: 12px; padding: 16px 18px; border-radius: 16px; background: transparent;
+  box-shadow: inset 2px 0 0 var(--accent), 0 0 0 0.5px var(--rim);
 }
 .retro-carried .retro-sec-title { margin-bottom: 3px; }
 .retro-carried-text { white-space: pre-wrap; color: var(--text-2); font-size: 13px; font-weight: 500; line-height: 1.5; }

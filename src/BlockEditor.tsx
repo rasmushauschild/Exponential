@@ -180,7 +180,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   useEffect(() => {
     if (!slash) return;
     const b = blocks[slash.i];
-    if (!b || !('text' in b) || b.kind === 'tog' && false || !b.text.startsWith('/')) { setSlash(null); return; }
+    if (!b || !('text' in b) || (b.text !== '' && !b.text.startsWith('/'))) { setSlash(null); return; }
     setSlashSel((v) => Math.min(v, Math.max(0, slashOptions().length - 1)));
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.slash-menu')) setSlash(null); };
     window.addEventListener('pointerdown', down);
@@ -252,7 +252,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       if (el.value === '') {
         // Enter on an empty task turns it back into plain text instead of chaining another task.
         const b = blocks[i] as Extract<Block, { kind: 'task' }>;
-        commit(blocks.map((x, j) => (j === i ? { key: newKey(), kind: 'p', text: '' } as Block : x)));
+        commit(blocks.map((x, j) => (j === i ? { key: newKey(), kind: 'p', text: '', indent: blocks[i].indent } as Block : x)));
         onDeleteTask(b.taskId);
         setFocus({ index: i, caret: 'start' });
       } else {
@@ -280,10 +280,10 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         if (kind === 'task') {
           if (b.kind === 'task') continue;
           const id = createTask(b.text);
-          next[i] = { key: newKey(), kind: 'task', taskId: id };
+          next[i] = { key: newKey(), kind: 'task', taskId: id, indent: b.indent };
         } else if (b.kind === 'task') {
           const t = tasks.find((x) => x.id === b.taskId);
-          next[i] = { key: newKey(), kind, text: t?.title ?? '' };
+          next[i] = { key: newKey(), kind, text: t?.title ?? '', indent: b.indent };
           onDeleteTask(b.taskId);
         } else {
           next[i] = { ...b, kind };
@@ -298,11 +298,11 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     if (kind === 'task') {
       if (b.kind === 'task') return;
       const id = createTask(b.kind === 'img' ? '' : b.text);
-      commit(blocks.map((x, j) => (j === active ? { key: newKey(), kind: 'task', taskId: id } as Block : x)));
+      commit(blocks.map((x, j) => (j === active ? { key: newKey(), kind: 'task', taskId: id, indent: b.indent } as Block : x)));
       setFocus({ index: active, caret: 'end' });
       return;
     }
-    if (b.kind === 'task') { const t = tasks.find((x) => x.id === b.taskId); commit(blocks.map((x, j) => (j === active ? { key: newKey(), kind, text: t?.title ?? '' } as Block : x))); onDeleteTask(b.taskId); setFocus({ index: active, caret: 'end' }); return; }
+    if (b.kind === 'task') { const t = tasks.find((x) => x.id === b.taskId); commit(blocks.map((x, j) => (j === active ? { key: newKey(), kind, text: t?.title ?? '', indent: b.indent } as Block : x))); onDeleteTask(b.taskId); setFocus({ index: active, caret: 'end' }); return; }
     if (b.kind === 'img') return;
     setBlock(active, { kind });
     setFocus({ index: active, caret: 'end' });

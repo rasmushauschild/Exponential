@@ -6,7 +6,7 @@ import { htmlToMarkdown } from './store';
 import { NO_GROUP_COLOR, STATUS_LABEL, crispColor, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { BlockEditor } from './BlockEditor';
-import { isoWeekNumber, todayISO, weekStart } from './dates';
+import { addDays, isoWeekNumber, todayISO, weekStart } from './dates';
 import { dragRows } from './rowDrag';
 
 export type Selection =
@@ -114,6 +114,8 @@ export function DetailPanel(p: Props) {
               <Prop label="Dates">
                 <DateRange start={project.start} end={project.end}
                   onChange={(start, end) => p.onUpdateProject(project.id, { start, end })} />
+                <button className="icon-btn small" title="Reset dates to this week"
+                  onClick={() => { const w = weekStart(todayISO()); p.onUpdateProject(project.id, { start: w, end: addDays(w, 6) }); }}>×</button>
               </Prop>
               <Prop label="People">
                 <AssigneePicker people={people} me={me} assignees={project.assignees ?? []} onToggle={(id) => p.onToggleAssignee(project.id, id)} />
