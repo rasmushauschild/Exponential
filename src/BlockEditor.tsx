@@ -14,27 +14,38 @@ import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
  */
 
 type Block =
-  | { key: string; kind: 'h1' | 'h2' | 'p'; text: string }
-  | { key: string; kind: 'img'; src: string }
-  | { key: string; kind: 'task'; taskId: string };
+  | { key: string; kind: 'h1' | 'h2' | 'p' | 'tog'; text: string; indent?: number }
+  | { key: string; kind: 'img'; src: string; indent?: number }
+  | { key: string; kind: 'task'; taskId: string; indent?: number };
 
-const TASK_RE = /^- \[( |x)\] ?(.*?)\s*<!--task:([0-9a-f-]{36})-->\s*$/i;
+const TASK_RE = /^(\s*)- \[( |x)\] ?(.*?)\s*<!--task:([0-9a-f-]{36})-->\s*$/i;
+const MAX_IND = 4;
+const indOf = (spaces: string) => Math.min(MAX_IND, Math.floor(spaces.length / 2));
 const newKey = () => `b${crypto.randomUUID().slice(0, 8)}`;
 
 export function parseBlocks(md: string): Block[] {
   const out: Block[] = [];
   let para: string[] = [];
-  const flush = () => { if (para.length) { out.push({ key: newKey(), kind: 'p', text: para.join('\n') }); para = []; } };
+  let paraInd = 0;
+  const flush = () => { if (para.length) { out.push({ key: newKey(), kind: 'p', text: para.join('\n'), indent: paraInd }); para = []; } };
   for (const raw of md.split('\n')) {
     const line = raw.replace(/\s+$/, '');
+    const ind = indOf(line.match(/^ */)?.[0] ?? '');
+    const body = line.replace(/^ +/, '');
     const task = line.match(TASK_RE);
-    const img = line.match(/^!\[[^\]]*\]\((data:image\/[^)]+|https?:[^)]+)\)\s*$/);
-    const h = line.match(/^(#{1,2})\s+(.*)$/);
-    if (task) { flush(); out.push({ key: newKey(), kind: 'task', taskId: task[3] }); }
-    else if (img) { flush(); out.push({ key: newKey(), kind: 'img', src: img[1] }); }
-    else if (h) { flush(); out.push({ key: newKey(), kind: h[1].length === 1 ? 'h1' : 'h2', text: h[2] }); }
-    else if (!line.trim()) flush();
-    else para.push(line.replace(/^- \[( |x)\] /, '☐ ').replace(/^- /, '• '));
+    const img = body.match(/^!\[[^\]]*\]\((data:image\/[^)]+|https?:[^)]+)\)\s*$/);
+    const tog = body.match(/^>>\s?(.*)$/);
+    const h = body.match(/^(#{1,2})\s+(.*)$/);
+    if (task) { flush(); out.push({ key: newKey(), kind: 'task', taskId: task[4], indent: indOf(task[1]) }); }
+    else if (img) { flush(); out.push({ key: newKey(), kind: 'img', src: img[1], indent: ind }); }
+    else if (tog) { flush(); out.push({ key: newKey(), kind: 'tog', text: tog[1], indent: ind }); }
+    else if (h) { flush(); out.push({ key: newKey(), kind: h[1].length === 1 ? 'h1' : 'h2', text: h[2], indent: ind }); }
+    else if (!body.trim()) flush();
+    else {
+      if (para.length && ind !== paraInd) flush();
+      if (!para.length) paraInd = ind;
+      para.push(body.replace(/^- \[( |x)\] /, '☐ ').replace(/^- /, '• '));
+    }
   }
   flush();
   return out;
@@ -42,11 +53,13 @@ export function parseBlocks(md: string): Block[] {
 
 export function serializeBlocks(blocks: Block[], tasks: Task[]): string {
   return blocks.filter((b, i) => !(i === blocks.length - 1 && b.kind === 'p' && b.text === '')).map((b) => {
-    if (b.kind === 'h1') return `# ${b.text}`;
-    if (b.kind === 'h2') return `## ${b.text}`;
-    if (b.kind === 'img') return `![](${b.src})`;
-    if (b.kind === 'task') { const t = tasks.find((x) => x.id === b.taskId); return `- [${t?.status === 'done' ? 'x' : ' '}] ${t?.title ?? ''} <!--task:${b.taskId}-->`; }
-    return b.text;
+    const pre = '  '.repeat(b.indent ?? 0);
+    if (b.kind === 'h1') return `${pre}# ${b.text}`;
+    if (b.kind === 'h2') return `${pre}## ${b.text}`;
+    if (b.kind === 'img') return `${pre}![](${b.src})`;
+    if (b.kind === 'tog') return `${pre}>> ${b.text}`;
+    if (b.kind === 'task') { const t = tasks.find((x) => x.id === b.taskId); return `${pre}- [${t?.status === 'done' ? 'x' : ' '}] ${t?.title ?? ''} <!--task:${b.taskId}-->`; }
+    return b.text.split('\n').map((l) => pre + l).join('\n');
   }).join('\n\n');
 }
 
@@ -112,6 +125,68 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     if (focusPrev && i > 0) setFocus({ index: i - 1, caret: 'end' });
   };
 
+  /* ── toggles: children are the following deeper-indented blocks; closing hides them ── */
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const hidden = (() => {
+    const h = new Set<number>();
+    let level: number | null = null;
+    blocks.forEach((b, i) => {
+      const ind = b.indent ?? 0;
+      if (level !== null && ind > level) { h.add(i); return; }
+      level = null;
+      if (b.kind === 'tog' && closed.has(b.key)) level = ind;
+    });
+    return h;
+  })();
+
+  /* ── slash menu: '/' on an empty block offers the block kinds ── */
+  const SLASH_OPTS: { label: string; kind: 'h1' | 'h2' | 'p' | 'tog' | 'task' }[] = [
+    { label: 'Heading 1', kind: 'h1' },
+    { label: 'Heading 2', kind: 'h2' },
+    { label: 'Text', kind: 'p' },
+    { label: 'Task', kind: 'task' },
+    { label: 'Toggle', kind: 'tog' },
+  ];
+  const [slash, setSlash] = useState<{ i: number; rect: DOMRect } | null>(null);
+  const slashRef = useRef(slash);
+  slashRef.current = slash;
+  const [slashSel, setSlashSel] = useState(0);
+  const slashSelRef = useRef(0);
+  slashSelRef.current = slashSel;
+  const slashOptions = () => {
+    const sl = slashRef.current;
+    if (!sl) return SLASH_OPTS;
+    const b = blocksRef.current[sl.i];
+    const q = b && 'text' in b ? b.text.slice(1).toLowerCase() : '';
+    return SLASH_OPTS.filter((o) => o.label.toLowerCase().includes(q));
+  };
+  const applySlash = (kind: 'h1' | 'h2' | 'p' | 'tog' | 'task') => {
+    const sl = slashRef.current;
+    if (!sl) return;
+    const i = sl.i;
+    setSlash(null);
+    const b = blocksRef.current[i];
+    if (!b || b.kind === 'img') return;
+    if (kind === 'task') {
+      const id = createTask('');
+      commit(blocksRef.current.map((x, j) => (j === i ? { key: newKey(), kind: 'task', taskId: id, indent: b.indent } as Block : x)));
+      setFocus({ index: i, caret: 'end' });
+    } else {
+      commit(blocksRef.current.map((x, j) => (j === i ? { ...b, kind, text: '' } as Block : x)));
+      setFocus({ index: i, caret: 'start' });
+    }
+  };
+  // The menu follows the block's text: it closes when the '/' is gone or the block changed shape.
+  useEffect(() => {
+    if (!slash) return;
+    const b = blocks[slash.i];
+    if (!b || !('text' in b) || b.kind === 'tog' && false || !b.text.startsWith('/')) { setSlash(null); return; }
+    setSlashSel((v) => Math.min(v, Math.max(0, slashOptions().length - 1)));
+    const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.slash-menu')) setSlash(null); };
+    window.addEventListener('pointerdown', down);
+    return () => window.removeEventListener('pointerdown', down);
+  }, [slash, blocks]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── keyboard behaviour for text blocks ── */
   // ⌘A anywhere in the notes selects every block (not the current field's text).
   const selectAll = (e: React.KeyboardEvent) => {
@@ -122,20 +197,40 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   };
   const onTextKey = (i: number, e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const el = e.currentTarget;
-    const b = blocks[i] as Extract<Block, { kind: 'h1' | 'h2' | 'p' }>;
+    const b = blocks[i] as Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
+    // The slash menu owns the arrows and Enter while it is open on this block.
+    if (slashRef.current?.i === i) {
+      const opts = slashOptions();
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashSel((v) => Math.min(opts.length - 1, v + 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashSel((v) => Math.max(0, v - 1)); return; }
+      if (e.key === 'Enter') { e.preventDefault(); const o = opts[Math.min(slashSelRef.current, opts.length - 1)]; if (o) applySlash(o.kind); else setSlash(null); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
+    }
+    if (e.key === '/' && el.value === '') {
+      const r = el.getBoundingClientRect();
+      setSlash({ i, rect: r });
+      setSlashSel(0);
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      setBlock(i, { indent: Math.max(0, Math.min(MAX_IND, (b.indent ?? 0) + (e.shiftKey ? -1 : 1))) });
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       const head = el.value.slice(0, el.selectionStart), tail = el.value.slice(el.selectionEnd);
       const next = blocks.map((x, j) => (j === i ? { ...b, text: head } : x));
-      next.splice(i + 1, 0, { key: newKey(), kind: 'p', text: tail });
+      // Enter on a toggle drops into it: the new line is a child, one level deeper.
+      next.splice(i + 1, 0, { key: newKey(), kind: 'p', text: tail, indent: Math.min(MAX_IND, (b.indent ?? 0) + (b.kind === 'tog' ? 1 : 0)) });
       commit(next);
+      if (b.kind === 'tog') setClosed((c) => { const n = new Set(c); n.delete(b.key); return n; });
       setFocus({ index: i + 1, caret: 'start' });
     } else if (e.key === 'Backspace' && el.selectionStart === 0 && el.selectionEnd === 0) {
       if (b.text === '' && blocks.length > 1) { e.preventDefault(); removeAt(i); }
       else if (i > 0 && blocks[i - 1].kind !== 'task' && blocks[i - 1].kind !== 'img') {
         e.preventDefault();
-        const prev = blocks[i - 1] as Extract<Block, { kind: 'h1' | 'h2' | 'p' }>;
+        const prev = blocks[i - 1] as Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>;
         const merged = blocks.filter((_, j) => j !== i).map((x, j) => (j === i - 1 ? { ...prev, text: prev.text + b.text } : x));
         commit(merged);
         setFocus({ index: i - 1, caret: prev.text.length });
@@ -147,6 +242,11 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   const onTaskKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>, task: Task | undefined) => {
     const el = e.currentTarget;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      setBlock(i, { indent: Math.max(0, Math.min(MAX_IND, (blocks[i].indent ?? 0) + (e.shiftKey ? -1 : 1))) });
+      return;
+    }
     if (e.key === 'Enter') {
       e.preventDefault();
       if (el.value === '') {
@@ -157,7 +257,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         setFocus({ index: i, caret: 'start' });
       } else {
         const id = createTask('');
-        insertAt(i + 1, { key: newKey(), kind: 'task', taskId: id });
+        insertAt(i + 1, { key: newKey(), kind: 'task', taskId: id, indent: blocks[i].indent });
       }
     } else if (e.key === 'Backspace' && el.value === '' ) { e.preventDefault(); removeAt(i); }
     else if (e.key === 'ArrowUp' && i > 0) { e.preventDefault(); setFocus({ index: i - 1, caret: 'end' }); }
@@ -168,7 +268,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   /* ── toolbar actions on the focused block ── */
   const activeRef = useRef(0);
   const setActive = (i: number) => { activeRef.current = i; };
-  const turnInto = (kind: 'h1' | 'h2' | 'p' | 'task') => {
+  const turnInto = (kind: 'h1' | 'h2' | 'p' | 'tog' | 'task') => {
     // With a block selection, the whole selection converts (images stay images).
     const s = selRef.current;
     if (s) {
@@ -349,6 +449,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('h2')} title="Heading 2">H2</button>
         <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('p')} title="Text">Text</button>
         <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('task')} title="Task block">Task</button>
+        <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('tog')} title="Toggle block">Toggle</button>
       </div>
       <div
         ref={listRef}
@@ -383,7 +484,11 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
           <div
             key={b.key}
             className={`blk blk-${b.kind}${drag && i >= drag.from && i < drag.from + drag.count ? ' dragging' : ''}${drag && (i < drag.from || i >= drag.from + drag.count) ? ' shifting' : ''}${i >= selLo && i <= selHi ? ' selected' : ''}`}
-            style={shift(i) ? { transform: `translateY(${shift(i)}px)` } : undefined}
+            style={{
+              ...(shift(i) ? { transform: `translateY(${shift(i)}px)` } : null),
+              ...(b.indent ? { marginLeft: `calc(${b.indent * 24}px - 26px)` } : null),
+              ...(hidden.has(i) ? { display: 'none' } : null),
+            }}
             onFocus={() => setActive(i)}
             onPointerDownCapture={(e) => onRowPointerDown(i, e)}
             onKeyDownCapture={() => setActive(i)}
@@ -407,6 +512,27 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
               />
             ) : b.kind === 'img' ? (
               <img src={b.src} alt="" className="blk-img" onClick={() => setActive(i)} />
+            ) : b.kind === 'tog' ? (
+              <div className="tog-blk">
+                <button
+                  className="tog-arrow"
+                  title={closed.has(b.key) ? 'Expand' : 'Collapse'}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => setClosed((c) => { const n = new Set(c); if (n.has(b.key)) n.delete(b.key); else n.add(b.key); return n; })}
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 10" style={{ transform: closed.has(b.key) ? 'rotate(-90deg)' : 'none', transition: 'transform 0.15s' }}>
+                    <path d="M2 3.5 L5 6.5 L8 3.5" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                <TextBlock
+                  block={b}
+                  placeholder="Toggle"
+                  focus={focus?.index === i ? focus : null}
+                  onFocused={() => setFocus(null)}
+                  onChange={(text) => setBlock(i, { text })}
+                  onKey={(e) => onTextKey(i, e)}
+                />
+              </div>
             ) : (
               <TextBlock
                 block={b}
@@ -420,6 +546,14 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
             {b.kind === 'img' && <button className="blk-x" title="Remove image" onClick={() => removeAt(i)}>×</button>}
           </div>
         ))}
+        {slash && createPortal(
+          <div className="status-menu slash-menu" style={{ position: 'fixed', left: slash.rect.left, top: slash.rect.bottom + 6 }}>
+            {slashOptions().map((o, k) => (
+              <button key={o.kind} className={k === Math.min(slashSel, slashOptions().length - 1) ? 'current' : ''}
+                onMouseDown={(e) => e.preventDefault()} onClick={() => applySlash(o.kind)}>{o.label}</button>
+            ))}
+            {slashOptions().length === 0 && <div className="hint" style={{ padding: '6px 10px' }}>No match</div>}
+          </div>, document.body)}
       </div>
     </div>
   );
@@ -465,7 +599,7 @@ function linkify(text: string): (string | { url: string; label: string })[] | nu
 }
 
 function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
-  block: Extract<Block, { kind: 'h1' | 'h2' | 'p' }>; placeholder: string; focus: Focus; onFocused: () => void;
+  block: Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>; placeholder: string; focus: Focus; onFocused: () => void;
   onChange: (text: string) => void; onKey: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);

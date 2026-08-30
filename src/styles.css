@@ -521,7 +521,7 @@ img { display: block; -webkit-user-drag: none; }
 .rich-body { position: relative; }
 .blocks { display: flex; flex-direction: column; gap: 6px; }
 .blk-list { display: flex; flex-direction: column; gap: 4px; padding: 4px 0 40px; position: relative; }
-.blk { position: relative; display: flex; align-items: flex-start; gap: 4px; margin-left: -26px; padding-left: 26px; border-radius: 8px; }
+.blk { position: relative; display: flex; align-items: flex-start; gap: 4px; margin: 0 -26px; padding: 0 26px; border-radius: 8px; }
 .blk.shifting { transition: transform 0.15s ease-out; }
 .blk.dragging { z-index: 5; background: var(--panel); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12); }
 .blk.selected, .blk.selected .task-blk.wk-row.task { background: var(--row-sel); }
@@ -552,14 +552,19 @@ img { display: block; -webkit-user-drag: none; }
 .blk-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; pointer-events: auto; cursor: pointer; }
 .blk-list.selecting .blk-link { pointer-events: none; }
 .blk-img { max-width: 100%; border-radius: 14px; margin: 6px 0; display: block; }
+.tog-blk { flex: 1; display: flex; align-items: flex-start; gap: 2px; min-width: 0; }
+.tog-arrow { width: 22px; height: 26px; margin-top: 2px; display: grid; place-items: center; color: var(--text-3); border-radius: 999px; flex: none; }
+.tog-arrow:hover { color: var(--text); background: var(--soft); }
+.tog-blk .blk-text { font-weight: 600; }
+.slash-menu { z-index: 700; }
 .blk-x { position: absolute; right: 6px; top: 10px; width: 24px; height: 24px; border-radius: 8px; background: var(--panel); color: var(--text-2); opacity: 0; transition: opacity 0.15s; box-shadow: var(--shadow); }
 .blk:hover .blk-x { opacity: 1; }
-.task-blk { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 8px 0 26px; margin-left: -26px; grid-template-columns: none; } /* hover box reaches back over the drag grip */
+.task-blk { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 26px; margin: 0 -26px; grid-template-columns: none; } /* box spans grip gutter to the panel edge */
 .task-blk-title { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-weight: 500; user-select: text; }
 .task-blk.done .task-blk-title, .task-blk.cancelled .task-blk-title { color: var(--text-3); }
 .task-blk.cancelled .task-blk-title { text-decoration: line-through; }
 /* Hidden entirely (not just faded) so the title runs to the panel edge until hover. */
-.task-blk .claim { display: none; flex: none; }
+.task-blk .claim { display: none; flex: none; margin-left: auto; }
 .blk:hover .task-blk .claim { display: block; }
 .blk.dragging .task-blk .claim, .blk.dragging .task-blk .owner-x { display: none; } /* no hover affordances on the drag ghost (outranks the :hover show rule) */
 .task-blk .from-chip { cursor: pointer; flex: none; }
