@@ -784,7 +784,7 @@ img { display: block; -webkit-user-drag: none; }
 /* ─── Sheets ────────────────────────────────────────── */
 
 .backdrop { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; z-index: 100; animation: fade 0.15s ease-out; }
-.sheet { border-radius: 24px; padding: 26px 28px 22px; width: 380px; background: var(--frost-deep); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); box-shadow: 0 0 0 2px var(--edge), 0 0 0 2.5px var(--rim), 0 24px 60px rgba(0, 0, 0, 0.16); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.sheet { border-radius: 24px; padding: 26px 28px 22px; width: 380px; background: var(--frost-deep); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); box-shadow: 0 0 0 1.5px var(--edge), 0 24px 60px rgba(0, 0, 0, 0.16); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
 .sheet h2 { margin: 0 0 16px; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
