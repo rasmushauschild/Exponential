@@ -448,6 +448,9 @@ img { display: block; -webkit-user-drag: none; }
 .detail-title, .field input, .inline-name { user-select: text; }
 
 .props { display: flex; flex-direction: column; gap: 4px; margin-bottom: 22px; }
+/* value selectors (dates / people / group / status) are quiet text until hovered */
+.props .pill, .props .date-pill, .props .chip { background: transparent; box-shadow: none; }
+.props .pill:hover, .props .date-pill:hover, .props .chip:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); }
 .prop { display: flex; align-items: center; gap: 12px; min-height: 32px; }
 .prop-label { width: 72px; flex: none; font-size: 13px; color: var(--text-3); font-weight: 600; }
 .prop-text { font-weight: 500; }

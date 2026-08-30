@@ -429,7 +429,7 @@ export default function App() {
                 <span className="team-name">{t.name}</span>
               </button>
               <button className={`team-cog${t.id === data.id && view === 'team' ? ' on' : ''}`} title="Team settings"
-                onClick={() => { if (t.id !== data.id) { switchTeam(t.id); setSelection(null); setSelectedPerson(null); } setView('team'); }}>
+                onClick={() => { if (t.id !== data.id) { switchTeam(t.id); setSelectedPerson(null); } setSelection(null); setView('team'); }}>
                 <CogIcon />
               </button>
             </div>
