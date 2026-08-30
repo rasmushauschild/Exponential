@@ -21,10 +21,10 @@
   --sel-blk: rgba(10, 132, 255, 0.1);
   --line: rgba(0, 0, 0, 0.09);
   --dot: rgba(0, 0, 0, 0.07);
-  --frost: rgba(250, 250, 252, 0.8);   /* almost-white panel inner */
+  --frost: rgba(255, 255, 255, 0.75);  /* almost-white panel inner, neutral — no cool cast */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --scrim: rgba(0, 0, 0, 0.25);
-  --radius-xl: 18px;
+  --radius-xl: 24px;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 10px 28px rgba(0, 0, 0, 0.06); /* soft drop below */
   --menu-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
   color-scheme: light;
