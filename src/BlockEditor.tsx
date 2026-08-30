@@ -349,7 +349,13 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         const bs = blocksRef.current;
         const group = bs.slice(from, from + count);
         const rest = [...bs.slice(0, from), ...bs.slice(from + count)];
-        commit([...rest.slice(0, latest.ins), ...group, ...rest.slice(latest.ins)]);
+        // The landing spot decides the depth: right under a toggle means inside it,
+        // otherwise match the block above; the whole group shifts by the same amount.
+        const prev = rest[latest.ins - 1];
+        const destInd = prev ? Math.min(MAX_IND, (prev.indent ?? 0) + (prev.kind === 'tog' ? 1 : 0)) : 0;
+        const delta = destInd - (group[0].indent ?? 0);
+        const shifted = group.map((g) => ({ ...g, indent: Math.max(0, Math.min(MAX_IND, (g.indent ?? 0) + delta)) }));
+        commit([...rest.slice(0, latest.ins), ...shifted, ...rest.slice(latest.ins)]);
         if (count > 1) setSel({ a: latest.ins, b: latest.ins + count - 1 });
       }
     };
