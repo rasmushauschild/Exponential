@@ -346,13 +346,13 @@ img { display: block; -webkit-user-drag: none; }
   border-radius: 999px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: var(--frost); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 40%, #fff), 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 40%, #fff), 0 0 0 0.5px var(--rim), 0 2px 6px rgba(0, 0, 0, 0.05);
   transition: left 0.12s ease-out, box-shadow 0.15s;
 }
 .wk-block::before { content: ''; position: absolute; inset: 0; background: var(--sc); opacity: 0.2; pointer-events: none; }
 .wk-block:not(.ev) { top: 11px; bottom: 11px; }
 /* Dragging eases between day snaps, like the hover ghost does. */
-.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sc) 62%, #fff), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
+.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sc) 62%, #fff), 0 0 0 0.5px var(--rim), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
 .wk-row.done .wk-block, .wk-row.cancelled .wk-block { color: var(--text-2); }
 
 /* The next upcoming event rides the bottom edge while its real row is below the fold; the
