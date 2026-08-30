@@ -453,29 +453,43 @@ img { display: block; -webkit-user-drag: none; }
   border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; overflow: hidden; animation: fade 0.25s ease-out; position: relative;
 }
-/* The top bar and foot are opaque and reach the panel's edges; a blur-only skirt at their
-   inner boundary smears approaching content so it never hard-clips or collides. */
+/* Progressive gradient blur at the panel's edges (the 'Pure CSS Gradient Blur' technique):
+   8 stacked backdrop layers, radius doubling toward the edge, interleaved 12.5% masks —
+   a continuous ramp with no seams. The bars are plain content on top of it. */
 .detail-top {
-  display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: var(--hdr);
-  flex-wrap: wrap; align-content: flex-start;
-  position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: height 0.18s ease-out;
-  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
-  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  display: flex; align-items: center; gap: 4px; padding: 18px 18px 0 26px;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
 }
-.detail { --hdr: 84px; }
-.detail.tb-stuck { --hdr: 96px; }
-.tb-slot { width: 100%; }
-/* the scrolled CONTENT fades out before it reaches the blur boundary, so the boundary
-   never cuts through legible text */
-.detail-scroll {
-  -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px));
-  mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px));
-}
-.detail:has(.detail-foot) .detail-scroll {
-  -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px), #000 calc(100% - 100px), transparent calc(100% - 64px));
-  mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px), #000 calc(100% - 100px), transparent calc(100% - 64px));
-}
+.gblur { position: absolute; left: 0; right: 0; z-index: 4; pointer-events: none; }
+.gblur.top { top: 0; height: 140px; }
+.gblur.bottom { bottom: 0; height: 116px; }
+.gblur > div, .gblur::before, .gblur::after { content: ''; position: absolute; inset: 0; }
+.gblur.top::before, .gblur.top > div, .gblur.top::after { --dir: to top; }
+.gblur.bottom::before, .gblur.bottom > div, .gblur.bottom::after { --dir: to bottom; }
+.gblur::before { z-index: 1; -webkit-backdrop-filter: blur(0.5px); backdrop-filter: blur(0.5px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 0%, #000 12.5%, #000 25%, rgba(0,0,0,0) 37.5%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 0%, #000 12.5%, #000 25%, rgba(0,0,0,0) 37.5%); }
+.gblur > div:nth-of-type(1) { z-index: 2; -webkit-backdrop-filter: blur(1px); backdrop-filter: blur(1px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 12.5%, #000 25%, #000 37.5%, rgba(0,0,0,0) 50%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 12.5%, #000 25%, #000 37.5%, rgba(0,0,0,0) 50%); }
+.gblur > div:nth-of-type(2) { z-index: 3; -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 25%, #000 37.5%, #000 50%, rgba(0,0,0,0) 62.5%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 25%, #000 37.5%, #000 50%, rgba(0,0,0,0) 62.5%); }
+.gblur > div:nth-of-type(3) { z-index: 4; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 37.5%, #000 50%, #000 62.5%, rgba(0,0,0,0) 75%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 37.5%, #000 50%, #000 62.5%, rgba(0,0,0,0) 75%); }
+.gblur > div:nth-of-type(4) { z-index: 5; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 50%, #000 62.5%, #000 75%, rgba(0,0,0,0) 87.5%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 50%, #000 62.5%, #000 75%, rgba(0,0,0,0) 87.5%); }
+.gblur > div:nth-of-type(5) { z-index: 6; -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 62.5%, #000 75%, #000 87.5%, rgba(0,0,0,0) 100%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 62.5%, #000 75%, #000 87.5%, rgba(0,0,0,0) 100%); }
+.gblur > div:nth-of-type(6) { z-index: 7; -webkit-backdrop-filter: blur(32px); backdrop-filter: blur(32px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 75%, #000 87.5%, #000 100%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 75%, #000 87.5%, #000 100%); }
+.gblur::after { z-index: 8; -webkit-backdrop-filter: blur(64px); backdrop-filter: blur(64px);
+  -webkit-mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 87.5%, #000 100%);
+  mask-image: linear-gradient(var(--dir), rgba(0,0,0,0) 87.5%, #000 100%); }
 
 /* while the formatting toolbar is stuck it lives INSIDE this bar's blur box — one
    seamless blur behind header + toolbar */
@@ -488,8 +502,8 @@ img { display: block; -webkit-user-drag: none; }
 .detail-kind { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .icon-btn { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color: var(--text-2); transition: background 0.15s; }
 .icon-btn:hover { background: var(--soft); color: var(--text); }
-.detail-scroll { flex: 1; overflow-y: auto; padding: 88px 26px 26px; }
-.detail:has(.detail-foot) .detail-scroll { padding-bottom: 96px; } /* room to scroll clear of the foot */
+.detail-scroll { flex: 1; overflow-y: auto; padding: 62px 26px 26px; }
+.detail:has(.detail-foot) .detail-scroll { padding-bottom: 80px; } /* room to scroll clear of the foot */
 .detail-scroll::-webkit-scrollbar { width: 0; }
 .detail-title { width: 100%; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; padding: 8px 0; margin-bottom: 8px; }
 .detail-title::placeholder { color: var(--text-3); }
@@ -556,8 +570,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
-.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; background: transparent; padding: 8px 0 4px; }
-.tb-slot .toolbar { padding: 0; }
+.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; background: transparent; padding: 8px 0 4px; position: sticky; top: -4px; z-index: 7; /* pins at 58 (62px scroll padding), floating over the gradient blur */ }
 .toolbar button { padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; background: transparent; }
 .toolbar button:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }
@@ -644,11 +657,8 @@ img { display: block; -webkit-user-drag: none; }
 .md-preview input[type='checkbox'], .rich-body input[type='checkbox'] { margin: 0 6px 0 0; vertical-align: -2px; accent-color: var(--text); }
 .md-preview code, .rich-body code { background: var(--soft); padding: 1px 5px; border-radius: 6px; font-size: 12.5px; }
 .detail-foot {
-  padding: 30px 26px 18px; display: flex; justify-content: flex-end;
+  padding: 12px 26px 18px; display: flex; justify-content: flex-end;
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
-  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
-  -webkit-mask-image: linear-gradient(to top, #000 62%, transparent 100%);
-  mask-image: linear-gradient(to top, #000 62%, transparent 100%);
 }
 
 /* ─── Team page ─────────────────────────────────────── */

@@ -103,8 +103,8 @@ export function DetailPanel(p: Props) {
         <span className="panel-spacer" />
         <button className="icon-btn" title="Delete" onClick={onDelete}><TrashIcon /></button>
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
-        <div className="tb-slot" />
       </div>
+      <GBlur pos="top" />
 
       <div className="detail-scroll">
         <TitleInput key={item.id} value={title} onChange={setTitle} />
@@ -198,6 +198,15 @@ export function DetailPanel(p: Props) {
   );
 }
 
+/** The 8-layer progressive gradient blur (radius doubles toward the panel edge). */
+function GBlur({ pos }: { pos: 'top' | 'bottom' }) {
+  return (
+    <div className={`gblur ${pos}`} aria-hidden>
+      <div /><div /><div /><div /><div /><div />
+    </div>
+  );
+}
+
 /* ─── Retro ─────────────────────────────────────────── */
 
 function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, legacyFields, people, me, onUpdate, onClose, width }: {
@@ -239,6 +248,7 @@ function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, leg
         <span className="panel-spacer" />
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
       </div>
+      <GBlur pos="top" />
       <div className="detail-scroll">
         <h1 className="detail-title static">Week {isoWeekNumber(week)}</h1>
 
@@ -483,6 +493,7 @@ function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead, width }
         <span className="panel-spacer" />
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
       </div>
+      <GBlur pos="top" />
       <div className="detail-scroll">
         <h1 className="detail-title static">Notifications</h1>
         {mine.length === 0 && <p className="muted">Nothing yet. You’ll hear here when a task is added for you, a review is requested, or a project you’re on changes.</p>}
@@ -821,11 +832,14 @@ function SendToAgent({ doc }: { doc: () => string }) {
     copied: 'Copied as Markdown',
   }[state];
   return (
-    <div className="detail-foot">
-      <button className="btn" onClick={send}>
-        <SparkIcon /> {label}
-      </button>
-    </div>
+    <>
+      <GBlur pos="bottom" />
+      <div className="detail-foot">
+        <button className="btn" onClick={send}>
+          <SparkIcon /> {label}
+        </button>
+      </div>
+    </>
   );
 }
 

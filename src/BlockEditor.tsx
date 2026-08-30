@@ -463,43 +463,15 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   const selHi = sel ? Math.max(sel.a, sel.b) : -1;
   const docEmpty = blocks.length === 1 && blocks[0].kind === 'p' && blocks[0].text === '';
 
-  // When the toolbar would scroll under the header, it moves INTO the header (a portal
-  // slot): the header's blur box grows around it and the scroller's content mask can't
-  // touch it. The sentinel flags the moment.
-  const sentRef = useRef<HTMLDivElement>(null);
-  const [stuck, setStuck] = useState(false);
-  const [slot, setSlot] = useState<HTMLElement | null>(null);
-  useEffect(() => {
-    const el = sentRef.current;
-    if (!el) return;
-    const detail = el.closest('.detail') as HTMLElement | null;
-    const io = new IntersectionObserver(
-      ([en]) => {
-        const on = !en.isIntersecting;
-        detail?.classList.toggle('tb-stuck', on);
-        setSlot(on ? (detail?.querySelector('.tb-slot') as HTMLElement | null) : null);
-        setStuck(on);
-      },
-      { root: el.closest('.detail-scroll'), rootMargin: '-85px 0px 0px 0px', threshold: 0 },
-    );
-    io.observe(el);
-    return () => { io.disconnect(); detail?.classList.remove('tb-stuck'); };
-  }, []);
-  const toolbar = (
-    <div className="toolbar">
-      <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('h1')} title="Heading 1">H1</button>
-      <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('h2')} title="Heading 2">H2</button>
-      <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('p')} title="Text">Text</button>
-      <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('task')} title="Task block">Task</button>
-      <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('tog')} title="Toggle block">Toggle</button>
-    </div>
-  );
-
   return (
     <div className="blocks">
-      <div ref={sentRef} style={{ height: 1, marginBottom: -1 }} />
-      {stuck && slot ? createPortal(toolbar, slot) : toolbar}
-      {stuck && <div style={{ height: 34 }} />}
+      <div className="toolbar">
+        <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('h1')} title="Heading 1">H1</button>
+        <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('h2')} title="Heading 2">H2</button>
+        <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('p')} title="Text">Text</button>
+        <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('task')} title="Task block">Task</button>
+        <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('tog')} title="Toggle block">Toggle</button>
+      </div>
 
       <div
         ref={listRef}
