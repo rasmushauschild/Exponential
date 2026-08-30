@@ -813,10 +813,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .rl-row.missed { --st: #db291f; animation: prio-miss 0.45s ease; }
 [data-theme='dark'] .rl-row.done { --st: #45cf6d; }
 [data-theme='dark'] .rl-row.missed { --st: #ff5b52; }
-.rl-row.done, .rl-row.missed { background: color-mix(in srgb, var(--st) 16%, transparent); }
+.rl-row.done, .rl-row.missed { background: color-mix(in srgb, var(--st) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st) 55%, #fff), 0 0 0 0.5px var(--rim); }
 .rl-row.done .rl-text, .rl-row.missed .rl-text { color: var(--st); }
 /* the P chip follows the outcome too — the whole line reads green or red */
-.rl-row.done .rl-p, .rl-row.missed .rl-p { color: var(--st); background: color-mix(in srgb, var(--st) 16%, transparent); }
+.rl-row.done .rl-p, .rl-row.missed .rl-p { color: var(--st); background: color-mix(in srgb, var(--st) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st) 55%, #fff), 0 0 0 0.5px var(--rim); }
 @keyframes prio-reach {
   0% { background: color-mix(in srgb, var(--st) 0%, transparent); }
   45% { background: color-mix(in srgb, var(--st) 40%, transparent); }
@@ -838,6 +838,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .rl-p {
   flex: none; width: 26px; height: 18px; border-radius: 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
   color: var(--pc); background: color-mix(in srgb, var(--pc) 13%, transparent); cursor: grab; transition: background 0.15s;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 45%, #fff), 0 0 0 0.5px var(--rim);
 }
 .rl-p:hover { background: color-mix(in srgb, var(--pc) 25%, transparent); }
 .rl-dot { flex: none; width: 26px; height: 20px; display: grid; place-items: center; padding: 0; cursor: grab; }
