@@ -458,11 +458,8 @@ img { display: block; -webkit-user-drag: none; }
    a continuous ramp with no seams. The bars are plain content on top of it. */
 .detail-top {
   display: flex; align-items: center; gap: 4px; padding: 18px 18px 0 26px;
-  flex-wrap: wrap; align-content: flex-start;
   position: absolute; top: 0; left: 0; right: 0; z-index: 6;
 }
-.tb-slot { width: 100%; }
-.tb-slot .toolbar { padding: 6px 0 0; }
 .gblur { position: absolute; left: 0; right: 0; z-index: 4; pointer-events: none; }
 .gblur.top { top: 0; height: 150px; }
 .gblur.bottom { bottom: 0; height: 130px; }
