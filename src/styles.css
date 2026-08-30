@@ -456,37 +456,22 @@ img { display: block; -webkit-user-drag: none; }
 /* The top bar and foot are opaque and reach the panel's edges; a blur-only skirt at their
    inner boundary smears approaching content so it never hard-clips or collides. */
 .detail-top {
-  display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: 58px;
+  display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: 84px;
   position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: height 0.18s ease-out;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
-  /* blur strength ramps down 22 → 9 → 3.5 → sharp across the lower edge: stepping the
-     radius avoids the double-image ghost a single strong-blur cross-fade produces */
-  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent calc(100% - 14px));
-  mask-image: linear-gradient(to bottom, #000 calc(100% - 26px), transparent calc(100% - 14px));
+  /* one blur box, dissolving progressively across its lower part (the bar's own row stays
+     in the solid zone) */
+  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
 }
-/* ramp layers are SIBLINGS of the bars (a backdrop-filtered element is a backdrop root:
-   its children's backdrop filters can't see behind it) */
-.detail { --barH: 58px; }
-.detail.tb-stuck { --barH: 94px; }
-.detail::before, .detail::after, .edge-ramp {
-  content: ''; position: absolute; left: 0; right: 0; z-index: 5; pointer-events: none;
-}
-.detail::before { top: calc(var(--barH) - 28px); height: 20px; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 65%, transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 65%, transparent); }
-.detail::after { top: calc(var(--barH) - 13px); height: 12px; -webkit-backdrop-filter: blur(3.5px); backdrop-filter: blur(3.5px);
-  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 40%, #000 70%, transparent);
-  mask-image: linear-gradient(to bottom, transparent, #000 40%, #000 70%, transparent); }
-.edge-ramp.fa { bottom: 54px; height: 20px; -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
-  -webkit-mask-image: linear-gradient(to top, transparent, #000 35%, #000 65%, transparent);
-  mask-image: linear-gradient(to top, transparent, #000 35%, #000 65%, transparent); }
-.edge-ramp.fb { bottom: 69px; height: 12px; -webkit-backdrop-filter: blur(3.5px); backdrop-filter: blur(3.5px);
-  -webkit-mask-image: linear-gradient(to top, transparent, #000 40%, #000 70%, transparent);
-  mask-image: linear-gradient(to top, transparent, #000 40%, #000 70%, transparent); }
+
 /* while the formatting toolbar is stuck it lives INSIDE this bar's blur box — one
    seamless blur behind header + toolbar */
-.detail-top { height: var(--barH); }
-.detail.tb-stuck .detail-top { height: 94px; }
+.detail.tb-stuck .detail-top {
+  height: 124px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
+}
 .toolbar::after {
   content: ''; position: absolute; left: 0; right: 0; height: 22px; top: 100%; pointer-events: none;
   -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
@@ -496,7 +481,7 @@ img { display: block; -webkit-user-drag: none; }
 .detail-kind { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .icon-btn { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color: var(--text-2); transition: background 0.15s; }
 .icon-btn:hover { background: var(--soft); color: var(--text); }
-.detail-scroll { flex: 1; overflow-y: auto; padding: 62px 26px 26px; }
+.detail-scroll { flex: 1; overflow-y: auto; padding: 88px 26px 26px; }
 .detail:has(.detail-foot) .detail-scroll { padding-bottom: 96px; } /* room to scroll clear of the foot */
 .detail-scroll::-webkit-scrollbar { width: 0; }
 .detail-title { width: 100%; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; padding: 8px 0; margin-bottom: 8px; }
@@ -654,8 +639,8 @@ img { display: block; -webkit-user-drag: none; }
   padding: 30px 26px 18px; display: flex; justify-content: flex-end;
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
-  -webkit-mask-image: linear-gradient(to top, #000 calc(100% - 26px), transparent calc(100% - 14px));
-  mask-image: linear-gradient(to top, #000 calc(100% - 26px), transparent calc(100% - 14px));
+  -webkit-mask-image: linear-gradient(to top, #000 62%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 62%, transparent 100%);
 }
 
 /* ─── Team page ─────────────────────────────────────── */
