@@ -26,6 +26,7 @@
   --dot-fade: #f6f6f8; /* matches the panel fill: fades dots out under text areas */
   --frost: #f6f6f8;  /* panel fill, a shade lighter than the ground */
   --frost-deep: rgba(241, 242, 246, 0.9); /* dialogs: slightly deeper glass so the white frame reads */
+  --tint: #ffffff; /* colour-mix base for fills/edges: white in light, near-black in dark */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --rim: rgba(20, 20, 30, 0.12);       /* super-thin dark line just outside the white edge */
   --scrim: rgba(0, 0, 0, 0.25);
@@ -62,6 +63,7 @@
   --dot-fade: #1d1d1f;
   --frost: rgba(30, 30, 32, 0.85);
   --frost-deep: rgba(22, 22, 24, 0.92);
+  --tint: #101012;
   --edge: rgba(255, 255, 255, 0.09);
   --rim: rgba(0, 0, 0, 0.55);
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.5);
@@ -265,23 +267,23 @@ img { display: block; -webkit-user-drag: none; }
   position: absolute; height: 26px; display: flex; align-items: center; gap: 10px;
   border-radius: 999px; padding: 0 12px; font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden;
   background: var(--frost); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--text);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 52%, #fff), 0 0 0 0.5px var(--rim), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 52%, var(--tint)), 0 0 0 0.5px var(--rim), 0 2px 8px rgba(0, 0, 0, 0.06);
   transition: box-shadow 0.15s, background 0.15s;
   z-index: 2;
 }
 .tl-project::before { content: ''; position: absolute; inset: 0; background: var(--pc); opacity: 0.2; pointer-events: none; transition: opacity 0.15s; }
 .tl-project > * { position: relative; } /* avatars and name sit above the tint, not under it */
-.tl-project:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 64%, #fff), 0 0 0 0.5px var(--rim), 0 4px 14px rgba(0, 0, 0, 0.1); }
+.tl-project:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 64%, var(--tint)), 0 0 0 0.5px var(--rim), 0 4px 14px rgba(0, 0, 0, 0.1); }
 .tl-project:hover::before { opacity: 0.28; }
-.tl-project.selected { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 78%, #fff), 0 0 0 0.5px var(--rim), 0 4px 14px rgba(0, 0, 0, 0.1); }
+.tl-project.selected { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 78%, var(--tint)), 0 0 0 0.5px var(--rim), 0 4px 14px rgba(0, 0, 0, 0.1); }
 .tl-project.selected::before { opacity: 0.38; }
 /* left/width/top ease so day and lane snaps glide; the base class must NOT transition position (panning). */
-.tl-project.live { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 78%, #fff), 0 0 0 0.5px var(--rim), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; transition: box-shadow 0.15s, background 0.15s, left 0.12s ease-out, width 0.12s ease-out, top 0.12s ease-out; }
+.tl-project.live { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 78%, var(--tint)), 0 0 0 0.5px var(--rim), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; transition: box-shadow 0.15s, background 0.15s, left 0.12s ease-out, width 0.12s ease-out, top 0.12s ease-out; }
 .tl-project.live::before { opacity: 0.38; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
 .bar-avatars { display: inline-flex; flex: none; }
-.bar-avatars .avatar { box-shadow: 0 0 0 2px color-mix(in srgb, var(--pc) 30%, #fff); margin-left: -5px; }
+.bar-avatars .avatar { margin-left: -5px; }
 .bar-avatars .avatar:first-child { margin-left: 0; }
 
 
@@ -356,13 +358,13 @@ img { display: block; -webkit-user-drag: none; }
   border-radius: 999px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: var(--frost); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc) 58%, #fff), 0 0 0 0.5px var(--rim), 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sc) 58%, var(--tint)), 0 0 0 0.5px var(--rim), 0 2px 6px rgba(0, 0, 0, 0.05);
   transition: left 0.12s ease-out, box-shadow 0.15s;
 }
 .wk-block::before { content: ''; position: absolute; inset: 0; background: var(--sc); opacity: 0.2; pointer-events: none; }
 .wk-block:not(.ev) { top: 11px; bottom: 11px; }
 /* Dragging eases between day snaps, like the hover ghost does. */
-.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 80%, #fff), 0 0 0 0.5px var(--rim), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
+.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 80%, var(--tint)), 0 0 0 0.5px var(--rim), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
 .wk-row.done .wk-block, .wk-row.cancelled .wk-block { color: var(--text-2); }
 
 /* The next upcoming event rides the bottom edge while its real row is below the fold; the
@@ -487,11 +489,11 @@ img { display: block; -webkit-user-drag: none; }
 .swatch {
   width: 22px; height: 22px; border-radius: 50%; transition: transform 0.12s;
   /* exactly the project-bar recipe: light tint fill, darker colour edge, hairline rim */
-  background: color-mix(in srgb, var(--pc) 20%, #fff);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 52%, #fff), 0 0 0 0.5px var(--rim);
+  background: color-mix(in srgb, var(--pc) 20%, var(--tint));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 52%, var(--tint)), 0 0 0 0.5px var(--rim);
 }
-.swatch:hover { transform: scale(1.1); background: color-mix(in srgb, var(--pc) 28%, #fff); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 64%, #fff), 0 0 0 0.5px var(--rim); }
-.swatch.on { background: color-mix(in srgb, var(--pc) 38%, #fff); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 78%, #fff), 0 0 0 0.5px var(--rim); }
+.swatch:hover { transform: scale(1.1); background: color-mix(in srgb, var(--pc) 28%, var(--tint)); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 64%, var(--tint)), 0 0 0 0.5px var(--rim); }
+.swatch.on { background: color-mix(in srgb, var(--pc) 38%, var(--tint)); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 78%, var(--tint)), 0 0 0 0.5px var(--rim); }
 .status-select { position: relative; }
 .pill.small.empty { color: var(--text-3); font-weight: 500; }
 /* group dots: a white (no-group) dot still reads as a hollow ring, not empty padding */
@@ -803,13 +805,13 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   min-width: 30px; height: 20px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center;
   position: relative; z-index: 1; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
   color: var(--gc, var(--text-3)); background: color-mix(in srgb, var(--gc, var(--text-3)) 14%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc, var(--text-3)) 45%, #fff), 0 0 0 0.5px var(--rim);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc, var(--text-3)) 45%, var(--tint)), 0 0 0 0.5px var(--rim);
 }
 .kr-row:has(.cstep.warp) .cstep-value { background: color-mix(in srgb, var(--gc) 22%, transparent); }
 /* the chip glows brighter the deeper the warp */
-.cstep.w8 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, #fff), 0 0 10px color-mix(in srgb, var(--gc) 50%, transparent); }
-.cstep.w9 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, #fff), 0 0 16px 2px color-mix(in srgb, var(--gc) 65%, transparent); }
-.cstep.w10 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, #fff), 0 0 22px 4px color-mix(in srgb, var(--gc) 75%, transparent); }
+.cstep.w8 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, var(--tint)), 0 0 10px color-mix(in srgb, var(--gc) 50%, transparent); }
+.cstep.w9 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, var(--tint)), 0 0 16px 2px color-mix(in srgb, var(--gc) 65%, transparent); }
+.cstep.w10 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, var(--tint)), 0 0 22px 4px color-mix(in srgb, var(--gc) 75%, transparent); }
 .cstep-value.unrated { color: var(--text-3); background: var(--soft-2); }
 .cstep.danger .cstep-value { color: #ff3b30; }
 /* low confidence: the chip breathes a slow red glow — no flashing */
@@ -847,10 +849,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .rl-row.missed { --st: #db291f; animation: prio-miss 0.45s ease; }
 [data-theme='dark'] .rl-row.done { --st: #45cf6d; }
 [data-theme='dark'] .rl-row.missed { --st: #ff5b52; }
-.rl-row.done, .rl-row.missed { background: color-mix(in srgb, var(--st) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st) 55%, #fff), 0 0 0 0.5px var(--rim); }
+.rl-row.done, .rl-row.missed { background: color-mix(in srgb, var(--st) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st) 55%, var(--tint)), 0 0 0 0.5px var(--rim); }
 .rl-row.done .rl-text, .rl-row.missed .rl-text { color: var(--st); }
 /* the P chip follows the outcome too — the whole line reads green or red */
-.rl-row.done .rl-p, .rl-row.missed .rl-p { color: var(--st); background: color-mix(in srgb, var(--st) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st) 55%, #fff), 0 0 0 0.5px var(--rim); }
+.rl-row.done .rl-p, .rl-row.missed .rl-p { color: var(--st); background: color-mix(in srgb, var(--st) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--st) 55%, var(--tint)), 0 0 0 0.5px var(--rim); }
 @keyframes prio-reach {
   0% { background: color-mix(in srgb, var(--st) 0%, transparent); }
   45% { background: color-mix(in srgb, var(--st) 40%, transparent); }
@@ -872,7 +874,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .rl-p {
   flex: none; width: 26px; height: 18px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
   color: var(--pc); background: color-mix(in srgb, var(--pc) 13%, transparent); cursor: grab; transition: background 0.15s;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 45%, #fff), 0 0 0 0.5px var(--rim);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 45%, var(--tint)), 0 0 0 0.5px var(--rim);
 }
 .rl-p:hover { background: color-mix(in srgb, var(--pc) 25%, transparent); }
 .rl-dot { flex: none; width: 26px; height: 20px; display: grid; place-items: center; padding: 0; cursor: grab; }
