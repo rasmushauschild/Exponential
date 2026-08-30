@@ -438,7 +438,7 @@ export function BigPlan(props: Props) {
 
       <div className="tl-lanes" style={{ top: projectTop - 6 }}>
       {ghost && !drag && ghost.lane >= 0 && (
-        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 6 + ghost.lane * ROW_H - scrollY }}>
+        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 8 + ghost.lane * ROW_H - scrollY }}>
           New project
         </div>
       )}
@@ -470,7 +470,7 @@ export function BigPlan(props: Props) {
             style={{
               left,
               width: w,
-              top: sec.laneTop - projectTop + 6 + lane * ROW_H - scrollY,
+              top: sec.laneTop - projectTop + 8 + lane * ROW_H - scrollY,
               ['--pc' as string]: color,
               paddingLeft: Math.max(12, Math.min(w - 12, 12 - left)),
               cursor: locked ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
