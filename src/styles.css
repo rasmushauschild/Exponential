@@ -457,7 +457,8 @@ img { display: block; -webkit-user-drag: none; }
    inner boundary smears approaching content so it never hard-clips or collides. */
 .detail-top {
   display: flex; align-items: center; gap: 4px; padding: 18px 18px 8px 26px; height: 58px;
-  position: absolute; top: 0; left: 0; right: 0; z-index: 6; background: var(--bar);
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
 }
 .detail-top::after, .detail-foot::before, .toolbar::after {
   content: ''; position: absolute; left: 0; right: 0; height: 24px; pointer-events: none;
@@ -639,7 +640,8 @@ img { display: block; -webkit-user-drag: none; }
 .md-preview code, .rich-body code { background: var(--soft); padding: 1px 5px; border-radius: 6px; font-size: 12.5px; }
 .detail-foot {
   padding: 12px 26px 18px; display: flex; justify-content: flex-end;
-  position: absolute; bottom: 0; left: 0; right: 0; z-index: 6; background: var(--bar);
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
+  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
 }
 
 /* ─── Team page ─────────────────────────────────────── */
