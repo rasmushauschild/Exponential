@@ -24,7 +24,7 @@
   --frost: rgba(250, 250, 252, 0.8);   /* almost-white panel inner */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --scrim: rgba(0, 0, 0, 0.25);
-  --radius-xl: 12px;
+  --radius-xl: 18px;
   --shadow: 0 2px 6px rgba(0, 0, 0, 0.04), 0 14px 36px rgba(0, 0, 0, 0.1); /* soft drop below */
   --menu-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
   color-scheme: light;
@@ -161,7 +161,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .panel {
   background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
-  border-radius: var(--radius-xl); box-shadow: 0 0 0 2px var(--edge), var(--shadow);
+  border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; min-height: 120px; overflow: hidden; position: relative;
 }
 .panel-head { display: flex; align-items: center; gap: 8px; padding: 22px 26px 10px; flex: none; overflow: hidden; }
@@ -187,6 +187,9 @@ img { display: block; -webkit-user-drag: none; }
 .person-menu button { white-space: nowrap; }
 .person-menu button span:last-child, .person-menu button { overflow: hidden; text-overflow: ellipsis; }
 .pill.small { padding: 5px 10px; font-size: 13px; }
+/* head controls (Calendar / Unlock / person select) read as plain text until hovered */
+.panel-head .pill:not(.active), .panel-head .pill.person { background: transparent; box-shadow: none; color: var(--text-2); }
+.panel-head .pill:not(.active):hover, .panel-head .pill.person:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 
 .avatar { border-radius: 50%; object-fit: cover; flex: none; }
 .avatar.initials { display: inline-grid; place-items: center; color: #fff; font-weight: 700; }
@@ -226,7 +229,7 @@ img { display: block; -webkit-user-drag: none; }
 .week-label {
   position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 12px; font-weight: 700; color: var(--text-3);
   white-space: nowrap; z-index: 6; padding: 3px 10px; border-radius: 6px; transition: color 0.15s;
-  background: var(--panel); box-shadow: 0 0 0 2px var(--edge), 0 2px 8px rgba(0, 0, 0, 0.07); /* legible over project bars */
+  background: var(--panel); box-shadow: 0 0 0 1.5px var(--edge), 0 2px 8px rgba(0, 0, 0, 0.07); /* legible over project bars */
 }
 .week-label.hover { bottom: 20px; } /* hovered weeks: same baseline as the label inside the band */
 .week-label:hover { color: var(--text); }
@@ -379,7 +382,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .status-menu {
   position: absolute; z-index: 500; border-radius: 10px; background: var(--panel);
-  box-shadow: 0 0 0 2px var(--edge), var(--menu-shadow); padding: 6px; min-width: 170px; animation: pop 0.14s ease-out;
+  box-shadow: 0 0 0 1.5px var(--edge), var(--menu-shadow); padding: 6px; min-width: 170px; animation: pop 0.14s ease-out;
 }
 .status-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border-radius: 10px; text-align: left; font-weight: 500; }
 .status-menu button:hover, .status-menu button.current { background: var(--soft); }
@@ -388,7 +391,7 @@ img { display: block; -webkit-user-drag: none; }
 .status-item .chev { margin-left: auto; color: var(--text-3); font-size: 14px; }
 .submenu {
   position: absolute; left: calc(100% - 2px); top: -6px; border-radius: 10px; padding: 6px; min-width: 190px; background: var(--panel);
-  box-shadow: 0 0 0 2px var(--edge), var(--menu-shadow); animation: pop 0.12s ease-out;
+  box-shadow: 0 0 0 1.5px var(--edge), var(--menu-shadow); animation: pop 0.12s ease-out;
   max-height: min(360px, 60vh); overflow-y: auto;
 }
 .submenu::before { content: ''; position: absolute; left: -12px; top: 0; bottom: 0; width: 12px; }
@@ -413,7 +416,7 @@ img { display: block; -webkit-user-drag: none; }
   padding: 7px 13px 7px 10px; border-radius: 8px; color: var(--text-2); font-weight: 600;
   background: var(--panel); transition: color 0.15s, background 0.15s;
 }
-.fab { box-shadow: 0 0 0 2px var(--edge), 0 2px 10px rgba(0, 0, 0, 0.08); }
+.fab { box-shadow: 0 0 0 1.5px var(--edge), 0 2px 10px rgba(0, 0, 0, 0.08); }
 .fab:hover { color: var(--text); background: var(--soft-2); }
 .fab .plus { font-size: 17px; line-height: 14px; width: 18px; text-align: center; }
 .wk-rows { padding-bottom: 56px; } /* keep the last rows clear of the floating button */
@@ -424,7 +427,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .detail {
   flex: none; background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
-  border-radius: var(--radius-xl); box-shadow: 0 0 0 2px var(--edge), var(--shadow);
+  border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; overflow: hidden; animation: fade 0.25s ease-out;
 }
 .detail-top { display: flex; align-items: center; gap: 4px; padding: 18px 18px 0 26px; }
@@ -653,7 +656,7 @@ img { display: block; -webkit-user-drag: none; }
 /* ─── Sheets ────────────────────────────────────────── */
 
 .backdrop { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; z-index: 100; animation: fade 0.15s ease-out; }
-.sheet { border-radius: 12px; padding: 26px 28px 22px; width: 380px; background: var(--panel); box-shadow: 0 0 0 2px var(--edge), 0 24px 60px rgba(0, 0, 0, 0.18); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.sheet { border-radius: 12px; padding: 26px 28px 22px; width: 380px; background: var(--panel); box-shadow: 0 0 0 1.5px var(--edge), 0 24px 60px rgba(0, 0, 0, 0.18); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
 .sheet h2 { margin: 0 0 16px; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-size: 12px; font-weight: 600; color: var(--text-2); }
