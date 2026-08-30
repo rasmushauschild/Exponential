@@ -62,7 +62,7 @@
   --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.1);
   --dot: rgba(255, 255, 255, 0.18);
-  --dot-fade: #16171d;
+  --dot-fade: #121318; /* must match the rendered dark panel surface */
   --frost: rgba(19, 20, 25, 0.85);
   --frost-deep: rgba(14, 15, 19, 0.92);
   --tint: #0b0c10;
