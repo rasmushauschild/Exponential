@@ -37,6 +37,7 @@ interface Props {
   retroFields: RetroField[];
   retroTemplate?: RetroTemplate;
   prevRetro?: Retro;
+  carriedConfidence?: Record<string, number>; // last set OKR scores from earlier weeks
   onOpen: (sel: Selection) => void;
   onMarkRead: (ids: string[]) => void;
   onDelete: () => void;
@@ -52,7 +53,7 @@ export function DetailPanel(p: Props) {
 
   const style = { width: p.width };
   if (selection.kind === 'inbox') return <Inbox {...p} />;
-  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} prevRetro={p.prevRetro} liveTemplate={p.retroTemplate} legacyFields={p.retroFields} people={people} me={me} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
+  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} prevRetro={p.prevRetro} carriedConfidence={p.carriedConfidence} liveTemplate={p.retroTemplate} legacyFields={p.retroFields} people={people} me={me} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
 
   const item = project ?? task ?? deadline;
   if (!item) return null;
@@ -197,8 +198,8 @@ export function DetailPanel(p: Props) {
 
 /* ─── Retro ─────────────────────────────────────────── */
 
-function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, me, onUpdate, onClose, width }: {
-  week: ISODate; retro?: Retro; prevRetro?: Retro; liveTemplate?: RetroTemplate; legacyFields: RetroField[];
+function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, legacyFields, people, me, onUpdate, onClose, width }: {
+  week: ISODate; retro?: Retro; prevRetro?: Retro; carriedConfidence?: Record<string, number>; liveTemplate?: RetroTemplate; legacyFields: RetroField[];
   people: Person[]; me: string; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number;
 }) {
   // Past weeks read from their frozen template; the current week follows Team settings
@@ -219,7 +220,8 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
     const next = order[(order.indexOf(mine[metric]) + 1) % order.length];
     save({ health: { ...health, [me]: { ...mine, [metric]: next as HealthMark } } }, 'health');
   };
-  const confidence = (a.confidence ?? {}) as Record<string, number>;
+  // this week's own scores win; untouched KRs start where earlier weeks left them
+  const confidence = { ...(locked ? {} : carriedConfidence), ...(a.confidence ?? {}) } as Record<string, number>;
   const markColor: Record<HealthMark, string> = { g: '#34c759', y: '#ffcc00', r: '#ff3b30' };
   const markLabel: Record<HealthMark, string> = { g: 'Good', y: 'So-so', r: 'Rough' };
   const ordered = [...ppl.filter((p) => p.id === me), ...ppl.filter((p) => p.id !== me)];
@@ -315,7 +317,7 @@ function RetroDoc({ week, retro, prevRetro, liveTemplate, legacyFields, people, 
           title={locked ? 'Unlock to edit this retro again' : 'Freeze this page exactly as it is — later changes to OKRs or the team won’t touch it'}
           onClick={() => locked
             ? save({ locked: false }, 'lock')
-            : save({ locked: true, lockedAt: new Date().toISOString(), people }, 'lock')}>
+            : save({ locked: true, lockedAt: new Date().toISOString(), people, confidence }, 'lock')}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
             <rect x="4" y="11" width="16" height="10" rx="2.5" />
             {locked

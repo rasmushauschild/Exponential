@@ -649,6 +649,15 @@ export default function App() {
             deadline={selDeadline}
             retro={selection.kind === 'retro' ? data.retros?.[selection.id] : undefined}
             prevRetro={selection.kind === 'retro' ? data.retros?.[addDays(selection.id, -7)] : undefined}
+            carriedConfidence={selection.kind === 'retro' ? (() => {
+              // OKR scores roll forward: a new week starts where the last one left off
+              const m: Record<string, number> = {};
+              for (const w of Object.keys(data.retros ?? {}).sort()) {
+                if (w >= selection.id) break;
+                Object.assign(m, data.retros![w].answers.confidence ?? {});
+              }
+              return m;
+            })() : undefined}
             retroTemplate={data.retroTemplate}
             notifications={data.notifications ?? []}
             people={data.people}
