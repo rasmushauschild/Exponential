@@ -456,25 +456,29 @@ img { display: block; -webkit-user-drag: none; }
 /* The top bar and foot are opaque and reach the panel's edges; a blur-only skirt at their
    inner boundary smears approaching content so it never hard-clips or collides. */
 .detail-top {
-  display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: 84px;
+  display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: var(--hdr);
+  flex-wrap: wrap; align-content: flex-start;
   position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: height 0.18s ease-out;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
-  /* one blur box, dissolving progressively across its lower part (the bar's own row stays
-     in the solid zone) */
-  -webkit-mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 60%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 72%, transparent 100%);
+}
+.detail { --hdr: 84px; }
+.detail.tb-stuck { --hdr: 96px; }
+.tb-slot { width: 100%; }
+/* the scrolled CONTENT fades out before it reaches the blur boundary, so the boundary
+   never cuts through legible text */
+.detail-scroll {
+  -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px));
+  mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px));
+}
+.detail:has(.detail-foot) .detail-scroll {
+  -webkit-mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px), #000 calc(100% - 100px), transparent calc(100% - 64px));
+  mask-image: linear-gradient(to bottom, transparent calc(var(--hdr) - 30px), #000 calc(var(--hdr) + 6px), #000 calc(100% - 100px), transparent calc(100% - 64px));
 }
 
 /* while the formatting toolbar is stuck it lives INSIDE this bar's blur box — one
    seamless blur behind header + toolbar */
-.detail.tb-stuck .detail-top {
-  /* the box ends exactly at the toolbar's bottom edge: the dissolve happens BEHIND the
-     toolbar row, and below it there is no blur at all */
-  height: 92px;
-  /* nonlinear: strong through the toolbar row, releasing only at the very edge */
-  -webkit-mask-image: linear-gradient(to bottom, #000 62%, #000 90%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 62%, #000 90%, transparent 100%);
-}
 .toolbar::after {
   content: ''; position: absolute; left: 0; right: 0; height: 22px; top: 100%; pointer-events: none;
   -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
@@ -552,7 +556,8 @@ img { display: block; -webkit-user-drag: none; }
 
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
-.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: -30px; z-index: 7; /* scrollport origin includes the 88px scroll padding: -30 pins at 58, flush under the header */ background: transparent; padding: 8px 0 4px; }
+.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; background: transparent; padding: 8px 0 4px; }
+.tb-slot .toolbar { padding: 0; }
 .toolbar button { padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; background: transparent; }
 .toolbar button:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }
