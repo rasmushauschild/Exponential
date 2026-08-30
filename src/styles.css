@@ -463,8 +463,8 @@ img { display: block; -webkit-user-drag: none; }
   position: absolute; top: 0; left: 0; right: 0; z-index: 6;
 }
 .gblur { position: absolute; left: 0; right: 0; z-index: 4; pointer-events: none; }
-.gblur.top { top: 0; height: 112px; background: linear-gradient(to top, transparent, var(--veil)); }
-.gblur.bottom { bottom: 0; height: 96px; background: linear-gradient(to bottom, transparent, var(--veil)); }
+.gblur.top { top: 0; height: 88px; background: linear-gradient(to top, transparent, var(--veil)); }
+.gblur.bottom { bottom: 0; height: 76px; background: linear-gradient(to bottom, transparent, var(--veil)); }
 .gblur > div, .gblur::before, .gblur::after { content: ''; position: absolute; inset: 0; }
 .gblur.top::before, .gblur.top > div, .gblur.top::after { --dir: to top; }
 .gblur.bottom::before, .gblur.bottom > div, .gblur.bottom::after { --dir: to bottom; }
