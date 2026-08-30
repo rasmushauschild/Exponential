@@ -554,6 +554,7 @@ img { display: block; -webkit-user-drag: none; }
 /* Hidden entirely (not just faded) so the title runs to the panel edge until hover. */
 .task-blk .claim { display: none; flex: none; }
 .blk:hover .task-blk .claim { display: block; }
+.blk.dragging .claim, .blk.dragging .owner-x { display: none; } /* no hover affordances on the drag ghost */
 .task-blk .from-chip { cursor: pointer; flex: none; }
 .owner-chip { padding-right: 3px; }
 .owner-open { display: inline-flex; align-items: center; gap: 4px; }
