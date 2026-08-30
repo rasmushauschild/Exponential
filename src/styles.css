@@ -766,19 +766,20 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; position: relative; z-index: 1;
   font-size: 14px; font-weight: 700; color: var(--text-3); cursor: pointer; transition: background 0.15s, color 0.15s;
 }
-.cstep-btn:hover { background: var(--soft-2); color: var(--text); }
+.cstep-btn:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 .cstep-btn:disabled { opacity: 0.3; cursor: default; background: none; }
 /* the number sits in a tinted chip, like the P1-P3 chips up in Priorities */
 .cstep-value {
   min-width: 30px; height: 20px; padding: 0 6px; border-radius: 7px; display: grid; place-items: center;
   position: relative; z-index: 1; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
   color: var(--gc, var(--text-3)); background: color-mix(in srgb, var(--gc, var(--text-3)) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc, var(--text-3)) 45%, #fff), 0 0 0 0.5px var(--rim);
 }
 .kr-row:has(.cstep.warp) .cstep-value { background: color-mix(in srgb, var(--gc) 22%, transparent); }
 /* the chip glows brighter the deeper the warp */
-.cstep.w8 .cstep-value { box-shadow: 0 0 10px color-mix(in srgb, var(--gc) 50%, transparent); }
-.cstep.w9 .cstep-value { box-shadow: 0 0 16px 2px color-mix(in srgb, var(--gc) 65%, transparent); }
-.cstep.w10 .cstep-value { box-shadow: 0 0 22px 4px color-mix(in srgb, var(--gc) 75%, transparent); }
+.cstep.w8 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, #fff), 0 0 10px color-mix(in srgb, var(--gc) 50%, transparent); }
+.cstep.w9 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, #fff), 0 0 16px 2px color-mix(in srgb, var(--gc) 65%, transparent); }
+.cstep.w10 .cstep-value { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc) 45%, #fff), 0 0 22px 4px color-mix(in srgb, var(--gc) 75%, transparent); }
 .cstep-value.unrated { color: var(--text-3); background: var(--soft-2); }
 .cstep.danger .cstep-value { color: #ff3b30; }
 /* low confidence: the chip breathes a slow red glow — no flashing */
