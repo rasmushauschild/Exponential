@@ -459,8 +459,9 @@ export function BigPlan(props: Props) {
         const en = live ? live.end : dayIndex(p.end) + follow;
         const lane = live ? live.lane : p.lane;
         const sec = sectionOf(live ? live.groupId : p.groupId);
-        const left = (s - origin) * ppd;
-        const w = Math.max(ppd, (en - s + 1) * ppd);
+        // 2px shaved off each end: bars that meet on a date keep a slight gap
+        const left = (s - origin) * ppd + 2;
+        const w = Math.max(ppd - 4, (en - s + 1) * ppd - 4);
         const color = projectColor(p, groups);
         const editing = editingId === p.id;
         return (
