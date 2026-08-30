@@ -449,31 +449,30 @@ img { display: block; -webkit-user-drag: none; }
 .detail {
   flex: none; background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
   border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
-  display: flex; flex-direction: column; overflow: hidden; animation: fade 0.25s ease-out;
+  display: flex; flex-direction: column; overflow: hidden; animation: fade 0.25s ease-out; position: relative;
 }
-.detail-top { display: flex; align-items: center; gap: 4px; padding: 18px 18px 0 26px; position: relative; z-index: 6; }
-/* content blur-fades out under the panel's top bar, the sticky toolbar, and the foot,
-   instead of clipping hard at the scroll edge */
-.detail-top::after, .detail-foot::before, .toolbar::after {
-  content: ''; position: absolute; left: 0; right: 0; height: 26px; pointer-events: none;
+/* The top bar and foot are glass overlays reaching the panel's edges: content scrolls
+   beneath them and blur-fades out across their height instead of clipping. */
+.detail-top {
+  display: flex; align-items: center; gap: 4px; padding: 18px 18px 16px 26px;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  background: linear-gradient(to bottom, var(--frost) 58%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent);
+  mask-image: linear-gradient(to bottom, #000 58%, transparent);
+}
+.toolbar::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 22px; top: 100%; pointer-events: none;
   -webkit-backdrop-filter: blur(7px); backdrop-filter: blur(7px);
-}
-.detail-top::after, .toolbar::after {
-  top: 100%;
   background: linear-gradient(to bottom, var(--frost), transparent);
   -webkit-mask-image: linear-gradient(to bottom, #000 15%, transparent);
   mask-image: linear-gradient(to bottom, #000 15%, transparent);
 }
-.detail-foot::before {
-  bottom: 100%;
-  background: linear-gradient(to top, var(--frost), transparent);
-  -webkit-mask-image: linear-gradient(to top, #000 15%, transparent);
-  mask-image: linear-gradient(to top, #000 15%, transparent);
-}
 .detail-kind { font-size: 12px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.05em; }
 .icon-btn { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color: var(--text-2); transition: background 0.15s; }
 .icon-btn:hover { background: var(--soft); color: var(--text); }
-.detail-scroll { flex: 1; overflow-y: auto; padding: 6px 26px 26px; }
+.detail-scroll { flex: 1; overflow-y: auto; padding: 60px 26px 26px; }
+.detail:has(.detail-foot) .detail-scroll { padding-bottom: 84px; } /* room to scroll clear of the foot */
 .detail-scroll::-webkit-scrollbar { width: 0; }
 .detail-title { width: 100%; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; padding: 8px 0; margin-bottom: 8px; }
 .detail-title::placeholder { color: var(--text-3); }
@@ -540,7 +539,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
-.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: -6px; z-index: 10; background: var(--frost); padding: 8px 0 4px; }
+.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: 52px; z-index: 5; background: var(--frost); padding: 8px 0 4px; }
 .toolbar button { padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; background: transparent; }
 .toolbar button:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }
@@ -626,7 +625,14 @@ img { display: block; -webkit-user-drag: none; }
 .md-preview img, .rich-body img { max-width: 100%; border-radius: 14px; margin: 8px 0; display: block; }
 .md-preview input[type='checkbox'], .rich-body input[type='checkbox'] { margin: 0 6px 0 0; vertical-align: -2px; accent-color: var(--text); }
 .md-preview code, .rich-body code { background: var(--soft); padding: 1px 5px; border-radius: 6px; font-size: 12.5px; }
-.detail-foot { flex: none; padding: 12px 26px 18px; display: flex; justify-content: flex-end; background: var(--frost); position: relative; z-index: 6; }
+.detail-foot {
+  padding: 28px 26px 18px; display: flex; justify-content: flex-end;
+  position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
+  background: linear-gradient(to top, var(--frost) 52%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(to top, #000 52%, transparent);
+  mask-image: linear-gradient(to top, #000 52%, transparent);
+}
 
 /* ─── Team page ─────────────────────────────────────── */
 
