@@ -456,15 +456,18 @@ img { display: block; -webkit-user-drag: none; }
 /* The top bar and foot are opaque and reach the panel's edges; a blur-only skirt at their
    inner boundary smears approaching content so it never hard-clips or collides. */
 .detail-top {
-  display: flex; align-items: center; gap: 4px; padding: 18px 18px 8px 26px; height: 58px;
-  position: absolute; top: 0; left: 0; right: 0; z-index: 6;
+  display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: 58px;
+  position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: height 0.18s ease-out;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
 }
-.detail-top::after, .detail-foot::before, .toolbar::after {
+/* while the formatting toolbar is stuck it lives INSIDE this bar's blur box — one
+   seamless blur behind header + toolbar */
+.detail.tb-stuck .detail-top { height: 94px; }
+.detail-top::after, .detail-foot::before {
   content: ''; position: absolute; left: 0; right: 0; height: 24px; pointer-events: none;
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
-.detail-top::after, .toolbar::after {
+.detail-top::after {
   top: 100%;
   -webkit-mask-image: linear-gradient(to bottom, #000, transparent);
   mask-image: linear-gradient(to bottom, #000, transparent);
@@ -484,7 +487,6 @@ img { display: block; -webkit-user-drag: none; }
 .icon-btn { width: 32px; height: 32px; border-radius: 999px; display: grid; place-items: center; color: var(--text-2); transition: background 0.15s; }
 .icon-btn:hover { background: var(--soft); color: var(--text); }
 .detail-scroll { flex: 1; overflow-y: auto; padding: 62px 26px 26px; }
-.detail:has(.toolbar) .detail-scroll { padding-top: 98px; } /* the pinned toolbar sits under the header */
 .detail:has(.detail-foot) .detail-scroll { padding-bottom: 78px; } /* room to scroll clear of the foot */
 .detail-scroll::-webkit-scrollbar { width: 0; }
 .detail-title { width: 100%; font-size: 26px; font-weight: 800; letter-spacing: -0.03em; padding: 8px 0; margin-bottom: 8px; }
@@ -552,7 +554,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
-.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: absolute; top: 58px; left: 0; right: 0; z-index: 5; background: transparent; -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); padding: 8px 26px 6px; }
+.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: 58px; z-index: 7; background: transparent; padding: 8px 0 4px; }
 .toolbar button { padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; background: transparent; }
 .toolbar button:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }

@@ -463,8 +463,24 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   const selHi = sel ? Math.max(sel.a, sel.b) : -1;
   const docEmpty = blocks.length === 1 && blocks[0].kind === 'p' && blocks[0].text === '';
 
+  // When the toolbar sticks under the panel header, the header's blur box grows to
+  // wrap it — the sentinel tells us the moment it happens.
+  const sentRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = sentRef.current;
+    if (!el) return;
+    const detail = el.closest('.detail');
+    const io = new IntersectionObserver(
+      ([en]) => detail?.classList.toggle('tb-stuck', !en.isIntersecting),
+      { root: el.closest('.detail-scroll'), rootMargin: '-59px 0px 0px 0px', threshold: 0 },
+    );
+    io.observe(el);
+    return () => { io.disconnect(); detail?.classList.remove('tb-stuck'); };
+  }, []);
+
   return (
     <div className="blocks">
+      <div ref={sentRef} style={{ height: 1, marginBottom: -1 }} />
       <div className="toolbar">
         <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('h1')} title="Heading 1">H1</button>
         <button onMouseDown={(e) => e.preventDefault()} onClick={() => turnInto('h2')} title="Heading 2">H2</button>
