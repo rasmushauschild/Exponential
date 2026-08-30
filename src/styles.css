@@ -471,8 +471,9 @@ img { display: block; -webkit-user-drag: none; }
   /* the box ends exactly at the toolbar's bottom edge: the dissolve happens BEHIND the
      toolbar row, and below it there is no blur at all */
   height: 92px;
-  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  /* nonlinear: strong through the toolbar row, releasing only at the very edge */
+  -webkit-mask-image: linear-gradient(to bottom, #000 62%, #000 90%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 62%, #000 90%, transparent 100%);
 }
 .toolbar::after {
   content: ''; position: absolute; left: 0; right: 0; height: 22px; top: 100%; pointer-events: none;
