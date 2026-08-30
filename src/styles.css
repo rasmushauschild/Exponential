@@ -41,8 +41,8 @@
 
 [data-theme='dark'] {
   --bg: #0c0d11;
-  --panel: #16171c;
-  --surface: #16171c;
+  --panel: #121317;
+  --surface: #121317;
   --text: #fafafa;
   --text-2: #a0a0a0;
   --text-3: #707070;
@@ -63,10 +63,10 @@
   --line: rgba(255, 255, 255, 0.1);
   --dot: rgba(255, 255, 255, 0.18);
   --dot-fade: #16171d;
-  --frost: rgba(23, 24, 30, 0.85);
-  --frost-deep: rgba(16, 17, 22, 0.92);
+  --frost: rgba(19, 20, 25, 0.85);
+  --frost-deep: rgba(14, 15, 19, 0.92);
   --tint: #0b0c10;
-  --bar: #181920;
+  --bar: #14151a;
   --veil: rgba(10, 11, 15, 0.6);
   --edge: rgba(255, 255, 255, 0.15);
   --rim: rgba(0, 0, 0, 0.55);
