@@ -219,7 +219,7 @@ img { display: block; -webkit-user-drag: none; }
   /* fade layer keeps the date header clean; the dot layer pans via inline background-position */
   background-image: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 40px, transparent 54px),
     radial-gradient(circle, var(--dot) 0.8px, transparent 0.8px);
-  background-size: auto, 19px 38px; background-position: 0 0, 9px 8px; /* one dot row per lane boundary: a line above and below every bar */
+  background-size: auto, 38px 38px; background-position: 0 0, 9px 8px; /* square grid, one dot row per lane boundary: lines sit between bars, never through them */
 }
 .timeline.panning { cursor: grabbing; }
 .timeline.dragging-item { cursor: grabbing; }
