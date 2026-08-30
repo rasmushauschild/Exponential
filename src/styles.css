@@ -530,7 +530,7 @@ img { display: block; -webkit-user-drag: none; }
   cursor: grab; opacity: 0; transition: opacity 0.15s, background 0.15s; display: grid; place-items: center;
 }
 .blk:hover .blk-handle { opacity: 1; }
-.blk-handle:hover { background: var(--ov-5); color: var(--text-2); }
+.blk-handle:hover { color: var(--text); } /* no button box: the grip is part of the block, not its own control */
 .blk-textwrap { flex: 1; min-width: 0; position: relative; display: flex; }
 .blk-text { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--text); font: inherit; line-height: 1.55; padding: 4px 0; overflow: hidden; user-select: text; white-space: pre-wrap; overflow-wrap: break-word; }
 .blk-text::placeholder { color: var(--text-3); }
