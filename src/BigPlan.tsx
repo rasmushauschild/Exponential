@@ -468,7 +468,7 @@ export function BigPlan(props: Props) {
         return (
           <div
             key={p.id}
-            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}`}
+            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}${!p.groupId || !groups.some((g) => g.id === p.groupId) ? ' nogroup' : ''}`}
             style={{
               left,
               width: w,
