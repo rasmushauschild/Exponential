@@ -744,7 +744,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .retro-objective { font-size: 13px; font-weight: 650; margin: 0 0 10px; line-height: 1.45; }
 .kr-row {
   display: flex; align-items: center; gap: 16px; padding: 10px 14px; position: relative; overflow: hidden;
-  border-radius: 999px; background: var(--frost); box-shadow: 0 0 0 0.5px var(--rim); transition: background 0.4s;
+  border-radius: 20px; background: var(--frost); box-shadow: 0 0 0 0.5px var(--rim); transition: background 0.4s; /* = capsule at one line, consistent corners when text wraps */
 }
 .kr-row + .kr-row { margin-top: 8px; }
 /* every warp level goes deeper into space */
