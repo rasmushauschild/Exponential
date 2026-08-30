@@ -286,7 +286,7 @@ function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, leg
                       title={`${p.name} — ${mark ? markLabel[mark] : 'not answered'}${mineCol ? ' · click to change' : ''}`}
                       disabled={!mineCol}
                       onClick={() => mineCol && cycleMark(m.key)}>
-                      <span className={`health-dot${mark ? ' on' : ''}`} style={mark ? { background: markColor[mark] } : undefined} />
+                      <span className={`health-dot${mark ? ' on' : ''}`} style={mark ? { ['--hc' as string]: markColor[mark] } : undefined} />
                     </button>
                   );
                 })}

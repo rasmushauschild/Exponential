@@ -892,7 +892,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .health-cell.mine { cursor: pointer; }
 .health-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-3) 55%, transparent); transition: transform 0.12s; }
 .health-cell.mine .health-dot:not(.on) { box-shadow: inset 0 0 0 1.5px var(--text-3); }
-.health-dot.on { box-shadow: 0 0 0 0.5px var(--rim); }
+.health-dot.on { background: var(--hc); box-shadow: 0 0 0 1px color-mix(in srgb, var(--hc) 72%, #000); }
 .health-cell.mine:hover .health-dot { transform: scale(1.45); }
 
 .grow-input { resize: none; overflow: hidden; line-height: 1.45; display: block; }
