@@ -476,7 +476,8 @@ img { display: block; -webkit-user-drag: none; }
 .date-pill.empty { color: var(--text-3); font-weight: 500; cursor: pointer; position: relative; overflow: hidden; }
 .date-pill.empty input { position: absolute; inset: 0; width: 100% !important; opacity: 0 !important; cursor: pointer; }
 .icon-btn.small { width: 24px; height: 24px; font-size: 15px; color: var(--text-3); margin-left: 2px; }
-.date-pill input[type='date'] { font: inherit; color: inherit; background: transparent; padding: 0; width: auto; field-sizing: content; cursor: pointer; font-variant-numeric: tabular-nums; }
+.date-pill input[type='date'] { font: inherit; color: inherit; background: transparent; padding: 0; width: 9.4ch; cursor: pointer; font-variant-numeric: tabular-nums; }
+.date-pill input[type='date']:first-child { text-align: right; } /* slack inside the fixed-width input sits away from the dash */
 .date-pill input[type='date']::-webkit-calendar-picker-indicator { display: none; }
 .date-pill input[type='date']::-webkit-datetime-edit { padding: 0; }
 .date-pill input[type='date']::-webkit-datetime-edit-fields-wrapper { padding: 0; }
