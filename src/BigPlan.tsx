@@ -109,6 +109,18 @@ export function BigPlan(props: Props) {
   };
   const [height, setHeight] = useState(0);
 
+  // The dot grid rides along when the plan pans, but zooming must not move it: panning
+  // changes origin at fixed ppd (dots follow), while a ppd change folds into `comp` so
+  // the grid's screen position stays exactly where it was.
+  const dotRef = useRef({ prev: 0, prevPpd: 0, comp: 0 });
+  {
+    const cur = origin * ppd;
+    if (dotRef.current.prevPpd !== ppd) dotRef.current.comp += cur - dotRef.current.prev;
+    dotRef.current.prev = cur;
+    dotRef.current.prevPpd = ppd;
+  }
+  const dotX = 9 - (origin * ppd - dotRef.current.comp);
+
   useLayoutEffect(() => {
     const el = ref.current!;
     const ro = new ResizeObserver(() => { setWidth(el.clientWidth); setHeight(el.clientHeight); });
@@ -355,7 +367,7 @@ export function BigPlan(props: Props) {
     <div
       ref={ref}
       className={`timeline${panning ? ' panning' : ''}${drag || dlDrag ? ' dragging-item' : ''}`}
-      style={{ backgroundPosition: `0 0, ${9 - origin * ppd}px ${14 - scrollY}px` }} /* header fade stays put; dots pan/scroll with the plan (lanes at 84, +2px optical nudge) */
+      style={{ backgroundPosition: `0 0, ${dotX}px ${14 - scrollY}px` }} /* header fade stays put; dots pan/scroll with the plan, frozen through zooms */
       onPointerDown={onPointerDown}
       onPointerMove={onHover}
       onPointerLeave={() => { setGhost(null); setHoverWeek(null); }}
