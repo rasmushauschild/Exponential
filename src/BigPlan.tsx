@@ -108,6 +108,11 @@ export function BigPlan(props: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     try { return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '[]')); } catch { return new Set<string>(); }
   });
+  // A short window after toggling in which rows glide to their new spots and the
+  // toggled group's bars fade out (still rendered) or in, instead of popping.
+  const [fold, setFold] = useState<{ gid: string; on: boolean } | null>(null);
+  const foldTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(foldTimer.current), []);
   const setCollapse = (gid: string, on: boolean) => {
     // commit any in-flight inline rename first — collapsing unmounts the group's bars,
     // and an input removed from the DOM never fires its blur (the typed name would be lost)
@@ -116,6 +121,9 @@ export function BigPlan(props: Props) {
     if (on) n.add(gid); else n.delete(gid);
     localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...n]));
     setCollapsed(n);
+    setFold({ gid, on });
+    window.clearTimeout(foldTimer.current);
+    foldTimer.current = window.setTimeout(() => setFold(null), 240);
     if (on) onCollapseGroup?.(projects.filter((p) => p.groupId === gid).map((p) => p.id));
   };
   // Vertical layout: one section per group (then ungrouped), each with its projects' lanes plus a spare lane.
@@ -505,7 +513,7 @@ export function BigPlan(props: Props) {
         );
       })}
 
-      <div className="tl-lanes" style={{ top: projectTop - 6 }}>
+      <div className={`tl-lanes${fold ? ' glide' : ''}`} style={{ top: projectTop - 6 }}>
       {ghost && !drag && !gDrag && ghost.lane >= 0 && (
         <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 3 + ghost.lane * ROW_H - scrollY }}>
           New project
@@ -564,7 +572,8 @@ export function BigPlan(props: Props) {
         const en = live ? live.end : dayIndex(p.end) + follow;
         const lane = live ? live.lane : p.lane;
         const sec = sectionOf(live ? live.groupId : p.groupId);
-        if (sec.collapsed) return null; // tucked away with its group
+        // tucked away with its group — except while collapsing, when the bars stay to fade out
+        if (sec.collapsed && !(fold?.on && fold.gid === sec.groupId)) return null;
         // 2px shaved off each end: bars that meet on a date keep a slight gap
         const left = (s - origin) * ppd + 2;
         const w = Math.max(ppd - 4, (en - s + 1) * ppd - 4);
@@ -573,7 +582,7 @@ export function BigPlan(props: Props) {
         return (
           <div
             key={p.id}
-            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}${!p.groupId || !groups.some((g) => g.id === p.groupId) ? ' nogroup' : ''}${gDrag && sec.groupId && gDrag.id !== sec.groupId ? ' gshift' : ''}`}
+            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}${!p.groupId || !groups.some((g) => g.id === p.groupId) ? ' nogroup' : ''}${gDrag && sec.groupId && gDrag.id !== sec.groupId ? ' gshift' : ''}${fold && fold.gid === sec.groupId ? (fold.on ? ' fold-out' : ' fold-in') : ''}`}
             style={{
               left,
               width: w,

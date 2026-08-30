@@ -96,6 +96,7 @@ body {
 }
 button, input { font: inherit; color: inherit; }
 button { background: none; border: 0; padding: 0; cursor: pointer; }
+:focus, :focus-visible { outline: none; } /* no tab-focus rings — the app is pointer-driven */
 button:disabled { opacity: 0.45; cursor: default; }
 input { border: 0; outline: 0; background: none; }
 img { display: block; -webkit-user-drag: none; }
@@ -274,8 +275,15 @@ img { display: block; -webkit-user-drag: none; }
 /* other sections glide out of the way while a group label is dragged */
 .tl-group.gshift { transition: background 0.15s, box-shadow 0.15s, transform 0.18s ease; }
 .tl-project.gshift { transition: box-shadow 0.15s, background 0.15s, transform 0.18s ease; }
+/* collapsing/expanding a group: rows glide to their new spots for a beat, the toggled group's bars fade */
+.tl-lanes.glide .tl-group { transition: background 0.15s, box-shadow 0.15s, top 0.2s ease; }
+.tl-lanes.glide .tl-project { transition: box-shadow 0.15s, background 0.15s, top 0.2s ease, opacity 0.16s ease; }
+.tl-project.fold-out { opacity: 0; pointer-events: none; }
+.tl-project.fold-in { animation: fold-in 0.2s ease; }
+@keyframes fold-in { from { opacity: 0; } }
 /* the group's colour dot turns into a collapse arrow on hover (stays an arrow while collapsed) */
 .tl-group .twist { position: relative; width: 12px; height: 16px; margin: 0 -2px; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.tl-group .twist::after { content: ''; position: absolute; inset: -6px; } /* generous invisible hit area */
 .tl-group .twist .dot { background: var(--gc); transition: opacity 0.12s; }
 .tl-group .twist .chev { position: absolute; color: var(--gc); opacity: 0; transition: opacity 0.12s, transform 0.15s; }
 .tl-group:not(.none):hover .twist .dot, .tl-group .twist.closed .dot { opacity: 0; }

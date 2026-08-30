@@ -159,16 +159,20 @@ export default function App() {
           : selection && ['project', 'task', 'deadline'].includes(selection.kind) ? new Set([selection.id])
           : null;
         if (!ids) return;
+        // The master plan is read-only while locked: its projects and deadlines survive
+        // Backspace (week-view tasks have no lock and always delete).
+        const allowed = unlocked ? ids : new Set([...ids].filter((id) => !(data?.projects.some((p) => p.id === id) || data?.deadlines.some((x) => x.id === id))));
+        if (!allowed.size) return;
         e.preventDefault();
-        update((d) => softDelete(d, ids));
-        if (selection && ids.has(selection.id)) setSelection(null);
+        update((d) => softDelete(d, allowed));
+        if (selection && allowed.has(selection.id)) setSelection(null);
         setMulti(new Set());
       }
       if (e.key === 'Escape' && multi.size) setMulti(new Set());
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, multi, selection, update]);
+  }, [undo, redo, multi, selection, update, unlocked, data]);
 
   /** Right-click Delete on a multi-selection removes everything selected, like Backspace. */
   const deleteMany = (ids: string[]) => {
