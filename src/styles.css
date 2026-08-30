@@ -165,7 +165,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .panel {
   background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
-  border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), 0 0 0 2px var(--rim), var(--shadow);
+  border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; min-height: 120px; overflow: hidden; position: relative;
 }
 .panel-head { display: flex; align-items: center; gap: 8px; padding: 22px 26px 10px; flex: none; overflow: hidden; }
@@ -436,7 +436,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .detail {
   flex: none; background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
-  border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), 0 0 0 2px var(--rim), var(--shadow);
+  border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; overflow: hidden; animation: fade 0.25s ease-out;
 }
 .detail-top { display: flex; align-items: center; gap: 4px; padding: 18px 18px 0 26px; }
