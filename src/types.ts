@@ -170,7 +170,7 @@ export const STATUS_LABEL: Record<Status, string> = {
 export const STATUS_ORDER: Status[] = ['todo', 'progress', 'review', 'done', 'cancelled'];
 
 export const STATUS_COLOR: Record<Status, string> = {
-  todo: '#c7c7cc',
+  todo: '#ffffff',
   progress: '#0a84ff',
   review: '#ff9f0a',
   done: '#30d158',
@@ -178,7 +178,7 @@ export const STATUS_COLOR: Record<Status, string> = {
 };
 
 export const PROJECT_COLORS = ['#5b8def', '#f0a04b', '#3fb98a', '#9b7fe8', '#e8739b', '#e2b93b', '#3fb4d6'];
-export const NO_GROUP_COLOR = '#9a9aa3';
+export const NO_GROUP_COLOR = '#ffffff';
 
 /** "Rasmus Hauschild" → "Rasmus H." */
 export function shortName(name: string): string {
