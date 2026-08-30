@@ -103,7 +103,7 @@ img { display: block; -webkit-user-drag: none; }
 .sidebar * { -webkit-app-region: no-drag; }
 .sidebar-inner {
   position: absolute; top: 0; bottom: 0; left: 0; right: 0; display: flex; flex-direction: column;
-  padding: 14px 14px 8px 14px; overflow: hidden;
+  padding: 14px 22px 8px 22px; overflow: hidden; /* rail is 88px: keep collapsed highlights square around the 30px icons */
 }
 .sidebar.mac .sidebar-inner { padding-top: 14px; }
 .nav-text, .team-name, .badge { opacity: 0; transition: opacity 0.15s; white-space: nowrap; }
