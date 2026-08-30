@@ -25,6 +25,7 @@
   --dot: rgba(0, 0, 0, 0.16);
   --dot-fade: #f6f6f8; /* matches the panel fill: fades dots out under text areas */
   --frost: #f6f6f8;  /* panel fill, a shade lighter than the ground */
+  --frost-deep: rgba(234, 235, 240, 0.9); /* dialogs: darker glass so the white frame reads */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --rim: rgba(20, 20, 30, 0.12);       /* super-thin dark line just outside the white edge */
   --scrim: rgba(0, 0, 0, 0.25);
@@ -60,6 +61,7 @@
   --dot: rgba(255, 255, 255, 0.18);
   --dot-fade: #1d1d1f;
   --frost: rgba(30, 30, 32, 0.85);
+  --frost-deep: rgba(22, 22, 24, 0.92);
   --edge: rgba(255, 255, 255, 0.09);
   --rim: rgba(0, 0, 0, 0.55);
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.5);
@@ -695,7 +697,7 @@ img { display: block; -webkit-user-drag: none; }
 /* ─── Sheets ────────────────────────────────────────── */
 
 .backdrop { position: fixed; inset: 0; background: var(--scrim); display: grid; place-items: center; z-index: 100; animation: fade 0.15s ease-out; }
-.sheet { border-radius: 24px; padding: 26px 28px 22px; width: 380px; background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); box-shadow: 0 0 0 4px var(--edge), 0 0 0 4.5px var(--rim), 0 24px 60px rgba(0, 0, 0, 0.16); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
+.sheet { border-radius: 24px; padding: 26px 28px 22px; width: 380px; background: var(--frost-deep); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px); box-shadow: 0 0 0 4px var(--edge), 0 0 0 4.5px var(--rim), 0 24px 60px rgba(0, 0, 0, 0.16); animation: pop 0.18s cubic-bezier(0.2, 0.9, 0.3, 1.2); }
 .sheet h2 { margin: 0 0 16px; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field label { font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.07em; }
