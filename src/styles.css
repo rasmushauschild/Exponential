@@ -20,7 +20,7 @@
   --ov-18: rgba(10, 20, 50, 0.16);
   --sel-blk: rgba(10, 132, 255, 0.1);
   --line: rgba(0, 0, 0, 0.09);
-  --dot: rgba(0, 0, 0, 0.22);
+  --dot: rgba(0, 0, 0, 0.16);
   --dot-fade: #fafafa; /* matches the panel ground: fades dots out under text areas */
   --frost: #fafafa;  /* panels match the background; the edge ring + shadow carry the separation */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
@@ -52,7 +52,7 @@
   --ov-18: rgba(255, 255, 255, 0.22);
   --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.1);
-  --dot: rgba(255, 255, 255, 0.24);
+  --dot: rgba(255, 255, 255, 0.18);
   --dot-fade: #1d1d1f;
   --frost: rgba(30, 30, 32, 0.85);
   --edge: rgba(255, 255, 255, 0.09);
@@ -211,7 +211,7 @@ img { display: block; -webkit-user-drag: none; }
 .timeline {
   flex: 1; position: relative; overflow: hidden; cursor: grab;
   /* fade layer keeps the date header clean; the dot layer pans via inline background-position */
-  background-image: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 72px, transparent 102px),
+  background-image: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 40px, transparent 54px),
     radial-gradient(circle, var(--dot) 0.8px, transparent 0.8px);
   background-size: auto, 19px 19px; background-position: 0 0, 9px 8px;
 }
@@ -273,7 +273,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
 .bar-avatars { display: inline-flex; flex: none; }
-.bar-avatars .avatar { box-shadow: 0 0 0 2px var(--surface); margin-left: -5px; }
+.bar-avatars .avatar { box-shadow: 0 0 0 2px color-mix(in srgb, var(--pc) 30%, #fff); margin-left: -5px; }
 .bar-avatars .avatar:first-child { margin-left: 0; }
 
 

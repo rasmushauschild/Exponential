@@ -170,7 +170,7 @@ export const STATUS_LABEL: Record<Status, string> = {
 export const STATUS_ORDER: Status[] = ['todo', 'progress', 'review', 'done', 'cancelled'];
 
 export const STATUS_COLOR: Record<Status, string> = {
-  todo: '#ffffff',
+  todo: '#d1d1d6',
   progress: '#0a84ff',
   review: '#ff9f0a',
   done: '#30d158',
@@ -184,7 +184,7 @@ const CRISP: Record<string, string> = {
   '#e8739b': '#ff375f', '#e2b93b': '#ffd60a', '#3fb4d6': '#64d2ff',
 };
 export const crispColor = (c: string) => CRISP[c] ?? c;
-export const NO_GROUP_COLOR = '#ffffff';
+export const NO_GROUP_COLOR = '#d1d1d6';
 
 /** "Rasmus Hauschild" → "Rasmus H." */
 export function shortName(name: string): string {
