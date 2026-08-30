@@ -367,11 +367,11 @@ export function BigPlan(props: Props) {
     <div
       ref={ref}
       className={`timeline${panning ? ' panning' : ''}${drag || dlDrag ? ' dragging-item' : ''}`}
+      style={{ backgroundPosition: `0 0, ${dotX}px ${14 - scrollY}px` }} /* header fade stays put; dots pan/scroll with the plan, frozen through zooms */
       onPointerDown={onPointerDown}
       onPointerMove={onHover}
       onPointerLeave={() => { setGhost(null); setHoverWeek(null); }}
     >
-      <div className="tl-dots" style={{ transform: `translate(${(((dotX % 32) + 32) % 32)}px, ${(((-scrollY % 32) + 32) % 32)}px)` }} />
       {weeks.map((m) => {
         const odd = Math.floor(m / 7) % 2 === 1;
         const hovered = hoverWeek === m;

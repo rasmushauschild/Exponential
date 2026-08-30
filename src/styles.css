@@ -178,7 +178,7 @@ img { display: block; -webkit-user-drag: none; }
 .planners { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 
 .panel {
-  background: var(--frost);
+  background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
   border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; min-height: 120px; overflow: hidden; position: relative;
 }
@@ -226,16 +226,10 @@ img { display: block; -webkit-user-drag: none; }
 
 .timeline {
   flex: 1; position: relative; overflow: hidden; cursor: grab;
-}
-/* dots live on their own composited layer and pan via transform — no repaint per frame */
-.tl-dots {
-  position: absolute; inset: -32px; pointer-events: none; will-change: transform;
-  background-image: radial-gradient(circle, var(--dot) 0.825px, transparent 0.825px);
-  background-size: 32px 32px; background-position: 9px 14px;
-}
-.timeline::before {
-  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 54px; z-index: 1; pointer-events: none;
-  background: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 40px, transparent 54px);
+  /* fade layer keeps the date header clean; the dot layer pans via inline background-position */
+  background-image: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 40px, transparent 54px),
+    radial-gradient(circle, var(--dot) 0.825px, transparent 0.825px);
+  background-size: auto, 32px 32px; background-position: 0 0, 9px 14px; /* square grid = lane height: a dot row on either side of every bar, never through */
 }
 .timeline.panning { cursor: grabbing; }
 .timeline.dragging-item { cursor: grabbing; }
@@ -459,7 +453,7 @@ img { display: block; -webkit-user-drag: none; }
 /* ─── Detail panel ──────────────────────────────────── */
 
 .detail {
-  flex: none; background: var(--frost);
+  flex: none; background: var(--frost); -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
   border-radius: var(--radius-xl); box-shadow: 0 0 0 1.5px var(--edge), var(--shadow);
   display: flex; flex-direction: column; overflow: hidden; animation: fade 0.25s ease-out; position: relative;
 }
