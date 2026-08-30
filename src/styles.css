@@ -554,7 +554,7 @@ img { display: block; -webkit-user-drag: none; }
 
 .editor { display: flex; flex-direction: column; gap: 8px; }
 /* top -6px + taller padding: the scroll area has 6px top padding that sticky pins below, letting text peek through. */
-.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: 58px; z-index: 7; background: transparent; padding: 8px 0 4px; }
+.toolbar { display: flex; align-items: center; gap: 2px; flex-wrap: wrap; position: sticky; top: -4px; z-index: 7; /* scrollport origin includes the 62px scroll padding: -4 pins at 58, flush under the header */ background: transparent; padding: 8px 0 4px; }
 .toolbar button { padding: 4px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-2); font-family: var(--font); line-height: 16px; background: transparent; }
 .toolbar button:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 .toolbar .hint { padding: 4px 2px; }
