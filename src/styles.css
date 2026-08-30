@@ -218,8 +218,8 @@ img { display: block; -webkit-user-drag: none; }
   flex: 1; position: relative; overflow: hidden; cursor: grab;
   /* fade layer keeps the date header clean; the dot layer pans via inline background-position */
   background-image: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 40px, transparent 54px),
-    radial-gradient(circle, var(--dot) 0.8px, transparent 0.8px);
-  background-size: auto, 32px 32px; background-position: 0 0, 9px 20px; /* square grid = lane height: a dot row on either side of every bar, never through */
+    radial-gradient(circle, var(--dot) 1.1px, transparent 1.1px);
+  background-size: auto, 32px 32px; background-position: 0 0, 9px 22px; /* square grid = lane height: a dot row on either side of every bar, never through */
 }
 .timeline.panning { cursor: grabbing; }
 .timeline.dragging-item { cursor: grabbing; }
@@ -246,7 +246,7 @@ img { display: block; -webkit-user-drag: none; }
 .week-label.current { color: var(--accent); }
 .week-label.current:hover { filter: brightness(0.8); }
 
-.today-line { position: absolute; top: 44px; bottom: 10px; border-radius: 2px; width: 2px; margin-left: -1px; background: var(--today); pointer-events: none; z-index: 5; }
+.today-line { position: absolute; top: 20px; bottom: 10px; border-radius: 2px; width: 2px; margin-left: -1px; background: var(--today); pointer-events: none; z-index: 5; }
 
 .tl-lanes { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; }
 .tl-group {
