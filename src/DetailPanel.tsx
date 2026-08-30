@@ -76,7 +76,7 @@ export function DetailPanel(p: Props) {
 
   const agentDoc = () => {
     const who = (id?: string) => (id ? shortName(people.find((x) => x.id === id)?.name ?? '') : '');
-    const lines = [`# ${title}`, '', `- Type: ${kind}`];
+    const lines = [`# ${title}`, '', `- Type: ${kind}`, `- Id: ${item.id} (the Exponential MCP get_item/update tools take this id)`];
     if (project) {
       lines.push(`- Starts: ${project.start}`, `- Ends: ${project.end}`);
       if (project.assignees?.length) lines.push(`- People: ${project.assignees.map(who).join(', ')}`);
@@ -799,17 +799,30 @@ export function renderMarkdown(md: string, editable = false): string {
 }
 
 function SendToAgent({ doc }: { doc: () => string }) {
-  const [state, setState] = useState<'idle' | 'done'>('idle');
+  const [state, setState] = useState<'idle' | 'app' | 'app-paste' | 'web' | 'copied'>('idle');
   const send = async () => {
     const md = doc();
-    try { await navigator.clipboard.writeText(md); } catch { /* clipboard may be unavailable in the preview */ }
-    setState('done');
-    setTimeout(() => setState('idle'), 1800);
+    // Desktop: open Claude with the prompt pre-filled (falls back to app+clipboard, then claude.ai).
+    if (window.exponential?.sendToClaude) {
+      const how = await window.exponential.sendToClaude(md);
+      setState(how);
+    } else {
+      try { await navigator.clipboard.writeText(md); } catch { /* clipboard may be unavailable in the preview */ }
+      setState('copied');
+    }
+    setTimeout(() => setState('idle'), 2600);
   };
+  const label = {
+    idle: 'Send to Claude',
+    app: 'Opened in Claude',
+    'app-paste': 'Opened Claude — ⌘V to paste',
+    web: 'Opened claude.ai',
+    copied: 'Copied as Markdown',
+  }[state];
   return (
     <div className="detail-foot">
       <button className="btn" onClick={send}>
-        <SparkIcon /> {state === 'done' ? 'Copied as Markdown' : 'Send to Agent'}
+        <SparkIcon /> {label}
       </button>
     </div>
   );

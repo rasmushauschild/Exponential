@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, Notification, Tray, nativeImage, screen, shell } = require('electron');
+const { app, BrowserWindow, clipboard, ipcMain, Menu, Notification, Tray, nativeImage, screen, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
@@ -313,6 +313,24 @@ ipcMain.on('widget:openMain', (_e, target) => {
   if (widgetWin) widgetWin.hide();
 });
 ipcMain.on('widget:close', () => { if (widgetWin) widgetWin.hide(); });
+
+// "Send to Agent": the text goes on the clipboard, then the best available Claude opens —
+// the desktop app with the prompt pre-filled (claude:// deep link), the app alone (paste),
+// or claude.ai in the browser. Returns which one happened so the button can say so.
+ipcMain.handle('claude:send', async (_e, text) => {
+  clipboard.writeText(text);
+  const { spawn } = require('node:child_process');
+  const tryOpen = (args) => new Promise((res) => {
+    if (process.platform !== 'darwin') return res(false);
+    const pr = spawn('open', args);
+    pr.on('exit', (c) => res(c === 0));
+    pr.on('error', () => res(false));
+  });
+  const q = text.length < 6000 ? encodeURIComponent(text) : null;
+  if (q && await tryOpen([`claude://new?q=${q}`])) return 'app';
+  if (await tryOpen(['-a', 'Claude'])) return 'app-paste';
+  try { await shell.openExternal(`https://claude.ai/new${q ? `?q=${q}` : ''}`); return 'web'; } catch { return 'copied'; }
+});
 
 ipcMain.handle('google:getConfig', () => google.getConfig());
 ipcMain.handle('google:setConfig', (_e, c) => google.setConfig(c));
