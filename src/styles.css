@@ -459,6 +459,9 @@ img { display: block; -webkit-user-drag: none; }
   display: flex; align-items: flex-start; gap: 4px; padding: 18px 18px 8px 26px; height: 58px;
   position: absolute; top: 0; left: 0; right: 0; z-index: 6; transition: height 0.18s ease-out;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
+  /* the blur region itself dissolves at its lower edge — no sharp blur boundary */
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
 }
 /* while the formatting toolbar is stuck it lives INSIDE this bar's blur box — one
    seamless blur behind header + toolbar */
@@ -644,6 +647,8 @@ img { display: block; -webkit-user-drag: none; }
   padding: 12px 26px 18px; display: flex; justify-content: flex-end;
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
   -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
+  -webkit-mask-image: linear-gradient(to top, #000 calc(100% - 12px), transparent);
+  mask-image: linear-gradient(to top, #000 calc(100% - 12px), transparent);
 }
 
 /* ─── Team page ─────────────────────────────────────── */
