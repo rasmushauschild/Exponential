@@ -456,9 +456,22 @@ img { display: block; -webkit-user-drag: none; }
 .detail-top {
   display: flex; align-items: center; gap: 4px; padding: 18px 18px 16px 26px;
   position: absolute; top: 0; left: 0; right: 0; z-index: 6;
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  -webkit-mask-image: linear-gradient(to bottom, #000 58%, transparent);
-  mask-image: linear-gradient(to bottom, #000 58%, transparent);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 30%, transparent 100%);
+}
+/* a second, heavier blur layer hugging the panel edge: intensity ramps toward the edge */
+.detail-top::before, .detail-foot::after {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px);
+}
+.detail-top::before {
+  -webkit-mask-image: linear-gradient(to bottom, #000 18%, transparent 55%);
+  mask-image: linear-gradient(to bottom, #000 18%, transparent 55%);
+}
+.detail-foot::after {
+  -webkit-mask-image: linear-gradient(to top, #000 18%, transparent 55%);
+  mask-image: linear-gradient(to top, #000 18%, transparent 55%);
 }
 .toolbar::after {
   content: ''; position: absolute; left: 0; right: 0; height: 22px; top: 100%; pointer-events: none;
@@ -626,9 +639,9 @@ img { display: block; -webkit-user-drag: none; }
 .detail-foot {
   padding: 28px 26px 18px; display: flex; justify-content: flex-end;
   position: absolute; bottom: 0; left: 0; right: 0; z-index: 6;
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  -webkit-mask-image: linear-gradient(to top, #000 52%, transparent);
-  mask-image: linear-gradient(to top, #000 52%, transparent);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(to top, #000 30%, transparent 100%);
+  mask-image: linear-gradient(to top, #000 30%, transparent 100%);
 }
 
 /* ─── Team page ─────────────────────────────────────── */
