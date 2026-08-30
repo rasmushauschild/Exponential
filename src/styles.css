@@ -1,7 +1,7 @@
 :root {
   /* flat supabase-style light theme: near-white ground, hairline dark borders,
      small radii, brand green, no glass/gradients/heavy shadows */
-  --bg: #fafafa;
+  --bg: #f1f1f4;
   --panel: #ffffff;
   --surface: #ffffff;
   --text: #171717;
@@ -21,12 +21,12 @@
   --sel-blk: rgba(10, 132, 255, 0.1);
   --line: rgba(0, 0, 0, 0.09);
   --dot: rgba(0, 0, 0, 0.16);
-  --dot-fade: #fafafa; /* matches the panel ground: fades dots out under text areas */
+  --dot-fade: #fafafa; /* matches the panel fill: fades dots out under text areas */
   --frost: #fafafa;  /* panels match the background; the edge ring + shadow carry the separation */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --scrim: rgba(0, 0, 0, 0.25);
   --radius-xl: 24px;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 10px 28px rgba(0, 0, 0, 0.06); /* soft drop below */
+  --shadow: 0 2px 6px rgba(0, 0, 0, 0.05), 0 18px 44px rgba(0, 0, 0, 0.1); /* soft drop below */
   --menu-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
   color-scheme: light;
   --font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI Variable', 'Segoe UI', Inter, system-ui, sans-serif;
@@ -224,7 +224,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-day.weekend { color: var(--text-3); opacity: 0.6; }
 
 .week-band {
-  position: absolute; top: 44px; bottom: 10px; border-radius: 10px; background: rgba(10, 132, 255, 0.07);
+  position: absolute; top: 44px; bottom: 10px; border-radius: 10px; background: transparent;
   cursor: ew-resize; transition: background 0.15s, left 0.35s cubic-bezier(0.45, 0, 0.2, 1);
 }
 .week-band.no-anim { transition: background 0.15s; }
@@ -257,19 +257,19 @@ img { display: block; -webkit-user-drag: none; }
   position: absolute; height: 26px; display: flex; align-items: center; gap: 10px;
   border-radius: 999px; padding: 0 12px; font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden;
   background: var(--frost); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--text);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 13%, #fff), 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 34%, #fff), 0 2px 8px rgba(0, 0, 0, 0.06);
   transition: box-shadow 0.15s, background 0.15s;
   z-index: 2;
 }
-.tl-project::before { content: ''; position: absolute; inset: 0; background: var(--pc); opacity: 0.3; pointer-events: none; transition: opacity 0.15s; }
+.tl-project::before { content: ''; position: absolute; inset: 0; background: var(--pc); opacity: 0.2; pointer-events: none; transition: opacity 0.15s; }
 .tl-project > * { position: relative; } /* avatars and name sit above the tint, not under it */
-.tl-project:hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 20%, #fff), 0 4px 14px rgba(0, 0, 0, 0.1); }
-.tl-project:hover::before { opacity: 0.38; }
-.tl-project.selected { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 28%, #fff), 0 4px 14px rgba(0, 0, 0, 0.1); }
-.tl-project.selected::before { opacity: 0.48; }
+.tl-project:hover { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 44%, #fff), 0 4px 14px rgba(0, 0, 0, 0.1); }
+.tl-project:hover::before { opacity: 0.28; }
+.tl-project.selected { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 58%, #fff), 0 4px 14px rgba(0, 0, 0, 0.1); }
+.tl-project.selected::before { opacity: 0.38; }
 /* left/width/top ease so day and lane snaps glide; the base class must NOT transition position (panning). */
-.tl-project.live { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 28%, #fff), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; transition: box-shadow 0.15s, background 0.15s, left 0.12s ease-out, width 0.12s ease-out, top 0.12s ease-out; }
-.tl-project.live::before { opacity: 0.48; }
+.tl-project.live { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--pc) 58%, #fff), 0 8px 24px rgba(0, 0, 0, 0.12); z-index: 10; transition: box-shadow 0.15s, background 0.15s, left 0.12s ease-out, width 0.12s ease-out, top 0.12s ease-out; }
+.tl-project.live::before { opacity: 0.38; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
 .bar-avatars { display: inline-flex; flex: none; }
@@ -344,13 +344,13 @@ img { display: block; -webkit-user-drag: none; }
   border-radius: 999px; display: flex; align-items: center; padding: 0 10px; font-size: 12px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   background: var(--frost); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 25%, #fff), 0 2px 6px rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--sc) 40%, #fff), 0 2px 6px rgba(0, 0, 0, 0.05);
   transition: left 0.12s ease-out, box-shadow 0.15s;
 }
-.wk-block::before { content: ''; position: absolute; inset: 0; background: var(--sc); opacity: 0.3; pointer-events: none; }
+.wk-block::before { content: ''; position: absolute; inset: 0; background: var(--sc); opacity: 0.2; pointer-events: none; }
 .wk-block:not(.ev) { top: 11px; bottom: 11px; }
 /* Dragging eases between day snaps, like the hover ghost does. */
-.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sc) 45%, #fff), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
+.wk-block.live { transition: left 0.12s ease-out, width 0.12s ease-out; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--sc) 62%, #fff), 0 6px 18px rgba(0, 0, 0, 0.12); z-index: 3; }
 .wk-row.done .wk-block, .wk-row.cancelled .wk-block { color: var(--text-2); }
 
 /* The next upcoming event rides the bottom edge while its real row is below the fold; the
@@ -721,7 +721,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 /* ─── Retro (redesigned) ───────────────────────────── */
 /* One quiet type scale: 11px caps titles, 13px/500 content, 12px tabular numbers.
    Each section is a soft inset card so the boundaries read at a glance. */
-.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 10px; background: rgba(10, 132, 255, 0.07); box-shadow: inset 0 0 0 1px var(--line); }
+.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 10px; background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 .retro-sec-title {
   font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
   letter-spacing: 0.07em; margin-bottom: 12px;
