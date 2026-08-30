@@ -468,9 +468,11 @@ img { display: block; -webkit-user-drag: none; }
 /* while the formatting toolbar is stuck it lives INSIDE this bar's blur box — one
    seamless blur behind header + toolbar */
 .detail.tb-stuck .detail-top {
-  height: 124px;
-  -webkit-mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
-  mask-image: linear-gradient(to bottom, #000 74%, transparent 100%);
+  /* the box ends exactly at the toolbar's bottom edge: the dissolve happens BEHIND the
+     toolbar row, and below it there is no blur at all */
+  height: 92px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 55%, transparent 100%);
 }
 .toolbar::after {
   content: ''; position: absolute; left: 0; right: 0; height: 22px; top: 100%; pointer-events: none;
