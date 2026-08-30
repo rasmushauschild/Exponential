@@ -313,10 +313,6 @@ img { display: block; -webkit-user-drag: none; }
 .wk-header { min-height: 28px; margin-bottom: 4px; }
 .wk-rows {
   flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column;
-  /* left fade shrinks the dots away under the task-title column */
-  background-image: linear-gradient(to right, var(--dot-fade) 0, var(--dot-fade) 15%, transparent 36%),
-    radial-gradient(circle, var(--dot) 0.8px, transparent 0.8px);
-  background-size: auto, 18px 18px; background-position: 0 0, 9px 0; background-attachment: local, local; /* dots scroll with the rows */
 }
 .wk-rows::-webkit-scrollbar { width: 0; }
 .wk-list { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 12px; position: relative; height: 100%; }

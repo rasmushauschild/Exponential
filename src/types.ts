@@ -184,7 +184,7 @@ const CRISP: Record<string, string> = {
   '#e8739b': '#ff375f', '#e2b93b': '#ffd60a', '#3fb4d6': '#64d2ff',
 };
 export const crispColor = (c: string) => CRISP[c] ?? c;
-export const NO_GROUP_COLOR = '#d1d1d6';
+export const NO_GROUP_COLOR = '#ffffff';
 
 /** "Rasmus Hauschild" → "Rasmus H." */
 export function shortName(name: string): string {
