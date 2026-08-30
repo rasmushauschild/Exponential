@@ -221,7 +221,7 @@ img { display: block; -webkit-user-drag: none; }
 .timeline.dragging-item { cursor: grabbing; }
 
 .tl-month { position: absolute; top: 2px; font-size: 12px; font-weight: 700; color: var(--text); padding-left: 8px; white-space: nowrap; pointer-events: none; }
-.tl-week-tint { position: absolute; top: 44px; bottom: 10px; border-radius: 10px; background: var(--ov-2); pointer-events: none; }
+.tl-week-tint { position: absolute; top: 44px; bottom: 10px; border-radius: 10px; background: var(--ov-4); pointer-events: none; }
 .tl-day { position: absolute; top: 22px; font-size: 12px; font-weight: 500; color: var(--text-3); text-align: center; pointer-events: none; font-variant-numeric: tabular-nums; }
 .tl-day.weekend { color: var(--text-3); opacity: 0.6; }
 
