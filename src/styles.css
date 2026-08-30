@@ -71,7 +71,7 @@
   --veil: rgba(10, 11, 15, 0.6);
   --wk-tint: rgba(255, 255, 255, 0.028);
   --edge: rgba(255, 255, 255, 0.15);
-  --rim: rgba(0, 0, 0, 0.55);
+  --rim: rgba(255, 255, 255, 0.13); /* dark mode: definition comes from a light hairline, not black */
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.5);
   --scrim: rgba(0, 0, 0, 0.5);
   --menu-shadow: 0 4px 28px rgba(0, 0, 0, 0.5);
