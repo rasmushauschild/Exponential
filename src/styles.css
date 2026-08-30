@@ -20,7 +20,7 @@
   --ov-18: rgba(10, 20, 50, 0.16);
   --sel-blk: rgba(10, 132, 255, 0.1);
   --line: rgba(0, 0, 0, 0.09);
-  --dot: rgba(0, 0, 0, 0.07);
+  --dot: rgba(0, 0, 0, 0.14);
   --frost: #fafafa;  /* panels match the background; the edge ring + shadow carry the separation */
   --edge: rgba(255, 255, 255, 0.95);   /* white outline */
   --scrim: rgba(0, 0, 0, 0.25);
@@ -51,7 +51,7 @@
   --ov-18: rgba(255, 255, 255, 0.22);
   --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.1);
-  --dot: rgba(255, 255, 255, 0.08);
+  --dot: rgba(255, 255, 255, 0.16);
   --frost: rgba(30, 30, 32, 0.85);
   --edge: rgba(255, 255, 255, 0.09);
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.35), 0 16px 40px rgba(0, 0, 0, 0.5);
@@ -208,8 +208,8 @@ img { display: block; -webkit-user-drag: none; }
 
 .timeline {
   flex: 1; position: relative; overflow: hidden; cursor: grab;
-  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
-  background-size: 16px 16px; background-position: 7px 7px;
+  background-image: radial-gradient(circle, var(--dot) 0.75px, transparent 0.75px);
+  background-size: 19px 19px; background-position: 9px 8px;
 }
 .timeline.panning { cursor: grabbing; }
 .timeline.dragging-item { cursor: grabbing; }
@@ -302,8 +302,8 @@ img { display: block; -webkit-user-drag: none; }
 
 .wk-body {
   flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; padding: 0 18px 14px 14px; overflow-x: hidden;
-  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
-  background-size: 16px 16px; background-position: 7px 7px;
+  background-image: radial-gradient(circle, var(--dot) 0.75px, transparent 0.75px);
+  background-size: 18px 18px; background-position: 9px 14px;
 }
 .wk-body.narrow { overflow-x: auto; }
 .wk-row { display: grid; grid-template-columns: minmax(170px, 34%) minmax(0, 1fr); align-items: center; min-height: 36px; flex: none; }
