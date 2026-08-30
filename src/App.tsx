@@ -531,6 +531,7 @@ export default function App() {
               onMoveProject={(id, patch) => updateProject(id, patch)}
               onOpenRetro={(monday) => setSelection({ kind: 'retro', id: monday })}
               onOpenGroup={(g) => { setEditGroup(g); setSheet('group'); }}
+              onReorderGroups={(ids) => update((d) => ({ ...d, groups: (d.groups ?? []).map((g) => ({ ...g, sort: ids.indexOf(g.id) })) }))}
               onMoveDeadline={(id, date) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, date } : x)) }))}
               onCreateDeadline={(date) => {
                 const id = uid();

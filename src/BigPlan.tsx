@@ -36,6 +36,7 @@ interface Props {
   onDeleteProject: (id: string) => void;
   onDeleteMany?: (ids: string[]) => void; // right-click Delete with a multi-selection
   onOpenGroup: (g: Group) => void;
+  onReorderGroups: (ids: string[]) => void; // drag a group label vertically
   onMoveDeadline: (id: string, date: ISODate) => void;
   onCreateProject: (start: ISODate, lane: number, groupId?: string) => void;
   onRename: (id: string, name: string) => void;
@@ -54,7 +55,7 @@ type Section = { groupId?: string; name: string; color: string; headerTop: numbe
 type View = { ppd: number; origin: number };
 
 export function BigPlan(props: Props) {
-  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup } = props;
+  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup, onReorderGroups } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -66,6 +67,7 @@ export function BigPlan(props: Props) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [dlDrag, setDlDrag] = useState<{ id: string; date: number } | null>(null);
   const [ctx, setCtx] = useState<{ x: number; y: number; id: string } | null>(null); // right-click menu on a bar
+  const [gDrag, setGDrag] = useState<{ id: string; dy: number } | null>(null); // group label being reordered
   const [hoverCursor, setHoverCursor] = useState<string>('');
   const [ghost, setGhost] = useState<{ day: number; lane: number; groupId?: string } | null>(null);
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
@@ -456,9 +458,41 @@ export function BigPlan(props: Props) {
         </div>
       )}
       {sections.map((sec) => (groups.length > 0 || !locked) && (
-        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}`} style={{ top: sec.headerTop - projectTop + 6 - scrollY }}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); else if (!locked) onAddGroup(); }}>
+        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}${gDrag && gDrag.id === sec.groupId ? ' dragging' : ''}`}
+          style={{ top: sec.headerTop - projectTop + 6 - scrollY, ...(gDrag && gDrag.id === sec.groupId ? { transform: `translateY(${gDrag.dy}px)`, zIndex: 40 } : null) }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            const g = groups.find((x) => x.id === sec.groupId);
+            // A still press opens the group; pulling vertically reorders the sections.
+            if (!g || locked || e.button !== 0) return;
+            e.preventDefault();
+            const startY = e.clientY;
+            let moved = false;
+            // label midpoints of the OTHER grouped sections, captured at grab time
+            const others = Array.from(ref.current!.querySelectorAll<HTMLElement>('.tl-group:not(.none)'))
+              .map((el) => ({ gid: el.dataset.gid!, mid: el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2 }))
+              .filter((o) => o.gid && o.gid !== g.id);
+            const move = (ev: PointerEvent) => {
+              if (!moved && Math.abs(ev.clientY - startY) > 4) { moved = true; document.body.classList.add('cursor-grabbing'); }
+              if (moved) setGDrag({ id: g.id, dy: ev.clientY - startY });
+            };
+            const up = (ev: PointerEvent) => {
+              window.removeEventListener('pointermove', move);
+              window.removeEventListener('pointerup', up);
+              document.body.classList.remove('cursor-grabbing');
+              setGDrag(null);
+              if (!moved) { onOpenGroup(g); return; }
+              const ordered = [...groups].sort((a, b) => a.sort - b.sort).map((x) => x.id).filter((id) => id !== g.id);
+              let ins = 0;
+              others.forEach((o, k) => { if (ev.clientY > o.mid) ins = k + 1; });
+              ordered.splice(ins, 0, g.id);
+              onReorderGroups(ordered);
+            };
+            window.addEventListener('pointermove', move);
+            window.addEventListener('pointerup', up);
+          }}
+          data-gid={sec.groupId ?? ''}
+          onClick={() => { if (!sec.groupId && !locked) onAddGroup(); else if (locked) { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); } }}>
           {sec.groupId || locked
             ? <><span className="dot" style={{ background: sec.color }} /> {sec.name}</>
             : <>+ Add group</>}
