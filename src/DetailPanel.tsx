@@ -103,6 +103,7 @@ export function DetailPanel(p: Props) {
         <span className="panel-spacer" />
         <button className="icon-btn" title="Delete" onClick={onDelete}><TrashIcon /></button>
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
+        <div className="tb-slot" />
       </div>
       <GBlur pos="top" />
 
