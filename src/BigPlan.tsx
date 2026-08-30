@@ -381,7 +381,7 @@ export function BigPlan(props: Props) {
         );
       })}
       {months.map((m) => (
-        <div key={m.iso} className="tl-month" style={{ left: Math.min(Math.max(m.left, 0), m.left + m.w - 70) + 10, opacity: m.w < 40 ? 0 : 1 }}>
+        <div key={m.iso} className="tl-month" style={{ left: Math.min(Math.max(m.left, 0), m.left + m.w - 70) + 18, opacity: m.w < 40 ? 0 : 1 }} /* +18 (+8px CSS padding) = 26px, flush with the panel title */>
           {monthShort(m.iso)} {m.iso.slice(0, 4)}
         </div>
       ))}
