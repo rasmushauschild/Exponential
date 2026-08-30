@@ -808,8 +808,8 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 /* list fields */
 .rl { display: flex; flex-direction: column; gap: 6px; }
 .rl-row {
-  display: flex; align-items: center; gap: 10px; min-height: 32px; border-radius: 999px; padding: 0 12px;
-  background: var(--frost); box-shadow: 0 0 0 0.5px var(--rim);
+  display: flex; align-items: center; gap: 10px; min-height: 40px; border-radius: 20px; padding: 0 14px;
+  background: var(--frost); box-shadow: 0 0 0 0.5px var(--rim); /* same capsule height as the KR rows */
 }
 .rl-row.dragging { background: var(--soft-2); }
 /* priorities marked reached sweep green; not reached go red */
