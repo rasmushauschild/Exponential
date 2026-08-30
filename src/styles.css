@@ -727,14 +727,14 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 /* ─── Retro (redesigned) ───────────────────────────── */
 /* One quiet type scale: 11px caps titles, 13px/500 content, 12px tabular numbers.
    Each section is a soft inset card so the boundaries read at a glance. */
-.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 10px; background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.retro-sec { margin-bottom: 12px; font-size: 13px; padding: 16px 18px; border-radius: 16px; background: var(--panel); box-shadow: 0 0 0 0.5px var(--rim), 0 2px 10px rgba(0, 0, 0, 0.04); }
 .retro-sec-title {
   font-size: 11px; font-weight: 700; color: var(--text-3); text-transform: uppercase;
   letter-spacing: 0.07em; margin-bottom: 12px;
 }
 .retro-carried {
-  margin-bottom: 12px; padding: 16px 18px; border-radius: 10px; background: var(--soft);
-  box-shadow: inset 2px 0 0 var(--accent), inset 0 0 0 1px var(--line);
+  margin-bottom: 12px; padding: 16px 18px; border-radius: 16px; background: var(--panel);
+  box-shadow: inset 2px 0 0 var(--accent), 0 0 0 0.5px var(--rim), 0 2px 10px rgba(0, 0, 0, 0.04);
 }
 .retro-carried .retro-sec-title { margin-bottom: 3px; }
 .retro-carried-text { white-space: pre-wrap; color: var(--text-2); font-size: 13px; font-weight: 500; line-height: 1.5; }
@@ -743,8 +743,8 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
    reacts to the score: deep space while warping (≥7), red-tinged while ≤2 */
 .retro-objective { font-size: 13px; font-weight: 650; margin: 0 0 10px; line-height: 1.45; }
 .kr-row {
-  display: flex; align-items: center; gap: 16px; padding: 10px 12px; position: relative; overflow: hidden;
-  border-radius: 8px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); transition: background 0.4s;
+  display: flex; align-items: center; gap: 16px; padding: 10px 14px; position: relative; overflow: hidden;
+  border-radius: 999px; background: var(--frost); box-shadow: 0 0 0 0.5px var(--rim); transition: background 0.4s;
 }
 .kr-row + .kr-row { margin-top: 8px; }
 /* every warp level goes deeper into space */
@@ -763,14 +763,14 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .cstep { position: static; display: flex; align-items: center; gap: 4px; flex: none; }
 .cstep-canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
 .cstep-btn {
-  width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; position: relative; z-index: 1;
+  width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; position: relative; z-index: 1;
   font-size: 14px; font-weight: 700; color: var(--text-3); cursor: pointer; transition: background 0.15s, color 0.15s;
 }
 .cstep-btn:hover { background: var(--panel); box-shadow: inset 0 0 0 1px var(--line); color: var(--text); }
 .cstep-btn:disabled { opacity: 0.3; cursor: default; background: none; }
 /* the number sits in a tinted chip, like the P1-P3 chips up in Priorities */
 .cstep-value {
-  min-width: 30px; height: 20px; padding: 0 6px; border-radius: 7px; display: grid; place-items: center;
+  min-width: 30px; height: 20px; padding: 0 6px; border-radius: 999px; display: grid; place-items: center;
   position: relative; z-index: 1; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums;
   color: var(--gc, var(--text-3)); background: color-mix(in srgb, var(--gc, var(--text-3)) 14%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gc, var(--text-3)) 45%, #fff), 0 0 0 0.5px var(--rim);
@@ -806,8 +806,11 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 }
 
 /* list fields */
-.rl { display: flex; flex-direction: column; gap: 3px; }
-.rl-row { display: flex; align-items: center; gap: 10px; min-height: 32px; border-radius: 10px; padding: 0 8px; margin: 0 -8px; }
+.rl { display: flex; flex-direction: column; gap: 6px; }
+.rl-row {
+  display: flex; align-items: center; gap: 10px; min-height: 32px; border-radius: 999px; padding: 0 12px;
+  background: var(--frost); box-shadow: 0 0 0 0.5px var(--rim);
+}
 .rl-row.dragging { background: var(--soft-2); }
 /* priorities marked reached sweep green; not reached go red */
 .rl-row.done { --st: #1e9c44; animation: prio-reach 0.8s ease; }
@@ -837,7 +840,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .rl-mark.no:hover, .rl-mark.no.on { color: var(--st, #ff3b30); }
 .rl-mark.on { opacity: 1; }
 .rl-p {
-  flex: none; width: 26px; height: 18px; border-radius: 6px; font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
+  flex: none; width: 26px; height: 18px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
   color: var(--pc); background: color-mix(in srgb, var(--pc) 13%, transparent); cursor: grab; transition: background 0.15s;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--pc) 45%, #fff), 0 0 0 0.5px var(--rim);
 }
@@ -889,7 +892,7 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .health-cell.mine { cursor: pointer; }
 .health-dot { width: 8px; height: 8px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--text-3) 55%, transparent); transition: transform 0.12s; }
 .health-cell.mine .health-dot:not(.on) { box-shadow: inset 0 0 0 1.5px var(--text-3); }
-.health-dot.on { box-shadow: none; }
+.health-dot.on { box-shadow: 0 0 0 0.5px var(--rim); }
 .health-cell.mine:hover .health-dot { transform: scale(1.45); }
 
 .grow-input { resize: none; overflow: hidden; line-height: 1.45; display: block; }
