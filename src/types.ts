@@ -177,7 +177,13 @@ export const STATUS_COLOR: Record<Status, string> = {
   cancelled: '#aeaeb2',
 };
 
-export const PROJECT_COLORS = ['#5b8def', '#f0a04b', '#3fb98a', '#9b7fe8', '#e8739b', '#e2b93b', '#3fb4d6'];
+export const PROJECT_COLORS = ['#3478f6', '#ff9f0a', '#34c759', '#af52de', '#ff375f', '#ffd60a', '#64d2ff'];
+/** Groups saved under the old muted palette render in the crisp equivalent. */
+const CRISP: Record<string, string> = {
+  '#5b8def': '#3478f6', '#f0a04b': '#ff9f0a', '#3fb98a': '#34c759', '#9b7fe8': '#af52de',
+  '#e8739b': '#ff375f', '#e2b93b': '#ffd60a', '#3fb4d6': '#64d2ff',
+};
+export const crispColor = (c: string) => CRISP[c] ?? c;
 export const NO_GROUP_COLOR = '#ffffff';
 
 /** "Rasmus Hauschild" → "Rasmus H." */

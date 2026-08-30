@@ -3,7 +3,7 @@ import type { Deadline, Group, HealthMark, ISODate, Notification, Person, Projec
 import { DEFAULT_HEALTH_METRICS } from './types';
 import { ConfidenceStepper } from './ConfidenceStepper';
 import { htmlToMarkdown } from './store';
-import { NO_GROUP_COLOR, STATUS_LABEL, shortName } from './types';
+import { NO_GROUP_COLOR, STATUS_LABEL, crispColor, shortName } from './types';
 import { Avatar, StatusDot, StatusMenu } from './WeekPlan';
 import { BlockEditor } from './BlockEditor';
 import { isoWeekNumber, todayISO, weekStart } from './dates';
@@ -610,14 +610,14 @@ function GroupPicker({ groups, value, onChange, onNew }: { groups: Group[]; valu
   return (
     <div className="group-picker status-select">
       <button className="pill small" onClick={() => setOpen((o) => !o)}>
-        <span className="dot" style={{ background: cur?.color ?? NO_GROUP_COLOR }} /> {cur?.name ?? 'No group'}
+        <span className="dot" style={{ background: crispColor(cur?.color ?? NO_GROUP_COLOR) }} /> {cur?.name ?? 'No group'}
       </button>
       {open && (
         <div className="status-menu" style={{ top: 34, left: 0 }}>
           <button className={!cur ? 'current' : ''} onClick={() => { onChange(undefined); setOpen(false); }}><span className="dot" style={{ background: NO_GROUP_COLOR, width: 10, height: 10, borderRadius: 5 }} /> No group</button>
           {groups.map((g) => (
             <button key={g.id} className={g.id === value ? 'current' : ''} onClick={() => { onChange(g.id); setOpen(false); }}>
-              <span className="dot" style={{ background: g.color, width: 10, height: 10, borderRadius: 5 }} /> {g.name}
+              <span className="dot" style={{ background: crispColor(g.color), width: 10, height: 10, borderRadius: 5 }} /> {g.name}
             </button>
           ))}
           <div className="sep" />

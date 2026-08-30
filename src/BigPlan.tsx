@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Deadline, Group, ISODate, Person, Project } from './types';
-import { NO_GROUP_COLOR } from './types';
+import { NO_GROUP_COLOR, crispColor } from './types';
 import { dayIndex, dayOfMonth, formatShort, fromDayIndex, isoWeekNumber, monthShort, weekStart, weekdayShort } from './dates';
 import { Avatar } from './WeekPlan';
 
@@ -46,7 +46,7 @@ interface Props {
 }
 
 export function projectColor(p: Project, groups: Group[]) {
-  return groups.find((g) => g.id === p.groupId)?.color ?? NO_GROUP_COLOR;
+  return crispColor(groups.find((g) => g.id === p.groupId)?.color ?? NO_GROUP_COLOR);
 }
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: number; lane: number; groupId?: string; moved: boolean; dd?: number; ids?: string[] };
@@ -89,7 +89,7 @@ export function BigPlan(props: Props) {
       // group's label row appends it as a new row of that group, so the layout never jumps while dragging.
       const spare = gid === undefined ? 1 : 0;
       const lanes = Math.max(1, inGroup.reduce((m, p) => Math.max(m, p.lane + 1), 0) + spare);
-      list.push({ groupId: gid, name: g?.name ?? 'No group', color: g?.color ?? NO_GROUP_COLOR, headerTop, laneTop: y, lanes });
+      list.push({ groupId: gid, name: g?.name ?? 'No group', color: crispColor(g?.color ?? NO_GROUP_COLOR), headerTop, laneTop: y, lanes });
       y += lanes * ROW_H + GROUP_GAP;
     }
     return list;
