@@ -532,6 +532,7 @@ export default function App() {
               onOpenRetro={(monday) => setSelection({ kind: 'retro', id: monday })}
               onOpenGroup={(g) => { setEditGroup(g); setSheet('group'); }}
               onReorderGroups={(ids) => update((d) => ({ ...d, groups: (d.groups ?? []).map((g) => ({ ...g, sort: ids.indexOf(g.id) })) }))}
+              onCollapseGroup={(ids) => setMulti((m) => (ids.some((id) => m.has(id)) ? new Set([...m].filter((id) => !ids.includes(id))) : m))}
               onMoveDeadline={(id, date) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, date } : x)) }))}
               onCreateDeadline={(date) => {
                 const id = uid();

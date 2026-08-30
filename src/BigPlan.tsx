@@ -37,6 +37,7 @@ interface Props {
   onDeleteMany?: (ids: string[]) => void; // right-click Delete with a multi-selection
   onOpenGroup: (g: Group) => void;
   onReorderGroups: (ids: string[]) => void; // drag a group label vertically
+  onCollapseGroup?: (projectIds: string[]) => void; // a collapsing group's bars leave the multi-selection
   onMoveDeadline: (id: string, date: ISODate) => void;
   onCreateProject: (start: ISODate, lane: number, groupId?: string) => void;
   onRename: (id: string, name: string) => void;
@@ -51,11 +52,41 @@ export function projectColor(p: Project, groups: Group[]) {
 }
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; start: number; end: number; lane: number; groupId?: string; moved: boolean; dd?: number; ids?: string[] };
-type Section = { groupId?: string; name: string; color: string; headerTop: number; laneTop: number; lanes: number };
+type Section = { groupId?: string; name: string; color: string; headerTop: number; laneTop: number; lanes: number; collapsed: boolean };
 type View = { ppd: number; origin: number };
 
+const COLLAPSE_KEY = 'exponential-collapsed'; // collapsed group ids — a per-machine view preference, not plan data
+
+/** Live preview of a group-label drag: `ins` = where among the other grouped sections the grabbed
+ *  one would land, `shift` = how far each grouped section is displaced right now (px). The drop
+ *  applies exactly what the preview shows, so sections never jump on release. */
+function groupDragPreview(sections: Section[], gid: string, dy: number) {
+  const gsecs = sections.filter((s) => s.groupId);
+  const dragged = gsecs.find((s) => s.groupId === gid);
+  const shift = new Map<string, number>();
+  if (!dragged) return { ins: 0, shift };
+  const hOf = (s: Section) => GROUP_H + s.lanes * ROW_H;
+  const others = gsecs.filter((s) => s.groupId !== gid);
+  const top0 = gsecs[0].headerTop;
+  // the grabbed section can't leave the grouped region (the ungrouped section stays last)
+  const cdy = Math.max(top0 - dragged.headerTop, Math.min(top0 + gsecs.reduce((s, x) => s + hOf(x), 0) - hOf(dragged) - dragged.headerTop, dy));
+  // the label's TOP against the midpoint between its two candidate landing tops — symmetric
+  // thresholds both directions, never 0px (a collapsed neighbour is only GROUP_H tall)
+  const top = dragged.headerTop + cdy;
+  let ins = 0, y = top0;
+  others.forEach((o, k) => { if (top > y + hOf(o) / 2) ins = k + 1; y += hOf(o); });
+  shift.set(gid, cdy);
+  y = top0;
+  others.forEach((o, k) => {
+    if (k === ins) y += hOf(dragged); // the hole the grabbed section would drop into
+    shift.set(o.groupId!, y - o.headerTop);
+    y += hOf(o);
+  });
+  return { ins, shift };
+}
+
 export function BigPlan(props: Props) {
-  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup, onReorderGroups } = props;
+  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup, onReorderGroups, onCollapseGroup } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -74,6 +105,19 @@ export function BigPlan(props: Props) {
   const [scrollY, setScrollY] = useState(0); // vertical offset of the lanes when they don't fit
   const scrollRef = useRef(0);
   scrollRef.current = scrollY;
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    try { return new Set<string>(JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '[]')); } catch { return new Set<string>(); }
+  });
+  const setCollapse = (gid: string, on: boolean) => {
+    // commit any in-flight inline rename first — collapsing unmounts the group's bars,
+    // and an input removed from the DOM never fires its blur (the typed name would be lost)
+    if (on) (document.activeElement as HTMLElement | null)?.blur?.();
+    const n = new Set(collapsed);
+    if (on) n.add(gid); else n.delete(gid);
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...n]));
+    setCollapsed(n);
+    if (on) onCollapseGroup?.(projects.filter((p) => p.groupId === gid).map((p) => p.id));
+  };
   // Vertical layout: one section per group (then ungrouped), each with its projects' lanes plus a spare lane.
   const sections: Section[] = (() => {
     const list: Section[] = [];
@@ -90,14 +134,24 @@ export function BigPlan(props: Props) {
       // Compact: no spare lane (only the last, ungrouped section keeps one). Dropping a project onto a
       // group's label row appends it as a new row of that group, so the layout never jumps while dragging.
       const spare = gid === undefined ? 1 : 0;
-      const lanes = Math.max(1, inGroup.reduce((m, p) => Math.max(m, p.lane + 1), 0) + spare);
-      list.push({ groupId: gid, name: g?.name ?? 'No group', color: crispColor(g?.color ?? NO_GROUP_COLOR), headerTop, laneTop: y, lanes });
+      const shut = gid !== undefined && collapsed.has(gid);
+      const lanes = shut ? 0 : Math.max(1, inGroup.reduce((m, p) => Math.max(m, p.lane + 1), 0) + spare);
+      list.push({ groupId: gid, name: g?.name ?? 'No group', color: crispColor(g?.color ?? NO_GROUP_COLOR), headerTop, laneTop: y, lanes, collapsed: shut });
       y += lanes * ROW_H + GROUP_GAP;
     }
     return list;
   })();
   const sectionOf = (gid?: string) => sections.find((s) => s.groupId === gid) ?? sections[sections.length - 1];
   const laneCount = sections.reduce((m, s) => m + s.lanes, 0);
+  // While a group label is being dragged, every grouped section (label + bars) rides its preview offset.
+  const gPrev = gDrag ? groupDragPreview(sections, gDrag.id, gDrag.dy) : null;
+  const gShift = (gid?: string) => (gPrev && gid ? gPrev.shift.get(gid) ?? 0 : 0);
+  // The drop handler reads these mirrors, not its closure: a realtime edit landing mid-drag
+  // re-flows the preview, and the drop must land in the hole the preview actually shows.
+  const sectionsRef = useRef(sections);
+  sectionsRef.current = sections;
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
   const weekRef = useRef(week);
   weekRef.current = week;
   // The band eases between weeks by default; while the timeline itself moves (pan/zoom) it must
@@ -185,7 +239,7 @@ export function BigPlan(props: Props) {
     const yc = clientY - rect.top + scrollY;
     for (const sec of sections) {
       if (yc >= sec.laneTop && yc < sec.laneTop + sec.lanes * ROW_H) return { day, lane: Math.floor((yc - sec.laneTop) / ROW_H), groupId: sec.groupId };
-      if ((groups.length > 0 || !locked) && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId }; // label row = append to this group
+      if (!sec.collapsed && (groups.length > 0 || !locked) && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId }; // label row = append to this group (collapsed groups are tucked away)
     }
     return { day, lane: -2, groupId: undefined as string | undefined };
   };
@@ -216,7 +270,7 @@ export function BigPlan(props: Props) {
   };
 
   const onHover = (e: React.PointerEvent) => {
-    if (drag || dlDrag || panning || bandDrag) return;
+    if (drag || dlDrag || panning || bandDrag || gDrag) return;
     const { day, lane, groupId } = slotAt(e.clientX, e.clientY);
     setHoverWeek(dayIndex(weekStart(fromDayIndex(day))));
     if (locked || !isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); return; }
@@ -452,14 +506,14 @@ export function BigPlan(props: Props) {
       })}
 
       <div className="tl-lanes" style={{ top: projectTop - 6 }}>
-      {ghost && !drag && ghost.lane >= 0 && (
+      {ghost && !drag && !gDrag && ghost.lane >= 0 && (
         <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 3 + ghost.lane * ROW_H - scrollY }}>
           New project
         </div>
       )}
       {sections.map((sec) => (groups.length > 0 || !locked) && (
-        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}${gDrag && gDrag.id === sec.groupId ? ' dragging' : ''}`}
-          style={{ top: sec.headerTop - projectTop + 6 - scrollY, ...(gDrag && gDrag.id === sec.groupId ? { transform: `translateY(${gDrag.dy}px)`, zIndex: 40 } : null) }}
+        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}${gDrag && gDrag.id === sec.groupId ? ' dragging' : gDrag && sec.groupId ? ' gshift' : ''}`}
+          style={{ top: sec.headerTop - projectTop + 6 - scrollY, ...(gDrag && sec.groupId ? { transform: `translateY(${gShift(sec.groupId)}px)`, zIndex: gDrag.id === sec.groupId ? 40 : undefined } : null) }}
           onPointerDown={(e) => {
             e.stopPropagation();
             const g = groups.find((x) => x.id === sec.groupId);
@@ -468,10 +522,6 @@ export function BigPlan(props: Props) {
             e.preventDefault();
             const startY = e.clientY;
             let moved = false;
-            // label midpoints of the OTHER grouped sections, captured at grab time
-            const others = Array.from(ref.current!.querySelectorAll<HTMLElement>('.tl-group:not(.none)'))
-              .map((el) => ({ gid: el.dataset.gid!, mid: el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2 }))
-              .filter((o) => o.gid && o.gid !== g.id);
             const move = (ev: PointerEvent) => {
               if (!moved && Math.abs(ev.clientY - startY) > 4) { moved = true; document.body.classList.add('cursor-grabbing'); }
               if (moved) setGDrag({ id: g.id, dy: ev.clientY - startY });
@@ -482,10 +532,9 @@ export function BigPlan(props: Props) {
               document.body.classList.remove('cursor-grabbing');
               setGDrag(null);
               if (!moved) { onOpenGroup(g); return; }
-              const ordered = [...groups].sort((a, b) => a.sort - b.sort).map((x) => x.id).filter((id) => id !== g.id);
-              let ins = 0;
-              others.forEach((o, k) => { if (ev.clientY > o.mid) ins = k + 1; });
-              ordered.splice(ins, 0, g.id);
+              // the drop lands exactly where the preview showed
+              const ordered = [...groupsRef.current].sort((a, b) => a.sort - b.sort).map((x) => x.id).filter((id) => id !== g.id);
+              ordered.splice(groupDragPreview(sectionsRef.current, g.id, ev.clientY - startY).ins, 0, g.id);
               onReorderGroups(ordered);
             };
             window.addEventListener('pointermove', move);
@@ -494,7 +543,16 @@ export function BigPlan(props: Props) {
           data-gid={sec.groupId ?? ''}
           onClick={() => { if (!sec.groupId && !locked) onAddGroup(); else if (locked) { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); } }}>
           {sec.groupId || locked
-            ? <><span className="dot" style={{ background: sec.color }} /> {sec.name}</>
+            ? <>
+                {sec.groupId ? (
+                  <span className={`twist${sec.collapsed ? ' closed' : ''}`} style={{ ['--gc' as string]: sec.color }}
+                    onPointerDown={(e) => { e.stopPropagation(); e.preventDefault(); }}
+                    onClick={(e) => { e.stopPropagation(); setCollapse(sec.groupId!, !sec.collapsed); }}>
+                    <span className="dot" />
+                    <svg className="chev" width="9" height="9" viewBox="0 0 10 10"><path d="M2 3.5 5 6.5 8 3.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                  </span>
+                ) : <span className="dot" style={{ background: sec.color }} />} {sec.name}
+              </>
             : <>+ Add group</>}
         </button>
       ))}
@@ -506,6 +564,7 @@ export function BigPlan(props: Props) {
         const en = live ? live.end : dayIndex(p.end) + follow;
         const lane = live ? live.lane : p.lane;
         const sec = sectionOf(live ? live.groupId : p.groupId);
+        if (sec.collapsed) return null; // tucked away with its group
         // 2px shaved off each end: bars that meet on a date keep a slight gap
         const left = (s - origin) * ppd + 2;
         const w = Math.max(ppd - 4, (en - s + 1) * ppd - 4);
@@ -514,11 +573,13 @@ export function BigPlan(props: Props) {
         return (
           <div
             key={p.id}
-            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}${!p.groupId || !groups.some((g) => g.id === p.groupId) ? ' nogroup' : ''}`}
+            className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}${!p.groupId || !groups.some((g) => g.id === p.groupId) ? ' nogroup' : ''}${gDrag && sec.groupId && gDrag.id !== sec.groupId ? ' gshift' : ''}`}
             style={{
               left,
               width: w,
               top: sec.laneTop - projectTop + 3 + lane * ROW_H - scrollY,
+              transform: gDrag && sec.groupId ? `translateY(${gShift(sec.groupId)}px)` : undefined,
+              zIndex: gDrag && gDrag.id === sec.groupId ? 40 : undefined,
               ['--pc' as string]: color,
               paddingLeft: Math.max(12, Math.min(w - 12, 12 - left)),
               cursor: locked ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
