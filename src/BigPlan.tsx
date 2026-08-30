@@ -5,11 +5,11 @@ import { NO_GROUP_COLOR, crispColor } from './types';
 import { dayIndex, dayOfMonth, formatShort, fromDayIndex, isoWeekNumber, monthShort, weekStart, weekdayShort } from './dates';
 import { Avatar } from './WeekPlan';
 
-const ROW_H = 38;
+const ROW_H = 32; // = the square dot grid: one dot row per lane boundary
 const DEADLINE_ROW_H = 30;
 const HEADER_H = 44; // month + day labels; tints and the band start below this
 const RETRO_H = 30; // strip along the bottom that shows week labels / opens the retro
-const GROUP_H = 38; // group label row above each section — one full lane, so the dot grid stays aligned
+const GROUP_H = 32; // group label row above each section — one full lane, so the dot grid stays aligned
 const GROUP_GAP = 0; // any gap would knock sections off the 19px dot grid
 const MIN_PPD = 4;
 const MAX_PPD = 90;
@@ -439,12 +439,12 @@ export function BigPlan(props: Props) {
 
       <div className="tl-lanes" style={{ top: projectTop - 6 }}>
       {ghost && !drag && ghost.lane >= 0 && (
-        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 8 + ghost.lane * ROW_H - scrollY }}>
+        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 3 + ghost.lane * ROW_H - scrollY }}>
           New project
         </div>
       )}
       {sections.map((sec) => (groups.length > 0 || !locked) && (
-        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}`} style={{ top: sec.headerTop - projectTop + 9 - scrollY }}
+        <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}`} style={{ top: sec.headerTop - projectTop + 6 - scrollY }}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => { const g = groups.find((x) => x.id === sec.groupId); if (g) onOpenGroup(g); else if (!locked) onAddGroup(); }}>
           {sec.groupId || locked
@@ -472,7 +472,7 @@ export function BigPlan(props: Props) {
             style={{
               left,
               width: w,
-              top: sec.laneTop - projectTop + 8 + lane * ROW_H - scrollY,
+              top: sec.laneTop - projectTop + 3 + lane * ROW_H - scrollY,
               ['--pc' as string]: color,
               paddingLeft: Math.max(12, Math.min(w - 12, 12 - left)),
               cursor: locked ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
