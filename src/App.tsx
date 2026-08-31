@@ -10,7 +10,7 @@ import { useData, useSystemNotifications, uid, type GoogleConfig } from './store
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, purgeTrash, renameTask, reorderTask, softDelete, unclaimTask } from './taskOps';
-import { isPending, loadTeam, onPersistError, signOutCloud, supabase } from './cloud';
+import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
@@ -252,37 +252,59 @@ export default function App() {
   const person = selectedPerson ?? data?.me ?? '';
 
   // "All teams": the week view also shows the selected person's tasks from every OTHER team,
-  // read-only, each wearing that team's badge. Refetched on toggle, focus, and once a minute
-  // (other teams have no realtime subscription).
-  const [foreign, setForeign] = useState<{ tasks: Task[]; badge: Map<string, { name: string; icon?: string }>; teamOf: Map<string, string> } | null>(null);
+  // fully editable, each wearing that team's badge. The whole team Data is kept so edits can be
+  // applied with the normal taskOps and persisted with persistDiff against the right team.
+  // Refetched on toggle, focus, and once a minute (other teams have no realtime subscription).
+  const [foreignTeams, setForeignTeams] = useState<Map<string, Data> | null>(null);
+  const fSeq = useRef(0); // bumps on every foreign edit; a refetch that started earlier must not clobber it
   const teamIds = teams.map((t) => t.id).join(',');
   useEffect(() => {
-    if (!allTeamsOn || !cloudMode || !data || teams.length < 2) { setForeign(null); return; }
+    if (!allTeamsOn || !cloudMode || !data || teams.length < 2) { setForeignTeams(null); return; }
     let dead = false;
     const me = data.me;
     const fetchAll = async () => {
+      const seqAtStart = fSeq.current;
       const others = teams.filter((t) => t.id !== data.id);
       const loaded = await Promise.all(others.map((t) => loadTeam(t.id, me).catch(() => null)));
-      if (dead) return;
-      const tasks: Task[] = [];
-      const badge = new Map<string, { name: string; icon?: string }>();
-      const teamOf = new Map<string, string>();
-      loaded.forEach((td, k) => {
-        if (!td) return;
-        for (const t of td.tasks) {
-          if (t.deletedAt) continue;
-          tasks.push(t);
-          badge.set(t.id, { name: others[k].name, icon: others[k].icon ?? undefined });
-          teamOf.set(t.id, others[k].id);
-        }
-      });
-      setForeign({ tasks, badge, teamOf });
+      if (dead || fSeq.current !== seqAtStart) return;
+      const m = new Map<string, Data>();
+      loaded.forEach((td, k) => { if (td) m.set(others[k].id, td); });
+      setForeignTeams(m);
     };
     fetchAll();
     const iv = window.setInterval(fetchAll, 60_000);
     window.addEventListener('focus', fetchAll);
     return () => { dead = true; window.clearInterval(iv); window.removeEventListener('focus', fetchAll); };
   }, [allTeamsOn, cloudMode, data?.id, data?.me, teamIds]); // eslint-disable-line react-hooks/exhaustive-deps
+  const foreign = (() => {
+    if (!foreignTeams) return null;
+    const tasks: Task[] = [];
+    const badge = new Map<string, { id: string; name: string; icon?: string }>();
+    const teamOf = new Map<string, string>();
+    for (const [tid, fd] of foreignTeams) {
+      const info = teams.find((t) => t.id === tid);
+      for (const t of fd.tasks) {
+        if (t.deletedAt) continue;
+        tasks.push(t);
+        badge.set(t.id, { id: tid, name: info?.name ?? fd.name, icon: info?.icon ?? fd.icon ?? undefined });
+        teamOf.set(t.id, tid);
+      }
+    }
+    return { tasks, badge, teamOf };
+  })();
+  /** Apply a taskOp to the foreign team that holds the task and persist it there. Returns false when the task isn't foreign. */
+  const foreignOp = (taskId: string, fn: (d: Data) => Data): boolean => {
+    const tid = foreign?.teamOf.get(taskId);
+    const fd = tid ? foreignTeams?.get(tid) : undefined;
+    if (!tid || !fd) return false;
+    const next = fn(fd);
+    if (next !== fd) {
+      fSeq.current++;
+      persistDiff(fd, next); // failures surface through the same red save toast
+      setForeignTeams((m) => new Map(m).set(tid, next));
+    }
+    return true;
+  };
 
   // The visible calendar refreshes quietly once a minute; the cache bridges the gaps.
   const [calTick, setCalTick] = useState(0);
@@ -636,6 +658,7 @@ export default function App() {
               onRename={(id, title, viaEnter) => {
                 setEditingId(null);
                 if (!title && !editingNew.current) return; // clearing the name of an existing task keeps the old one
+                if (foreignOp(id, (d) => renameTask(d, id, title, editingNew.current))) return;
                 let nextId = '';
                 update((d) => {
                   const t = d.tasks.find((x) => x.id === id);
@@ -647,18 +670,21 @@ export default function App() {
                 if (nextId) setEditingId(nextId);
               }}
               onAddNamed={(title) => { if (isPending(person)) return; update((d) => { const r = addTask(d, person, undefined); return renameTask(r.data, r.id, title); }); }}
-              onUpdate={(id, patch) => updateTask(id, patch)}
-              onDelete={(id) => { update((d) => softDelete(d, [id])); if (selection?.id === id) setSelection(null); }}
+              onUpdate={(id, patch) => { if (!foreignOp(id, (d) => patchTask(d, id, patch))) updateTask(id, patch); }}
+              onDelete={(id) => {
+                if (!foreignOp(id, (d) => softDelete(d, [id]))) update((d) => softDelete(d, [id]));
+                if (selection?.id === id) setSelection(null);
+              }}
               onDeleteMany={deleteMany}
-              onDeny={(id) => update((d) => denyReview(d, id))}
-              onCompleteReview={(id) => update((d) => completeReview(d, id))}
+              onDeny={(id) => { if (!foreignOp(id, (d) => denyReview(d, id))) update((d) => denyReview(d, id)); }}
+              onCompleteReview={(id) => { if (!foreignOp(id, (d) => completeReview(d, id))) update((d) => completeReview(d, id)); }}
               onOpen={(t) => {
                 // A row from another team opens in that team: switch first, then select.
                 const tid = foreign?.teamOf.get(t.id);
                 if (tid) switchTeam(tid).then(() => open('task', t.id));
                 else open('task', t.id);
               }}
-              onReorder={(id, afterId) => update((d) => reorderTask(d, id, afterId))}
+              onReorder={(id, afterId) => { if (!foreignOp(id, (d) => reorderTask(d, id, afterId))) update((d) => reorderTask(d, id, afterId)); }}
               calendar={{
                 enabled: calendarOn,
                 available: !!googleUser,

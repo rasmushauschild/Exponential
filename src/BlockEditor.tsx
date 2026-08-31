@@ -676,6 +676,32 @@ function linkify(text: string): (string | { url: string; label: string })[] | nu
   return parts;
 }
 
+/** Bold / italic / strike spans in the text: `**x**`, `*x*`, `~~x~~` (no space just inside the markers). */
+type Emph = { style: 'b' | 'i' | 's'; mark: string; text: string };
+const EMPH_RE = /(\*\*(?!\s)[^*\n]*?(?<!\s)\*\*|~~(?!\s)[^~\n]*?(?<!\s)~~|\*(?!\s)[^*\n]*?(?<!\s)\*)/g;
+
+/** Splits the text into plain / link / emphasis segments; null when there's nothing to decorate. */
+function decorate(text: string): (string | { url: string; label: string } | Emph)[] | null {
+  const linked = linkify(text);
+  let any = linked !== null;
+  const out: (string | { url: string; label: string } | Emph)[] = [];
+  for (const part of linked ?? [text]) {
+    if (typeof part !== 'string') { out.push(part); continue; }
+    EMPH_RE.lastIndex = 0;
+    let last = 0;
+    for (const m of part.matchAll(EMPH_RE)) {
+      const tok = m[0];
+      const mark = tok.startsWith('**') ? '**' : tok.startsWith('~~') ? '~~' : '*';
+      out.push(part.slice(last, m.index));
+      out.push({ style: mark === '**' ? 'b' : mark === '~~' ? 's' : 'i', mark, text: tok.slice(mark.length, tok.length - mark.length) });
+      last = (m.index ?? 0) + tok.length;
+      any = true;
+    }
+    out.push(part.slice(last));
+  }
+  return any ? out : null;
+}
+
 function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
   block: Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>; placeholder: string; focus: Focus; onFocused: () => void;
   onChange: (text: string) => void; onKey: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
@@ -690,14 +716,15 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
     el.setSelectionRange(pos, pos);
     onFocused();
   }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
-  // With links present the textarea's own text goes transparent and a mirror layer renders it,
-  // links styled and clickable; the two must share exact metrics so glyphs line up.
-  const links = linkify(block.text);
+  // With links or emphasis present the textarea's own text goes transparent and a mirror layer
+  // renders it, styled; the two must share exact metrics so glyphs line up (which is why the
+  // markers stay visible — dimmed — and bold is a metric-neutral text-shadow, not a wider face).
+  const deco = decorate(block.text);
   return (
     <div className="blk-textwrap">
       <textarea
         ref={ref}
-        className={`blk-text ${block.kind}${links ? ' has-links' : ''}`}
+        className={`blk-text ${block.kind}${deco ? ' has-links' : ''}`}
         rows={1}
         value={block.text}
         placeholder={placeholder}
@@ -705,11 +732,13 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
         onKeyDown={onKey}
         spellCheck
       />
-      {links && (
+      {deco && (
         <div className={`blk-linklayer ${block.kind}`}>
-          {links.map((p, k) => typeof p === 'string'
+          {deco.map((p, k) => typeof p === 'string'
             ? <span key={k}>{p}</span>
-            : <a key={k} className="blk-link" href={p.url} title={p.url} onClick={(e) => { e.preventDefault(); window.open(p.url); }}>{p.label}</a>)}
+            : 'url' in p
+              ? <a key={k} className="blk-link" href={p.url} title={p.url} onClick={(e) => { e.preventDefault(); window.open(p.url); }}>{p.label}</a>
+              : <span key={k}><span className="md-mark">{p.mark}</span><span className={`md-${p.style}`}>{p.text}</span><span className="md-mark">{p.mark}</span></span>)}
           {'\n'}
         </div>
       )}

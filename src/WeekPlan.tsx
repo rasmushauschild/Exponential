@@ -35,7 +35,7 @@ interface Props {
   onWeekChange: (monday: ISODate) => void;
   calendar: { enabled: boolean; available: boolean; events: CalendarEvent[]; note?: string };
   onToggleCalendar: () => void;
-  teamBadge?: (id: string) => { name: string; icon?: string } | undefined; // set for tasks pulled in from OTHER teams (read-only rows)
+  teamBadge?: (id: string) => { id?: string; name: string; icon?: string } | undefined; // set for tasks pulled in from OTHER teams
   allTeams?: { on: boolean; toggle: () => void }; // "All teams" pill (multi-team members only)
   headExtra?: React.ReactNode; // e.g. the widget's "open app" button
 }
@@ -134,7 +134,8 @@ export function WeekPlan(props: Props) {
     if (!lift || !lifted) return null;
     const arr = group.filter((t) => t.id !== lifted.id);
     arr.splice(liftIdx + liftSteps, 0, lifted);
-    const sub = arr.filter((t) => t.personId === lifted.personId && !teamBadge?.(t.id));
+    // reordering stays within one team's group: the drop target must live where the dragged task lives
+    const sub = arr.filter((t) => t.personId === lifted.personId && teamBadge?.(t.id)?.id === teamBadge?.(lifted.id)?.id);
     const i = sub.findIndex((t) => t.id === lifted.id);
     return i > 0 ? sub[i - 1].id : null;
   })();
@@ -256,7 +257,7 @@ export function WeekPlan(props: Props) {
                 key={t.id}
                 task={t}
                 week={week}
-                readonly={(readonly || !!teamBadge?.(t.id)) && editingId !== t.id}
+                readonly={readonly && editingId !== t.id}
                 reviewRow={t.personId !== selected}
                 team={teamBadge?.(t.id)}
                 people={people}
@@ -279,7 +280,7 @@ export function WeekPlan(props: Props) {
                 onDrop={() => { if (liftStepsRef.current !== 0) onReorder(t.id, dropAfterRef.current); setLift(null); }}
                 onMoveToNow={
                   // unfinished task in a past week: offer to pull it to the top of the backlog
-                  dayIndex(today) >= dayIndex(week) + 7 && !readonly && !teamBadge?.(t.id) && t.personId === selected && !!t.date && t.status !== 'done' && t.status !== 'cancelled'
+                  dayIndex(today) >= dayIndex(week) + 7 && !readonly && t.personId === selected && !!t.date && t.status !== 'done' && t.status !== 'cancelled'
                     ? () => {
                         const top = tasks.reduce((m, x) => (!x.date && x.personId === t.personId && !x.deletedAt ? Math.min(m, (x.order ?? 0) - 1) : m), 0);
                         onUpdate(t.id, { date: undefined, end: undefined, order: top });
