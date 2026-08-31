@@ -31,18 +31,22 @@ interface Props {
   onDeny?: (id: string) => void; // decline a review request shown in my week
   onCompleteReview?: (id: string) => void; // sign off on one
   onOpen: (t: Task) => void;
-  onReorder: (id: string, delta: number) => void;
+  onReorder: (id: string, afterId: string | null) => void; // drop the task right after this one (null = top of its day)
   onWeekChange: (monday: ISODate) => void;
   calendar: { enabled: boolean; available: boolean; events: CalendarEvent[]; note?: string };
   onToggleCalendar: () => void;
+  teamBadge?: (id: string) => { name: string; icon?: string } | undefined; // set for tasks pulled in from OTHER teams (read-only rows)
+  allTeams?: { on: boolean; toggle: () => void }; // "All teams" pill (multi-team members only)
   headExtra?: React.ReactNode; // e.g. the widget's "open app" button
 }
 
-/** Tasks are editable by their owner; anyone may add a task to someone's week. */
+/** Everyone has full freedom in everyone's week — the owner just hears about changes others make. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeleteMany, onDeny, onCompleteReview, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, headExtra } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeleteMany, onDeny, onCompleteReview, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, teamBadge, allTeams, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
-  const readonly = selected !== me;
+  // Invited members who haven't signed in yet can't own tasks (their rows wouldn't persist).
+  const readonly = selected.startsWith('pending:');
+  const other = selected !== me; // wording only — someone else's week is fully editable
   const todayIdx = dayIndex(today) - dayIndex(week);
   const bodyRef = useRef<HTMLDivElement>(null);
   const [todayX, setTodayX] = useState<number | null>(null);
@@ -123,6 +127,17 @@ export function WeekPlan(props: Props) {
   const liftSteps = lift ? Math.min(group.length - 1 - liftIdx, Math.max(-liftIdx, Math.round(lift.dy / lift.rowH))) : 0;
   const liftStepsRef = useRef(0); // read at drop time: the row's pointer handlers were bound before the drag began
   liftStepsRef.current = liftSteps;
+  // The exact visible row the drop lands after (among the same person's own rows), so the commit
+  // matches the preview even when hidden done rows or review rows sit in between.
+  const dropAfterRef = useRef<string | null>(null);
+  dropAfterRef.current = (() => {
+    if (!lift || !lifted) return null;
+    const arr = group.filter((t) => t.id !== lifted.id);
+    arr.splice(liftIdx + liftSteps, 0, lifted);
+    const sub = arr.filter((t) => t.personId === lifted.personId && !teamBadge?.(t.id));
+    const i = sub.findIndex((t) => t.id === lifted.id);
+    return i > 0 ? sub[i - 1].id : null;
+  })();
   const rowOffset = (t: Task) => {
     if (!lift) return 0;
     if (t.id === lift.id) return Math.min((group.length - 1 - liftIdx) * lift.rowH, Math.max(-liftIdx * lift.rowH, lift.dy));
@@ -206,6 +221,11 @@ export function WeekPlan(props: Props) {
         >
           <CalIcon /> Calendar
         </button>
+        {allTeams && (
+          <button className={`pill toggle${allTeams.on ? ' active' : ''}`} onClick={allTeams.toggle} title="Show your tasks from every team you're in">
+            All teams
+          </button>
+        )}
         <div className="panel-spacer" />
         {headExtra}
         <PersonDropdown people={people} me={me} selected={selected} onSelect={onSelect} />
@@ -236,8 +256,9 @@ export function WeekPlan(props: Props) {
                 key={t.id}
                 task={t}
                 week={week}
-                readonly={readonly && editingId !== t.id}
+                readonly={(readonly || !!teamBadge?.(t.id)) && editingId !== t.id}
                 reviewRow={t.personId !== selected}
+                team={teamBadge?.(t.id)}
                 people={people}
                 me={me}
                 selected={selectedId === t.id || !!selectedIds?.has(t.id)}
@@ -255,10 +276,10 @@ export function WeekPlan(props: Props) {
                 offset={rowOffset(t)}
                 lifting={lift?.id === t.id}
                 onLift={(dy, rowH) => setLift({ id: t.id, dy, rowH })}
-                onDrop={() => { if (liftStepsRef.current !== 0) onReorder(t.id, liftStepsRef.current); setLift(null); }}
+                onDrop={() => { if (liftStepsRef.current !== 0) onReorder(t.id, dropAfterRef.current); setLift(null); }}
                 onMoveToNow={
                   // unfinished task in a past week: offer to pull it to the top of the backlog
-                  dayIndex(today) >= dayIndex(week) + 7 && !readonly && t.personId === selected && !!t.date && t.status !== 'done' && t.status !== 'cancelled'
+                  dayIndex(today) >= dayIndex(week) + 7 && !readonly && !teamBadge?.(t.id) && t.personId === selected && !!t.date && t.status !== 'done' && t.status !== 'cancelled'
                     ? () => {
                         const top = tasks.reduce((m, x) => (!x.date && x.personId === t.personId && !x.deletedAt ? Math.min(m, (x.order ?? 0) - 1) : m), 0);
                         onUpdate(t.id, { date: undefined, end: undefined, order: top });
@@ -316,7 +337,7 @@ export function WeekPlan(props: Props) {
         )}
       </div>
 
-      <button className="fab" onClick={() => onAdd()} title={readonly ? `Add a task for ${shortName(people.find((p) => p.id === selected)?.name ?? '')}` : 'Add a task (goes to your backlog)'}>
+      <button className="fab" onClick={() => onAdd()} title={other ? `Add a task for ${shortName(people.find((p) => p.id === selected)?.name ?? '')}` : 'Add a task (goes to your backlog)'}>
         <span className="plus">+</span> Add task
       </button>
     </>
@@ -325,8 +346,9 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editing, onUpdate, onDelete, selCount = 1, onDeleteSel, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop, onMoveToNow }: {
+function TaskRow({ task, week, readonly, reviewRow, team, people, me, selected, editing, onUpdate, onDelete, selCount = 1, onDeleteSel, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop, onMoveToNow }: {
   task: Task;
+  team?: { name: string; icon?: string }; // the OTHER team this task came from (all-teams view)
   week: ISODate;
   readonly: boolean;
   reviewRow: boolean; // someone else's task, here because they asked this week's person for a review
@@ -464,7 +486,7 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
   return (
     <div
       ref={rowRef}
-      className={`wk-row task ${displayStatus}${selected ? ' selected' : ''}${creator || reviewRow ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
+      className={`wk-row task ${displayStatus}${selected ? ' selected' : ''}${reviewRow ? ' from-other' : ''}${lifting ? ' lifting' : ''}${offset && !lifting ? ' shifted' : ''}${backlog ? ' backlog' : ''}`}
       style={offset ? { transform: `translateY(${offset}px)` } : undefined}
       onContextMenu={(e) => { if (readonly || (reviewRow && task.reviewDone)) return; e.preventDefault(); setCtx({ x: e.clientX, y: e.clientY }); }}
     >
@@ -499,6 +521,11 @@ function TaskRow({ task, week, readonly, reviewRow, people, me, selected, editin
         {reviewOwner && (
           <span className="from-chip review named" title={`${reviewOwner.name} asked for a review`}>
             <Avatar person={reviewOwner} size={14} /> {shortName(reviewOwner.name).split(' ')[0]}
+          </span>
+        )}
+        {team && (
+          <span className="team-chip" title={`From ${team.name}`}>
+            {team.icon ? <img src={team.icon} alt="" /> : team.name.slice(0, 1).toUpperCase()}
           </span>
         )}
         {menu && (reviewRow ? (

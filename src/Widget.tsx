@@ -133,7 +133,7 @@ export default function Widget() {
           onDeny={(id) => update((d) => denyReview(d, id))}
           onCompleteReview={(id) => update((d) => completeReview(d, id))}
           onOpen={(t) => window.exponential?.openMain({ kind: 'task', id: t.id })}
-          onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
+          onReorder={(id, afterId) => update((d) => reorderTask(d, id, afterId))}
           onWeekChange={setWeek}
           calendar={{ enabled: calOn && !!window.exponential, available: true, events: calEvents }}
           onToggleCalendar={() => {}}

@@ -10,12 +10,12 @@ import { useData, useSystemNotifications, uid, type GoogleConfig } from './store
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, purgeTrash, renameTask, reorderTask, softDelete, unclaimTask } from './taskOps';
-import { isPending, onPersistError, signOutCloud, supabase } from './cloud';
+import { isPending, loadTeam, onPersistError, signOutCloud, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
-const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true };
+const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true, allTeams: false };
 const prefs: typeof DEFAULT_PREFS = (() => {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
 })();
@@ -102,7 +102,8 @@ export default function App() {
   };
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const [calendarOn, setCalendarOn] = useState(() => prefs.calendar);
-  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn }); }, [weekH, detailW, themePref, calendarOn]);
+  const [allTeamsOn, setAllTeamsOn] = useState(() => prefs.allTeams);
+  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -249,6 +250,39 @@ export default function App() {
   }, [googleUser, connectCloud]);
 
   const person = selectedPerson ?? data?.me ?? '';
+
+  // "All teams": the week view also shows the selected person's tasks from every OTHER team,
+  // read-only, each wearing that team's badge. Refetched on toggle, focus, and once a minute
+  // (other teams have no realtime subscription).
+  const [foreign, setForeign] = useState<{ tasks: Task[]; badge: Map<string, { name: string; icon?: string }>; teamOf: Map<string, string> } | null>(null);
+  const teamIds = teams.map((t) => t.id).join(',');
+  useEffect(() => {
+    if (!allTeamsOn || !cloudMode || !data || teams.length < 2) { setForeign(null); return; }
+    let dead = false;
+    const me = data.me;
+    const fetchAll = async () => {
+      const others = teams.filter((t) => t.id !== data.id);
+      const loaded = await Promise.all(others.map((t) => loadTeam(t.id, me).catch(() => null)));
+      if (dead) return;
+      const tasks: Task[] = [];
+      const badge = new Map<string, { name: string; icon?: string }>();
+      const teamOf = new Map<string, string>();
+      loaded.forEach((td, k) => {
+        if (!td) return;
+        for (const t of td.tasks) {
+          if (t.deletedAt) continue;
+          tasks.push(t);
+          badge.set(t.id, { name: others[k].name, icon: others[k].icon ?? undefined });
+          teamOf.set(t.id, others[k].id);
+        }
+      });
+      setForeign({ tasks, badge, teamOf });
+    };
+    fetchAll();
+    const iv = window.setInterval(fetchAll, 60_000);
+    window.addEventListener('focus', fetchAll);
+    return () => { dead = true; window.clearInterval(iv); window.removeEventListener('focus', fetchAll); };
+  }, [allTeamsOn, cloudMode, data?.id, data?.me, teamIds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The visible calendar refreshes quietly once a minute; the cache bridges the gaps.
   const [calTick, setCalTick] = useState(0);
@@ -582,7 +616,10 @@ export default function App() {
               onSelect={setSelectedPerson}
               week={week}
               today={today}
-              tasks={live.tasks.filter((t) => (t.personId === person || (t.reviewerId === person && (t.status === 'review' || t.reviewDone))) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
+              tasks={[...live.tasks, ...(foreign?.tasks.filter((t) => t.personId === person) ?? [])]
+                .filter((t) => (t.personId === person || (t.reviewerId === person && (t.status === 'review' || t.reviewDone))) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
+              teamBadge={foreign ? (id) => foreign.badge.get(id) : undefined}
+              allTeams={cloudMode && teams.length > 1 ? { on: allTeamsOn, toggle: () => setAllTeamsOn((v) => !v) } : undefined}
               selectedId={selection?.id}
               selectedIds={multi}
               onToggleSelect={toggleSelect}
@@ -602,7 +639,7 @@ export default function App() {
                 let nextId = '';
                 update((d) => {
                   const t = d.tasks.find((x) => x.id === id);
-                  const renamed = renameTask(d, id, title);
+                  const renamed = renameTask(d, id, title, editingNew.current);
                   // Enter keeps the flow going after a NEW task: a fresh one right after, ready to type.
                   if (viaEnter && title && t && editingNew.current) { const r = addTask(renamed, t.personId, t.date); nextId = r.id; return r.data; }
                   return renamed;
@@ -615,8 +652,13 @@ export default function App() {
               onDeleteMany={deleteMany}
               onDeny={(id) => update((d) => denyReview(d, id))}
               onCompleteReview={(id) => update((d) => completeReview(d, id))}
-              onOpen={(t) => open('task', t.id)}
-              onReorder={(id, delta) => update((d) => reorderTask(d, id, delta))}
+              onOpen={(t) => {
+                // A row from another team opens in that team: switch first, then select.
+                const tid = foreign?.teamOf.get(t.id);
+                if (tid) switchTeam(tid).then(() => open('task', t.id));
+                else open('task', t.id);
+              }}
+              onReorder={(id, afterId) => update((d) => reorderTask(d, id, afterId))}
               calendar={{
                 enabled: calendarOn,
                 available: !!googleUser,

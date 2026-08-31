@@ -157,7 +157,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     const sl = slashRef.current;
     if (!sl) return SLASH_OPTS;
     const b = blocksRef.current[sl.i];
-    const q = b && 'text' in b ? b.text.slice(1).toLowerCase() : '';
+    const q = (b && 'text' in b ? b.text : b?.kind === 'task' ? tasksRef.current.find((t) => t.id === b.taskId)?.title ?? '' : '').slice(1).toLowerCase();
     return SLASH_OPTS.filter((o) => o.label.toLowerCase().includes(q));
   };
   const applySlash = (kind: 'h1' | 'h2' | 'p' | 'tog' | 'task') => {
@@ -167,6 +167,14 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     setSlash(null);
     const b = blocksRef.current[i];
     if (!b || b.kind === 'img') return;
+    if (b.kind === 'task') {
+      // converting a task block away deletes its (still unnamed) task
+      if (kind === 'task') return;
+      onDeleteTask(b.taskId);
+      commit(blocksRef.current.map((x, j) => (j === i ? { key: newKey(), kind, text: '', indent: b.indent } as Block : x)));
+      setFocus({ index: i, caret: 'start' });
+      return;
+    }
     if (kind === 'task') {
       const id = createTask('');
       commit(blocksRef.current.map((x, j) => (j === i ? { key: newKey(), kind: 'task', taskId: id, indent: b.indent } as Block : x)));
@@ -176,11 +184,14 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       setFocus({ index: i, caret: 'start' });
     }
   };
+  // What the menu filters on: the block's text, or the task's title for task blocks.
+  const slashText = (b: Block | undefined) => (b && 'text' in b ? b.text : b?.kind === 'task' ? tasksRef.current.find((t) => t.id === b.taskId)?.title ?? '' : null);
   // The menu follows the block's text: it closes when the '/' is gone or the block changed shape.
   useEffect(() => {
     if (!slash) return;
     const b = blocks[slash.i];
-    if (!b || !('text' in b) || (b.text !== '' && !b.text.startsWith('/'))) { setSlash(null); return; }
+    const txt = slashText(b);
+    if (txt === null || (txt !== '' && !txt.startsWith('/'))) { setSlash(null); return; }
     setSlashSel((v) => Math.min(v, Math.max(0, slashOptions().length - 1)));
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.slash-menu')) setSlash(null); };
     window.addEventListener('pointerdown', down);
@@ -199,6 +210,29 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     const el = e.currentTarget;
     const b = blocks[i] as Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
+    // ⌘B / ⌘I / ⌘⇧X wrap (or unwrap) the selection in Markdown emphasis markers.
+    if ((e.metaKey || e.ctrlKey) && !e.altKey) {
+      const mark = e.key.toLowerCase() === 'b' && !e.shiftKey ? '**' : e.key.toLowerCase() === 'i' && !e.shiftKey ? '*' : e.key.toLowerCase() === 'x' && e.shiftKey ? '~~' : null;
+      if (mark) {
+        e.preventDefault();
+        const s = el.selectionStart, en = el.selectionEnd;
+        const before = el.value.slice(0, s), inner = el.value.slice(s, en), after = el.value.slice(en);
+        let text: string, ns: number, ne: number;
+        if (inner.startsWith(mark) && inner.endsWith(mark) && inner.length >= mark.length * 2) {
+          text = before + inner.slice(mark.length, inner.length - mark.length) + after;
+          ns = s; ne = en - 2 * mark.length;
+        } else if (before.endsWith(mark) && after.startsWith(mark)) {
+          text = before.slice(0, -mark.length) + inner + after.slice(mark.length);
+          ns = s - mark.length; ne = en - mark.length;
+        } else {
+          text = before + mark + inner + mark + after;
+          ns = s + mark.length; ne = en + mark.length;
+        }
+        setBlock(i, { text });
+        window.setTimeout(() => el.setSelectionRange(ns, ne), 0); // after React writes the new value
+        return;
+      }
+    }
     // The slash menu owns the arrows and Enter while it is open on this block.
     if (slashRef.current?.i === i) {
       const opts = slashOptions();
@@ -242,6 +276,18 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   const onTaskKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>, task: Task | undefined) => {
     const el = e.currentTarget;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
+    // The slash menu works here too: '/' on a still-unnamed task offers the block kinds.
+    if (slashRef.current?.i === i) {
+      const opts = slashOptions();
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSlashSel((v) => Math.min(opts.length - 1, v + 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSlashSel((v) => Math.max(0, v - 1)); return; }
+      if (e.key === 'Enter') { e.preventDefault(); const o = opts[Math.min(slashSelRef.current, opts.length - 1)]; if (o) applySlash(o.kind); else setSlash(null); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
+    }
+    if (e.key === '/' && el.value === '') {
+      setSlash({ i, rect: el.getBoundingClientRect() });
+      setSlashSel(0);
+    }
     if (e.key === 'Tab') {
       e.preventDefault();
       setBlock(i, { indent: Math.max(0, Math.min(MAX_IND, (blocks[i].indent ?? 0) + (e.shiftKey ? -1 : 1))) });

@@ -1,5 +1,6 @@
 import type { Data, ISODate, Notification, Task } from './types';
-import { shortName } from './types';
+import { STATUS_LABEL, shortName } from './types';
+import { formatShort } from './dates';
 import { uid } from './store';
 
 /** Pure helpers shared by the main window and the menu-bar widget. */
@@ -20,26 +21,29 @@ export function addTask(d: Data, personId: string | undefined, date?: ISODate, a
   return { data: { ...d, tasks: [...d.tasks, task] }, id };
 }
 
-/** Finishing the inline name: empty removes the task; naming someone else's task tells them. */
-export function renameTask(d: Data, id: string, title: string): Data {
+/** Finishing the inline name: empty removes the task; naming someone else's task tells them.
+ *  `fresh` distinguishes a just-created task ("added to your week") from renaming an existing one. */
+export function renameTask(d: Data, id: string, title: string, fresh = true): Data {
   if (!title) return { ...d, tasks: d.tasks.filter((t) => t.id !== id) };
   const t0 = d.tasks.find((t) => t.id === id);
   if (!t0) return d;
   const next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, title } : t)) };
-  return t0.personId && t0.personId !== d.me
+  if (!t0.personId || t0.personId === d.me || title === t0.title) return next;
+  return fresh
     ? notify(next, { to: t0.personId, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${title}” to your ${t0.date ? 'week' : 'backlog'}`, ref: { kind: 'task', id } })
-    : next;
+    : notify(next, { to: t0.personId, from: d.me, kind: 'task-changed', text: `${nameOf(d, d.me)} renamed “${t0.title}” to “${title}”`, ref: { kind: 'task', id } });
 }
 
-export function reorderTask(d: Data, id: string, delta: number): Data {
+/** Drop `id` immediately after `afterId` in its person+day group (or at the top when null).
+ *  A precise target instead of a step delta: the visible list may hide done or deleted rows,
+ *  so counted steps and actual positions drift apart. */
+export function reorderTask(d: Data, id: string, afterId: string | null): Data {
   const t = d.tasks.find((x) => x.id === id);
   if (!t) return d;
-  const group = d.tasks.filter((x) => x.personId === t.personId && x.date === t.date)
+  const group = d.tasks.filter((x) => !x.deletedAt && x.id !== id && x.personId === t.personId && x.date === t.date)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.title.localeCompare(b.title));
-  const from = group.findIndex((x) => x.id === id);
-  const to = Math.min(group.length - 1, Math.max(0, from + delta));
-  if (from === to) return d;
-  group.splice(to, 0, group.splice(from, 1)[0]);
+  const at = afterId ? group.findIndex((x) => x.id === afterId) + 1 : 0;
+  group.splice(at, 0, t);
   const order = new Map(group.map((x, i) => [x.id, i]));
   return { ...d, tasks: d.tasks.map((x) => (order.has(x.id) ? { ...x, order: order.get(x.id) } : x)) };
 }
@@ -58,6 +62,21 @@ export function patchTask(d: Data, id: string, patch: Partial<Task>): Data {
     // A fresh request: any earlier verdict from this (or another) reviewer no longer applies.
     next = { ...next, tasks: next.tasks.map((t) => (t.id === id ? { ...t, reviewDone: undefined } : t)) };
     next = notify(next, { to: after.reviewerId, from: d.me, kind: 'review-requested', text: `${nameOf(d, d.me)} asked you to review “${after.title}”`, ref: { kind: 'task', id } });
+  }
+  // Anyone may edit anyone's week — the owner just hears about status and schedule changes
+  // someone else makes (notes edits are too chatty to report keystroke by keystroke).
+  const owner = after.personId;
+  if (owner && owner !== d.me && !(patch.personId && patch.personId !== before.personId)) {
+    if ('status' in patch && after.status !== before.status && after.status !== 'review')
+      next = notify(next, { to: owner, from: d.me, kind: 'task-changed', text: `${nameOf(d, d.me)} set “${after.title}” to ${STATUS_LABEL[after.status]}`, ref: { kind: 'task', id } });
+    if (('date' in patch || 'end' in patch) && (after.date !== before.date || after.end !== before.end))
+      next = notify(next, {
+        to: owner, from: d.me, kind: 'task-changed',
+        text: after.date
+          ? `${nameOf(d, d.me)} scheduled “${after.title}” for ${formatShort(after.date)}${after.end && after.end !== after.date ? ` – ${formatShort(after.end)}` : ''}`
+          : `${nameOf(d, d.me)} moved “${after.title}” to your backlog`,
+        ref: { kind: 'task', id },
+      });
   }
   return next;
 }

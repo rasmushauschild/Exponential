@@ -54,7 +54,7 @@ export interface Task {
   deletedAt?: string; // soft-deleted: sits in Team settings → Recently deleted for 7 days
 }
 
-export type NotificationKind = 'task-added' | 'review-requested' | 'review-denied' | 'review-completed' | 'owner-changed' | 'project-changed';
+export type NotificationKind = 'task-added' | 'task-changed' | 'review-requested' | 'review-denied' | 'review-completed' | 'owner-changed' | 'project-changed';
 
 export interface Notification {
   id: string;
