@@ -282,6 +282,7 @@ export default function App() {
     const badge = new Map<string, { id: string; name: string; icon?: string }>();
     const teamOf = new Map<string, string>();
     for (const [tid, fd] of foreignTeams) {
+      if (tid === data?.id) continue; // just switched here: its tasks are the LIVE ones now (the refetch hasn't caught up yet)
       const info = teams.find((t) => t.id === tid);
       for (const t of fd.tasks) {
         if (t.deletedAt) continue;
