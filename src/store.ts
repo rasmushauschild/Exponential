@@ -441,5 +441,5 @@ export function useData() {
 
   const data = cloud ? cloud.data : ws ? current(ws) : null;
   const teams: TeamSummary[] = cloud ? cloud.teams : (ws?.teams ?? []).map((t) => ({ id: t.id, name: t.name, icon: t.icon }));
-  return { data, teams, update, undo, redo, switchTeam, createTeam, deleteTeam, connectCloud, cloudMode: !!cloud };
+  return { data, teams, update, undo, redo, switchTeam, createTeam, deleteTeam, connectCloud, cloudMode: !!cloud, refresh: reload };
 }

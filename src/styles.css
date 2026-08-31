@@ -746,7 +746,8 @@ img { display: block; -webkit-user-drag: none; }
   /* hairline + a shadow that stays inside the 16px transparent margin */
   box-shadow: 0 0 0 1px var(--line), 0 4px 14px rgba(0, 0, 0, 0.16);
 }
-[data-theme='dark'] .widget-panel { box-shadow: 0 0 0 1px var(--line), 0 4px 14px rgba(0, 0, 0, 0.5); }
+/* the popover window is transparent, so the frost's dark-mode alpha would show the desktop through — solid panel instead */
+[data-theme='dark'] .widget-panel { background: var(--panel); box-shadow: 0 0 0 1px var(--line), 0 4px 14px rgba(0, 0, 0, 0.5); }
 .widget .panel-head { -webkit-app-region: no-drag; padding: 18px 22px 8px; }
 .widget .panel-title { font-size: 20px; }
 .widget .arrow { font-size: 12px; margin-left: 2px; }

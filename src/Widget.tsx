@@ -7,7 +7,7 @@ import { todayISO, weekStart } from './dates';
 
 /** Menu-bar popover: only the week panel, full featured, always synced with the main window. */
 export default function Widget() {
-  const { data, update, connectCloud } = useData();
+  const { data, update, connectCloud, refresh } = useData();
   useEffect(() => { connectCloud().catch((e) => console.error('[widget] cloud', e)); }, [connectCloud]);
   useSystemNotifications(data);
   const [today, setToday] = useState(todayISO());
@@ -56,20 +56,30 @@ export default function Widget() {
   const me = data?.me ?? '';
   const who = person ?? me;
 
-  const startNewTask = () => {
-    if (!data) return;
+  // The shown handler is registered once, so everything it touches must be read fresh through
+  // refs — the data it saw at registration is the LOCAL file snapshot from before connectCloud
+  // finished, and a task created against that gets a person id the cloud rejects.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+
+  const startNewTask = (personId?: string) => {
+    if (!dataRef.current) return;
+    const w = personId ?? who;
     let id = '';
     // at the top of the backlog, so the week's tasks stay in view while you type
-    update((d) => { const r = addTask(d, who, undefined, 'start'); id = r.id; return r.data; });
+    update((d) => { const r = addTask(d, w, undefined, 'start'); id = r.id; return r.data; });
     setEditingId(id);
   };
+  const startRef = useRef(startNewTask);
+  startRef.current = startNewTask;
 
-  // Each time the popover opens — and the first time data arrives while it's open — a fresh task is
-  // ready to type into, on the current week.
-  const openedOnce = useRef(false);
+  // Each time the popover opens — or as soon as data arrives, when it opened before the data —
+  // a fresh task is ready to type into, on the current week, for me.
+  const pendingOpen = useRef(false);
   useEffect(() => {
-    if (!data) return;
-    if (!openedOnce.current && document.visibilityState === 'visible') { openedOnce.current = true; startNewTask(); }
+    if (pendingOpen.current && data) { pendingOpen.current = false; startRef.current(data.me); }
+  }, [!!data]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
     return window.exponential?.onWidgetShown(() => {
       applyTheme();
       setCalOn(readCalPref());
@@ -77,10 +87,13 @@ export default function Widget() {
       setToday(todayISO());
       setWeek(weekStart(todayISO()));
       setPerson(null);
-      startNewTask();
+      refresh(); // catch up on anything missed while the window was hidden (throttled timers)
+      const d = dataRef.current;
+      if (d) startRef.current(d.me);
+      else pendingOpen.current = true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!data]);
+  }, []);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => { if (e.key === 'Escape' && !(document.activeElement as HTMLElement)?.matches('input, textarea')) window.exponential?.closeWidget(); };
