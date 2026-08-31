@@ -16,7 +16,7 @@ export default function Widget() {
   const [editingId, setEditingId] = useState<string | null>(null);
   // Follow the theme and calendar preference chosen in the main window (same origin → same
   // localStorage); re-check whenever they change or the popover opens.
-  const readCalPref = () => { try { return !!JSON.parse(localStorage.getItem('exponential-layout') ?? '{}').calendar; } catch { return false; } };
+  const readCalPref = () => { try { return JSON.parse(localStorage.getItem('exponential-layout') ?? '{}').calendar !== false; } catch { return true; } };
   const [calOn, setCalOn] = useState(readCalPref);
   const applyTheme = () => {
     let saved = '';
