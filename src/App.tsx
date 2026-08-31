@@ -641,7 +641,7 @@ export default function App() {
               today={today}
               tasks={[...live.tasks, ...(foreign?.tasks.filter((t) => t.personId === person) ?? [])]
                 .filter((t) => (t.personId === person || (t.reviewerId === person && (t.status === 'review' || t.reviewDone))) && (!t.date || (t.date <= addDays(week, 6) && (t.end ?? t.date) >= week)))}
-              teamBadge={foreign ? (id) => foreign.badge.get(id) : undefined}
+              teamBadge={foreign && data ? (id) => foreign.badge.get(id) ?? { id: data.id, name: data.name, icon: data.icon ?? undefined } : undefined}
               allTeams={cloudMode && teams.length > 1 ? { on: allTeamsOn, toggle: () => setAllTeamsOn((v) => !v) } : undefined}
               selectedId={selection?.id}
               selectedIds={multi}
