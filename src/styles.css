@@ -651,11 +651,13 @@ img { display: block; -webkit-user-drag: none; }
 .blk-linklayer { position: absolute; inset: 0; pointer-events: none; color: var(--text); font: inherit; line-height: 1.55; padding: 4px 0; white-space: pre-wrap; overflow-wrap: break-word; overflow: hidden; }
 .blk-linklayer.h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; padding: 12px 0 2px; }
 .blk-linklayer.h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; padding: 10px 0 2px; }
-/* markdown emphasis in the mirror: markers dimmed, styles metric-neutral so the caret never drifts */
+/* markdown emphasis in the mirror. Focused block: markers dimmed, styles metric-neutral so the
+   caret never drifts. Unfocused (.clean): markers hidden, real styles — no caret to align with. */
 .blk-linklayer .md-mark { color: var(--text-3); opacity: 0.6; }
 .blk-linklayer .md-b { text-shadow: 0.5px 0 currentColor; }
 .blk-linklayer .md-i { font-style: italic; }
 .blk-linklayer .md-s { text-decoration: line-through; }
+.blk-linklayer.clean .md-b { text-shadow: none; font-weight: bolder; }
 .blk-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; pointer-events: auto; cursor: pointer; }
 .blk-list.selecting .blk-link { pointer-events: none; }
 .blk-img { max-width: 100%; border-radius: 14px; margin: 6px 0; display: block; }

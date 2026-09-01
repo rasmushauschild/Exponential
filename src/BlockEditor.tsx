@@ -717,9 +717,12 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
     onFocused();
   }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   // With links or emphasis present the textarea's own text goes transparent and a mirror layer
-  // renders it, styled; the two must share exact metrics so glyphs line up (which is why the
-  // markers stay visible — dimmed — and bold is a metric-neutral text-shadow, not a wider face).
+  // renders it, styled. While THIS block is being edited the mirror must share exact metrics with
+  // the textarea so the caret lines up: markers stay visible (dimmed) and bold is a metric-neutral
+  // text-shadow. Everywhere else there is no caret to match, so the markers vanish and the styles
+  // render for real — Obsidian-style live preview.
   const deco = decorate(block.text);
+  const [focused, setFocused] = useState(false);
   return (
     <div className="blk-textwrap">
       <textarea
@@ -730,15 +733,19 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKey}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         spellCheck
       />
       {deco && (
-        <div className={`blk-linklayer ${block.kind}`}>
+        <div className={`blk-linklayer ${block.kind}${focused ? '' : ' clean'}`}>
           {deco.map((p, k) => typeof p === 'string'
             ? <span key={k}>{p}</span>
             : 'url' in p
               ? <a key={k} className="blk-link" href={p.url} title={p.url} onClick={(e) => { e.preventDefault(); window.open(p.url); }}>{p.label}</a>
-              : <span key={k}><span className="md-mark">{p.mark}</span><span className={`md-${p.style}`}>{p.text}</span><span className="md-mark">{p.mark}</span></span>)}
+              : focused
+                ? <span key={k}><span className="md-mark">{p.mark}</span><span className={`md-${p.style}`}>{p.text}</span><span className="md-mark">{p.mark}</span></span>
+                : <span key={k} className={`md-${p.style}`}>{p.text}</span>)}
           {'\n'}
         </div>
       )}
