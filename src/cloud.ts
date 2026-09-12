@@ -92,6 +92,7 @@ export async function deleteTeam(id: string) {
 }
 
 export async function loadTeam(teamId: string, me: string): Promise<Data> {
+  try { await ensureSession(); } catch { /* a dead session then fails the reads visibly instead of silently returning nothing */ }
   const [team, members, projects, deadlines, tasks, retros, notifications, groups] = await Promise.all([
     supabase.from('teams').select('id, name, icon, retro_fields, retro_template').eq('id', teamId).single(),
     supabase.from('team_members').select('team_id, email, user_id, role, color, profiles(id, email, name, photo, color)').eq('team_id', teamId).order('created_at'),
@@ -151,6 +152,10 @@ async function run(label: string, p: PromiseLike<{ error: unknown }>) {
 
 /** Persist whatever changed between two snapshots of the same team. Fire-and-forget; errors are logged. */
 export async function persistDiff(prev: Data, next: Data) {
+  // The session can die while the app is running (a laptop asleep past token expiry, or a
+  // backend outage blocking the refresh — the egress-quota incident did exactly this): heal
+  // it before writing, or every save bounces off RLS as anonymous until the app restarts.
+  try { await ensureSession(); } catch { /* let the writes surface the real error */ }
   const teamId = next.id;
   const ops: Promise<void>[] = [];
 
