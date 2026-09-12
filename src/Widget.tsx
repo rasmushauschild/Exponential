@@ -1,14 +1,35 @@
 import { useEffect, useRef, useState } from 'react';
 import { WeekPlan } from './WeekPlan';
 import { useData, useSystemNotifications } from './store';
+import { onPersistError } from './cloud';
 import type { CalendarEvent } from './types';
 import { addTask, completeReview, denyReview, patchTask, renameTask, reorderTask, softDelete } from './taskOps';
 import { todayISO, weekStart } from './dates';
 
 /** Menu-bar popover: only the week panel, full featured, always synced with the main window. */
 export default function Widget() {
-  const { data, update, connectCloud, refresh } = useData();
-  useEffect(() => { connectCloud().catch((e) => console.error('[widget] cloud', e)); }, [connectCloud]);
+  const { data, update, connectCloud, refresh, cloudMode } = useData();
+  const cloudRef = useRef(cloudMode);
+  cloudRef.current = cloudMode;
+  // Keep trying to reach the cloud (30s + every open) instead of one silent attempt: during the
+  // egress outage a single failure left widgets on the stale LOCAL file for the whole session,
+  // quietly writing tasks nobody would ever see.
+  const tryCloud = useRef(() => {});
+  useEffect(() => {
+    let dead = false;
+    let timer: number | undefined;
+    const attempt = () => {
+      if (dead || cloudRef.current || !window.exponential) return;
+      connectCloud().then((ok) => { if (!dead && !ok) retry(); }).catch((e) => { console.error('[widget] cloud', e); if (!dead) retry(); });
+    };
+    const retry = () => { window.clearTimeout(timer); timer = window.setTimeout(attempt, 30_000); };
+    tryCloud.current = attempt;
+    attempt();
+    return () => { dead = true; window.clearTimeout(timer); };
+  }, [connectCloud]);
+  // Failed saves must be VISIBLE here too — the widget once swallowed every persist error.
+  const [saveError, setSaveError] = useState<string | null>(null);
+  useEffect(() => onPersistError((m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 8000); }), []);
   useSystemNotifications(data);
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
@@ -87,6 +108,7 @@ export default function Widget() {
       setToday(todayISO());
       setWeek(weekStart(todayISO()));
       setPerson(null);
+      tryCloud.current(); // still on local data? another shot at signing in before the user types
       refresh(); // catch up on anything missed while the window was hidden (throttled timers)
       const d = dataRef.current;
       if (d) startRef.current(d.me);
@@ -105,6 +127,10 @@ export default function Widget() {
 
   return (
     <div className="widget">
+      {window.exponential && !cloudMode && (
+        <div className="toast error-toast">Not connected — tasks added here won't sync</div>
+      )}
+      {saveError && <div className="toast error-toast">{saveError}</div>}
       <section className="panel widget-panel">
         <WeekPlan
           people={data.people.filter((p) => p.id === me)}
