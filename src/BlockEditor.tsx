@@ -355,9 +355,28 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   };
 
   /* ── images ── */
+  // Notes images live inline in the DB and are re-downloaded on EVERY team load by every
+  // client (this once blew the Supabase egress quota), so big pastes are compressed hard:
+  // capped at 1600px on the long side and re-encoded as JPEG unless already tiny.
   const insertImage = (file: File, at: number) => {
     const reader = new FileReader();
-    reader.onload = () => insertAt(at, { key: newKey(), kind: 'img', src: String(reader.result) }, 'end');
+    reader.onload = () => {
+      const raw = String(reader.result);
+      const place = (src: string) => insertAt(at, { key: newKey(), kind: 'img', src }, 'end');
+      if (file.size < 150_000) { place(raw); return; }
+      const img = new Image();
+      img.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const jpg = canvas.toDataURL('image/jpeg', 0.82);
+        place(jpg.length < raw.length ? jpg : raw);
+      };
+      img.onerror = () => place(raw);
+      img.src = raw;
+    };
     reader.readAsDataURL(file);
   };
 

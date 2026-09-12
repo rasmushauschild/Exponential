@@ -10,7 +10,7 @@ import { useData, useSystemNotifications, uid, type GoogleConfig } from './store
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, purgeTrash, renameTask, reorderTask, softDelete, unclaimTask } from './taskOps';
-import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, supabase } from './cloud';
+import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
@@ -254,7 +254,9 @@ export default function App() {
   // "All teams": the week view also shows the selected person's tasks from every OTHER team,
   // fully editable, each wearing that team's badge. The whole team Data is kept so edits can be
   // applied with the normal taskOps and persisted with persistDiff against the right team.
-  // Refetched on toggle, focus, and once a minute (other teams have no realtime subscription).
+  // Loaded once per toggle/team-change, then kept fresh by REALTIME per foreign team — full team
+  // loads are heavy (notes carry inline images) and the old 60s/every-focus polling is what blew
+  // the Supabase egress quota. Focus refetch survives only as a ≥5min safety net.
   const [foreignTeams, setForeignTeams] = useState<Map<string, Data> | null>(null);
   const fSeq = useRef(0); // bumps on every foreign edit; a refetch that started earlier must not clobber it
   const teamIds = teams.map((t) => t.id).join(',');
@@ -262,9 +264,17 @@ export default function App() {
     if (!allTeamsOn || !cloudMode || !data || teams.length < 2) { setForeignTeams(null); return; }
     let dead = false;
     const me = data.me;
-    const fetchAll = async () => {
+    const others = teams.filter((t) => t.id !== data.id);
+    let lastFetch = 0;
+    const fetchOne = async (tid: string) => {
       const seqAtStart = fSeq.current;
-      const others = teams.filter((t) => t.id !== data.id);
+      const td = await loadTeam(tid, me).catch(() => null);
+      if (dead || !td || fSeq.current !== seqAtStart) return;
+      setForeignTeams((m) => new Map(m ?? []).set(tid, td));
+    };
+    const fetchAll = async () => {
+      lastFetch = Date.now();
+      const seqAtStart = fSeq.current;
       const loaded = await Promise.all(others.map((t) => loadTeam(t.id, me).catch(() => null)));
       if (dead || fSeq.current !== seqAtStart) return;
       const m = new Map<string, Data>();
@@ -272,9 +282,10 @@ export default function App() {
       setForeignTeams(m);
     };
     fetchAll();
-    const iv = window.setInterval(fetchAll, 60_000);
-    window.addEventListener('focus', fetchAll);
-    return () => { dead = true; window.clearInterval(iv); window.removeEventListener('focus', fetchAll); };
+    const subs = others.map((t) => subscribeTeam(t.id, me, () => fetchOne(t.id)));
+    const onFocus = () => { if (Date.now() - lastFetch > 300_000) fetchAll(); }; // realtime can drop while the machine sleeps
+    window.addEventListener('focus', onFocus);
+    return () => { dead = true; subs.forEach((off) => off()); window.removeEventListener('focus', onFocus); };
   }, [allTeamsOn, cloudMode, data?.id, data?.me, teamIds]); // eslint-disable-line react-hooks/exhaustive-deps
   const foreign = (() => {
     if (!foreignTeams) return null;
