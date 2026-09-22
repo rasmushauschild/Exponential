@@ -50,18 +50,17 @@ export default function App() {
   const [leftW, setLeftW] = useState(415);
   const [lResizing, setLResizing] = useState(false);
   const leftWRef = useRef(leftW); leftWRef.current = leftW;
-  const minPanelW = () => {
-    const W = window.innerWidth;
-    return Math.min(Math.max(280, Math.floor(W / 5)), Math.floor((W - 140) / 3));
-  };
+  // The centre (planners) always keeps at least a third of the window; the two side
+  // panels split what's left, each at least ~a fifth (never less than 240px).
+  const sideBudget = () => window.innerWidth - 106 - Math.floor(window.innerWidth / 3); // 106 = sidebar + shell padding + slot margins, measured
+  const minPanelW = () => Math.max(240, Math.min(Math.floor(window.innerWidth / 5), Math.floor((sideBudget() - 28) / 2)));
   const onLResizeDown = (e: React.PointerEvent) => {
     e.preventDefault();
     const startX = e.clientX, startW = leftW;
     setLResizing(true);
     const move = (ev: PointerEvent) => {
-      const mp = minPanelW();
-      const max = window.innerWidth - 100 - mp - (detailRef.current ? detailWRef.current + 14 : 0);
-      setLeftW(Math.max(mp, Math.min(max, startW + (ev.clientX - startX))));
+      const max = sideBudget() - 14 - (detailRef.current ? detailWRef.current + 14 : 0);
+      setLeftW(Math.max(minPanelW(), Math.min(max, startW + (ev.clientX - startX))));
     };
     const up = () => { setLResizing(false); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move);
@@ -144,9 +143,8 @@ export default function App() {
     const startX = e.clientX, startW = detailW;
     setVResizing(true);
     const move = (ev: PointerEvent) => {
-      const mp = minPanelW();
-      const max = window.innerWidth - 100 - mp - (leftOpenRef.current ? leftWRef.current + 14 : 0);
-      setDetailW(Math.max(mp, Math.min(max, startW - (ev.clientX - startX))));
+      const max = sideBudget() - 14 - (leftOpenRef.current ? leftWRef.current + 14 : 0);
+      setDetailW(Math.max(minPanelW(), Math.min(max, startW - (ev.clientX - startX))));
     };
     const up = () => { setVResizing(false); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move);
@@ -156,9 +154,9 @@ export default function App() {
   useEffect(() => {
     const fit = () => {
       const mp = minPanelW();
-      const budget = window.innerWidth - 100 - mp;
-      setDetailW((w) => Math.max(mp, Math.min(w, budget - (leftOpenRef.current ? leftWRef.current + 14 : 0))));
-      setLeftW((w) => Math.max(mp, Math.min(w, budget - (detailRef.current ? detailWRef.current + 14 : 0))));
+      const budget = sideBudget();
+      setDetailW((w) => Math.max(mp, Math.min(w, budget - 14 - (leftOpenRef.current ? leftWRef.current + 14 : 0))));
+      setLeftW((w) => Math.max(mp, Math.min(w, budget - 14 - (detailRef.current ? detailWRef.current + 14 : 0))));
     };
     fit();
     window.addEventListener('resize', fit);

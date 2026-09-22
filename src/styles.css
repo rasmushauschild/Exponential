@@ -1157,6 +1157,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .chat-reacts button span { font-size: 11px; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .chat-reacts button:hover { background: var(--soft); }
 .chat-reacts button.on { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.react-who { z-index: 120; display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 10px; background: var(--frost-deep); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: 0 0 0 1px var(--line), var(--menu-shadow, 0 8px 24px rgba(0,0,0,0.18)); pointer-events: none; max-width: 260px; }
+.react-who-emoji { font-size: 20px; flex: none; }
+.react-who-names { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.react-who-row { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .chat-actions { position: absolute; top: -10px; right: 10px; display: none; gap: 2px; background: var(--panel); border-radius: 8px; box-shadow: 0 0 0 1px var(--line), var(--menu-shadow, 0 6px 20px rgba(0,0,0,0.1)); padding: 2px; }
 .chat-msg:hover .chat-actions { display: flex; }
 .chat-actions button { width: 24px; height: 24px; border-radius: 6px; display: grid; place-items: center; color: var(--text-2); }
@@ -1190,9 +1194,26 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .chat-att-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chat-att-chip button { color: var(--text-3); font-size: 14px; }
 .chat-att-chip button:hover { color: var(--text); }
-.chat-emoji-pop { display: grid; grid-template-columns: repeat(8, 30px); gap: 2px; padding: 8px; }
-.chat-emoji-pop button { width: 30px; height: 30px; border-radius: 7px; font-size: 17px; display: grid; place-items: center; }
-.chat-emoji-pop button:hover { background: var(--soft); }
+.emoji-pop { padding: 0; overflow: hidden; }
+.emoji-pop emoji-picker {
+  width: 100%; height: 100%;
+  --background: var(--panel);
+  --border-color: transparent;
+  --border-size: 0;
+  --input-border-color: var(--line);
+  --input-border-radius: 9px;
+  --input-font-color: var(--text);
+  --input-placeholder-color: var(--text-3);
+  --outline-color: transparent;
+  --category-font-color: var(--text-3);
+  --category-font-size: 11px;
+  --indicator-color: var(--accent);
+  --button-hover-background: var(--soft);
+  --button-active-background: var(--soft);
+  --num-columns: 8;
+  --emoji-size: 1.25rem;
+  font-family: var(--font);
+}
 .chat-members-sheet { width: 420px; }
 .sheet-title { font-size: 15px; font-weight: 700; margin-bottom: 12px; }
 

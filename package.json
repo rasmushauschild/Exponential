@@ -31,6 +31,8 @@
     "@paper-design/shaders-react": "^0.0.80",
     "@supabase/supabase-js": "^2.112.3",
     "electron-updater": "^6.8.9",
+    "emoji-picker-element": "^1.29.1",
+    "emoji-picker-element-data": "^1.8.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"
   },

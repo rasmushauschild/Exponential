@@ -13,7 +13,6 @@ import { InboxList } from './DetailPanel';
 import type { Notification } from './types';
 import type { Selection } from './DetailPanel';
 
-const EMOJI = ['👍', '❤️', '😂', '🎉', '🙌', '🔥', '👀', '✅', '💯', '😅', '😍', '🤔', '😢', '😮', '🙏', '👏', '🚀', '⭐', '☕', '🍿', '💪', '🫡', '🤝', '🥳', '😴', '🤯', '🧠', '⚡', '🌱', '🍾', '🎯', '🛠️'];
 
 interface Props {
   teamId: string;
@@ -400,12 +399,6 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
 }) {
   const [editing, setEditing] = useState(false);
   const [pick, setPick] = useState<DOMRect | null>(null);
-  useEffect(() => {
-    if (!pick) return;
-    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.chat-emoji-pop')) setPick(null); };
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [pick]);
   return (
     <div className={`chat-msg${head ? ' head' : ''}`}>
       <span className="chat-gutter">
@@ -433,10 +426,7 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
         {msg.reactions && Object.keys(msg.reactions).length > 0 && (
           <div className="chat-reacts">
             {Object.entries(msg.reactions).map(([emo, users]) => (
-              <button key={emo} className={users.includes(me) ? 'on' : ''} onClick={() => onReact(emo)}
-                title={users.map((u) => shortName(people.find((x) => x.id === u)?.name ?? 'Someone')).join(', ')}>
-                {emo} <span>{users.length}</span>
-              </button>
+              <ReactChip key={emo} emoji={emo} users={users} me={me} people={people} onClick={() => onReact(emo)} />
             ))}
           </div>
         )}
@@ -448,10 +438,7 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
           {(mine || canModerate) && <button title="Delete" onClick={onDelete}><CrossGlyph /></button>}
         </span>
       )}
-      {pick && createPortal(
-        <div className="status-menu chat-emoji-pop" style={{ position: 'fixed', top: Math.min(pick.bottom + 6, window.innerHeight - 180), right: Math.max(12, window.innerWidth - pick.right - 60) }}>
-          {EMOJI.map((emo) => <button key={emo} onClick={() => { onReact(emo); setPick(null); }}>{emo}</button>)}
-        </div>, document.body)}
+      {pick && <EmojiPop anchor={pick} onPick={(emo) => { onReact(emo); setPick(null); }} onClose={() => setPick(null)} />}
     </div>
   );
 }
@@ -584,6 +571,70 @@ function ThumbChip({ att, cloud }: { att: Attachment; cloud: boolean }) {
   const [url, setUrl] = useState<string | null>(att.path.startsWith('data:') ? att.path : null);
   useEffect(() => { let gone = false; if (!url) attachmentUrl(att, cloud).then((u) => !gone && setUrl(u)).catch(() => {}); return () => { gone = true; }; }, [att.path]); // eslint-disable-line react-hooks/exhaustive-deps
   return url ? <img src={url} alt="" /> : <FileGlyph />;
+}
+
+/** A reaction chip that shows WHO reacted on hover (avatars + names). */
+function ReactChip({ emoji, users, me, people, onClick }: { emoji: string; users: string[]; me: string; people: Person[]; onClick: () => void }) {
+  const [hover, setHover] = useState<DOMRect | null>(null);
+  return (
+    <>
+      <button className={users.includes(me) ? 'on' : ''} onClick={onClick}
+        onMouseEnter={(e) => setHover((e.currentTarget as HTMLElement).getBoundingClientRect())}
+        onMouseLeave={() => setHover(null)}>
+        {emoji} <span>{users.length}</span>
+      </button>
+      {hover && createPortal(
+        <div className="react-who" style={{ position: 'fixed', left: Math.min(hover.left, window.innerWidth - 190), bottom: window.innerHeight - hover.top + 6 }}>
+          <span className="react-who-emoji">{emoji}</span>
+          <div className="react-who-names">
+            {users.map((u) => {
+              const person = people.find((x) => x.id === u);
+              return (
+                <span key={u} className="react-who-row">
+                  {person && <Avatar person={person} size={16} />}
+                  {u === me ? 'You' : person ? shortName(person.name) : 'Someone'}
+                </span>
+              );
+            })}
+          </div>
+        </div>, document.body)}
+    </>
+  );
+}
+
+/** The full emoji picker (searchable, categorized, frequently-used first — Slack-style).
+ *  emoji-picker-element is lazy-loaded with locally bundled data, so the main chunk and
+ *  offline use are unaffected; it persists your most-used emoji in IndexedDB itself. */
+function EmojiPop({ anchor, onPick, onClose }: { anchor: DOMRect; onPick: (emoji: string) => void; onClose: () => void }) {
+  const hostRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const [{ Picker }, data] = await Promise.all([
+        import('emoji-picker-element'),
+        import('emoji-picker-element-data/en/emojibase/data.json?url'),
+      ]);
+      if (!alive || !hostRef.current) return;
+      const picker = new Picker({ dataSource: (data as { default: string }).default });
+      picker.classList.add(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+      picker.addEventListener('emoji-click', (ev) => {
+        if (ev.detail.unicode) onPick(ev.detail.unicode);
+      });
+      hostRef.current.replaceChildren(picker);
+    })();
+    return () => { alive = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.emoji-pop')) onClose(); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [onClose]);
+  const W = 324, H = 372;
+  const left = Math.max(10, Math.min(anchor.left - W + anchor.width, window.innerWidth - W - 10));
+  const top = anchor.bottom + 6 + H <= window.innerHeight - 10 ? anchor.bottom + 6 : Math.max(10, anchor.top - H - 6);
+  return createPortal(
+    <div ref={hostRef} className="status-menu emoji-pop" style={{ position: 'fixed', left, top, width: W, height: H }} />,
+    document.body);
 }
 
 function XGlyph() {
