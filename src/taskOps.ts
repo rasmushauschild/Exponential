@@ -2,6 +2,7 @@ import type { Data, ISODate, Notification, Task } from './types';
 import { STATUS_LABEL, shortName } from './types';
 import { formatShort } from './dates';
 import { uid } from './store';
+import { stripInlineMd as plain } from './richtext';
 
 /** Pure helpers shared by the main window and the menu-bar widget. */
 
@@ -30,8 +31,8 @@ export function renameTask(d: Data, id: string, title: string, fresh = true): Da
   const next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? { ...t, title } : t)) };
   if (!t0.personId || t0.personId === d.me || title === t0.title) return next;
   return fresh
-    ? notify(next, { to: t0.personId, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${title}” to your ${t0.date ? 'week' : 'backlog'}`, ref: { kind: 'task', id } })
-    : notify(next, { to: t0.personId, from: d.me, kind: 'task-changed', text: `${nameOf(d, d.me)} renamed “${t0.title}” to “${title}”`, ref: { kind: 'task', id } });
+    ? notify(next, { to: t0.personId, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${plain(title)}” to your ${t0.date ? 'week' : 'backlog'}`, ref: { kind: 'task', id } })
+    : notify(next, { to: t0.personId, from: d.me, kind: 'task-changed', text: `${nameOf(d, d.me)} renamed “${plain(t0.title)}” to “${plain(title)}”`, ref: { kind: 'task', id } });
 }
 
 /** Drop `id` immediately after `afterId` in its person+day group (or at the top when null).
@@ -55,26 +56,26 @@ export function patchTask(d: Data, id: string, patch: Partial<Task>): Data {
   const after = { ...before, ...patch };
   let next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) };
   if (patch.personId && patch.personId !== before.personId) {
-    next = notify(next, { to: after.personId!, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} handed you “${after.title}”`, ref: { kind: 'task', id } });
-    if (before.personId) next = notify(next, { to: before.personId, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} moved “${after.title}” to ${nameOf(d, after.personId!)}`, ref: { kind: 'task', id } });
+    next = notify(next, { to: after.personId!, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} handed you “${plain(after.title)}”`, ref: { kind: 'task', id } });
+    if (before.personId) next = notify(next, { to: before.personId, from: d.me, kind: 'owner-changed', text: `${nameOf(d, d.me)} moved “${plain(after.title)}” to ${nameOf(d, after.personId!)}`, ref: { kind: 'task', id } });
   }
   if (after.status === 'review' && after.reviewerId && (after.reviewerId !== before.reviewerId || before.status !== 'review')) {
     // A fresh request: any earlier verdict from this (or another) reviewer no longer applies.
     next = { ...next, tasks: next.tasks.map((t) => (t.id === id ? { ...t, reviewDone: undefined } : t)) };
-    next = notify(next, { to: after.reviewerId, from: d.me, kind: 'review-requested', text: `${nameOf(d, d.me)} asked you to review “${after.title}”`, ref: { kind: 'task', id } });
+    next = notify(next, { to: after.reviewerId, from: d.me, kind: 'review-requested', text: `${nameOf(d, d.me)} asked you to review “${plain(after.title)}”`, ref: { kind: 'task', id } });
   }
   // Anyone may edit anyone's week — the owner just hears about status and schedule changes
   // someone else makes (notes edits are too chatty to report keystroke by keystroke).
   const owner = after.personId;
   if (owner && owner !== d.me && !(patch.personId && patch.personId !== before.personId)) {
     if ('status' in patch && after.status !== before.status && after.status !== 'review')
-      next = notify(next, { to: owner, from: d.me, kind: 'task-changed', text: `${nameOf(d, d.me)} set “${after.title}” to ${STATUS_LABEL[after.status]}`, ref: { kind: 'task', id } });
+      next = notify(next, { to: owner, from: d.me, kind: 'task-changed', text: `${nameOf(d, d.me)} set “${plain(after.title)}” to ${STATUS_LABEL[after.status]}`, ref: { kind: 'task', id } });
     if (('date' in patch || 'end' in patch) && (after.date !== before.date || after.end !== before.end))
       next = notify(next, {
         to: owner, from: d.me, kind: 'task-changed',
         text: after.date
-          ? `${nameOf(d, d.me)} scheduled “${after.title}” for ${formatShort(after.date)}${after.end && after.end !== after.date ? ` – ${formatShort(after.end)}` : ''}`
-          : `${nameOf(d, d.me)} moved “${after.title}” to your backlog`,
+          ? `${nameOf(d, d.me)} scheduled “${plain(after.title)}” for ${formatShort(after.date)}${after.end && after.end !== after.date ? ` – ${formatShort(after.end)}` : ''}`
+          : `${nameOf(d, d.me)} moved “${plain(after.title)}” to your backlog`,
         ref: { kind: 'task', id },
       });
   }
@@ -88,7 +89,7 @@ export function completeReview(d: Data, id: string): Data {
   if (!t || t.status !== 'review' || !t.reviewerId) return d;
   const next: Data = { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, status: 'progress' as const, reviewDone: true } : x)) };
   return t.personId
-    ? notify(next, { to: t.personId, from: d.me, kind: 'review-completed', text: `${nameOf(d, d.me)} completed the review of “${t.title}”`, ref: { kind: 'task', id } })
+    ? notify(next, { to: t.personId, from: d.me, kind: 'review-completed', text: `${nameOf(d, d.me)} completed the review of “${plain(t.title)}”`, ref: { kind: 'task', id } })
     : next;
 }
 
@@ -121,7 +122,7 @@ export function denyReview(d: Data, id: string): Data {
   if (!t || !t.reviewerId) return d;
   const next: Data = { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, reviewerId: undefined, status: 'progress' as const } : x)) };
   return t.personId
-    ? notify(next, { to: t.personId, from: d.me, kind: 'review-denied', text: `${nameOf(d, d.me)} declined to review “${t.title}”`, ref: { kind: 'task', id } })
+    ? notify(next, { to: t.personId, from: d.me, kind: 'review-denied', text: `${nameOf(d, d.me)} declined to review “${plain(t.title)}”`, ref: { kind: 'task', id } })
     : next;
 }
 
@@ -131,7 +132,7 @@ export function claimTask(d: Data, id: string, personId?: string): Data {
   if (!t) return d;
   const to = personId ?? d.me;
   let next = { ...d, tasks: d.tasks.map((x) => (x.id === id ? { ...x, personId: to, date: undefined, end: undefined } : x)) };
-  if (to !== d.me) next = notify(next, { to, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${t.title}” to your backlog`, ref: { kind: 'task', id } });
+  if (to !== d.me) next = notify(next, { to, from: d.me, kind: 'task-added', text: `${nameOf(d, d.me)} added “${plain(t.title)}” to your backlog`, ref: { kind: 'task', id } });
   return next;
 }
 

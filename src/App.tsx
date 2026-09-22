@@ -653,9 +653,15 @@ export default function App() {
                 if (!name) update((d) => ({ ...d, deadlines: d.deadlines.filter((x) => x.id !== id) }));
                 else update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, name } : x)) }));
               }}
-              onCreateProject={(start, lane, groupId) => {
+              onCreateProject={(start, lane, groupId, atTop) => {
                 const id = uid();
-                update((d) => ({ ...d, projects: [...d.projects, { id, name: 'New project', start, end: addDays(start, 6), lane, groupId }] }));
+                update((d) => {
+                  // From a group's label row the new bar goes on TOP of the group: everyone below moves down a lane.
+                  const projects = atTop
+                    ? d.projects.map((p) => (!p.deletedAt && (p.groupId ?? null) === (groupId ?? null) ? { ...p, lane: p.lane + 1 } : p))
+                    : d.projects;
+                  return { ...d, projects: [...projects, { id, name: 'New project', start, end: addDays(start, 6), lane, groupId }] };
+                });
                 editingNew.current = true;
                 setEditingId(id);
               }}
@@ -726,7 +732,10 @@ export default function App() {
               onDuplicate={(id) => {
                 const dup = (d: Data): Data => {
                   const t = d.tasks.find((x) => x.id === id);
-                  return t ? { ...d, tasks: [...d.tasks, { ...t, id: uid(), reviewerId: undefined, reviewDone: undefined, order: (t.order ?? 0) + 0.5 }] } : d;
+                  if (!t) return d;
+                  // land right below the original; reorderTask renumbers the whole group with INTEGERS (sort_order column)
+                  const copy = { ...t, id: uid(), reviewerId: undefined, reviewDone: undefined };
+                  return reorderTask({ ...d, tasks: [...d.tasks, copy] }, copy.id, t.id);
                 };
                 if (!foreignOp(id, dup)) update(dup);
               }}

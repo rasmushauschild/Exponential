@@ -350,24 +350,24 @@ function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, leg
  * carried improvements, and the MCP server keep working); priorities lines
  * carry a leading "P1 " / "P2 " / "P3 " tag rendered as a clickable chip.
  */
-type ListItem = { text: string; r?: 'y' | 'n'; who: string[] }; // r: reached / not reached; who: assigned people
-const P_COLORS = ['#ff3b30', '#ff9500', '#8e8e93']; // by position; everything past #3 stays grey
+type ListItem = { text: string; p: 1 | 2 | 3; r?: 'y' | 'n'; who: string[] }; // p: priority level; r: reached / not reached; who: assignees
+const P_COLORS: Record<1 | 2 | 3, string> = { 1: '#ff3b30', 2: '#ff9500', 3: '#8e8e93' };
 
-/** Lines like "P2✓ Ship the thing @[uuid|uuid]" — number, outcome mark, text, assignees. */
+/** Lines like "P2✓ Ship the thing @[uuid|uuid]" — level, outcome mark, text, assignees. */
 const parseList = (v: string, withP: boolean): ListItem[] =>
   v.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
     let who: string[] = [];
     l = l.replace(/ ?@\[([^\]]*)\]\s*$/, (_, ids: string) => { who = ids.split('|').filter(Boolean); return ''; });
     if (withP) {
       const m = /^P(\d+)([✓✗]?)[\s.:—-]*(.*)$/i.exec(l);
-      if (m) return { text: m[3], r: m[2] === '✓' ? 'y' as const : m[2] === '✗' ? 'n' as const : undefined, who };
+      if (m) return { text: m[3], p: Math.min(3, Math.max(1, Number(m[1]))) as 1 | 2 | 3, r: m[2] === '✓' ? 'y' as const : m[2] === '✗' ? 'n' as const : undefined, who };
     }
-    return { text: l.replace(/^[-•]\s*/, ''), who };
+    return { text: l.replace(/^[-•]\s*/, ''), p: 1 as const, who };
   });
 const serializeList = (items: ListItem[], withP: boolean) =>
-  items.filter((i) => i.text.trim()).map((i, k) => {
+  items.filter((i) => i.text.trim()).map((i) => {
     const who = i.who.length ? ` @[${i.who.join('|')}]` : '';
-    return withP ? `P${k + 1}${i.r === 'y' ? '✓' : i.r === 'n' ? '✗' : ''} ${i.text.trim()}${who}` : `${i.text.trim()}${who}`;
+    return withP ? `P${i.p}${i.r === 'y' ? '✓' : i.r === 'n' ? '✗' : ''} ${i.text.trim()}${who}` : `${i.text.trim()}${who}`;
   }).join('\n');
 
 function RetroList({ value, onChange, withPriority, placeholder, readOnly, people }: {
@@ -404,7 +404,7 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly, peopl
   };
   const insertAt = (i: number) => {
     const next = [...items];
-    next.splice(i, 0, { text: '', who: [] });
+    next.splice(i, 0, { text: '', p: items[i - 1]?.p ?? 1, who: [] });
     commit(next);
     focusAt.current = i;
   };
@@ -448,12 +448,15 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly, peopl
         <div key={i} ref={(el) => { rows.current[i] = el; }}
           className={`rl-row${dragging === i ? ' dragging' : ''}${withP && it.r === 'y' ? ' done' : ''}${withP && it.r === 'n' ? ' missed' : ''}`}>
           {withP ? (
-            <button
-              className={`rl-p${ro ? ' ro' : ''}`}
-              style={{ ['--pc' as string]: P_COLORS[Math.min(i, P_COLORS.length - 1)] }}
-              title={ro ? `Priority ${i + 1}` : `Priority ${i + 1} — drag to reorder`}
-              onPointerDown={ro ? undefined : (e) => startDrag(i, e)}
-            >P{i + 1}</button>
+            <>
+              <span className="rl-num">{i + 1}</span>
+              <button
+                className={`rl-p${ro ? ' ro' : ''}`}
+                style={{ ['--pc' as string]: P_COLORS[it.p] }}
+                title={ro ? `P${it.p}` : `P${it.p} — click to change, drag to reorder`}
+                onPointerDown={ro ? undefined : (e) => startDrag(i, e, () => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, p: (x.p % 3) + 1 as 1 | 2 | 3 } : x))))}
+              >P{it.p}</button>
+            </>
           ) : (
             <button className={`rl-dot${ro ? ' ro' : ''}`} title={ro ? undefined : 'Drag to reorder'} onPointerDown={ro ? undefined : (e) => startDrag(i, e)} />
           )}
@@ -494,11 +497,11 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly, peopl
           </span>
           {withP && (it.who.length > 0 || !ro) && (
             <span className="rl-who" onPointerDown={(e) => e.stopPropagation()}>
-              {it.who.map((id) => { const per = people?.find((x) => x.id === id); return per ? <Avatar key={id} person={per} size={16} /> : null; })}
               {!ro && (
                 <button className="rl-who-add" title="Assign people"
                   onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setWhoMenu((m) => (m?.i === i ? null : { i, rect: r })); }}>+</button>
               )}
+              {it.who.map((id) => { const per = people?.find((x) => x.id === id); return per ? <Avatar key={id} person={per} size={16} /> : null; })}
             </span>
           )}
         </div>

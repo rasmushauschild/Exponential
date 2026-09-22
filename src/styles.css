@@ -225,13 +225,15 @@ img { display: block; -webkit-user-drag: none; }
 
 /* ─── Master plan ───────────────────────────────────── */
 
-.timeline {
-  flex: 1; position: relative; overflow: hidden; cursor: grab;
-  /* fade layer keeps the date header clean; the dot layer pans via inline background-position */
-  background-image: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 40px, transparent 54px),
-    radial-gradient(circle, var(--dot) 0.825px, transparent 0.825px);
-  background-size: auto, 32px 32px; background-position: 0 0, 9px 14px; /* square grid = lane height: a dot row on either side of every bar, never through */
+.timeline { flex: 1; position: relative; overflow: hidden; cursor: grab; }
+/* square grid = lane height: a dot row on either side of every bar, never through. Own layer:
+   panning translates it on the compositor instead of repainting the whole panel every frame. */
+.tl-dots {
+  position: absolute; inset: -32px; pointer-events: none; will-change: transform;
+  background-image: radial-gradient(circle, var(--dot) 0.825px, transparent 0.825px);
+  background-size: 32px 32px; /* offsets live in the transform (dotX already carries the 9px base, the y expression the 14px) */
 }
+.tl-dot-fade { position: absolute; top: 0; left: 0; right: 0; height: 54px; pointer-events: none; background: linear-gradient(to bottom, var(--dot-fade) 0, var(--dot-fade) 40px, transparent 54px); }
 .timeline.panning { cursor: grabbing; }
 .timeline.dragging-item { cursor: grabbing; }
 
@@ -673,6 +675,9 @@ img { display: block; -webkit-user-drag: none; }
 .blk:hover .blk-x { opacity: 1; }
 .task-blk { flex: 1; display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px 0 26px; margin: 0 -26px; grid-template-columns: none; } /* box spans grip gutter to the panel edge */
 .task-blk-title { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-weight: 500; user-select: text; }
+.task-blk-title[contenteditable] { white-space: pre; overflow: hidden; cursor: text; }
+.task-blk-title[contenteditable]:empty::before { content: attr(data-ph); color: var(--text-3); pointer-events: none; }
+.md-linkish { text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--text-3); }
 .task-blk.done .task-blk-title, .task-blk.cancelled .task-blk-title { color: var(--text-3); }
 .task-blk.cancelled .task-blk-title { text-decoration: line-through; }
 /* Hidden entirely (not just faded) so the title runs to the panel edge until hover. */
@@ -985,8 +990,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .rl-mark.no:hover, .rl-mark.no.on { color: var(--st, #ff3b30); }
 .rl-mark.on { opacity: 1; }
 .rl-row.done .rl-mark, .rl-row.missed .rl-mark { background: transparent; }
-/* assignees on a priority row */
-.rl-who { display: inline-flex; align-items: center; gap: 3px; flex: none; }
+/* assignees on a priority row: stacked like the master-plan bars, flush to the row's right edge */
+.rl-num { flex: none; min-width: 14px; text-align: right; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text-3); }
+.rl-who { display: inline-flex; align-items: center; flex: none; margin-right: -4px; }
+.rl-who > * + * { margin-left: -5px; }
 .rl-who .avatar { box-shadow: 0 0 0 1.5px var(--panel); }
 .rl-who-add {
   width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600;

@@ -5,6 +5,7 @@ import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, shortName } from './types';
 import { addDays, dayIndex, dayOfMonth, isoWeekNumber, weekdayShort } from './dates';
 import { InlineName } from './BigPlan';
 import { confettiBurst } from './confetti';
+import { renderInlineMd } from './richtext';
 
 const EDGE = 8;
 const SWIPE_TRIGGER = 120; // accumulated px of horizontal scroll that flips the week
@@ -507,7 +508,7 @@ function TaskRow({ task, week, readonly, reviewRow, team, people, me, selected, 
         </button>
         {editing
           ? <InlineName initial={task.title} placeholder="Task name…" onDone={(t, viaEnter) => onRename(task.id, t, viaEnter)} />
-          : <button className="task-title" onDoubleClick={() => { if (!readonly && !reviewRow) onEdit?.(task.id); }}>{task.title}</button>}
+          : <button className="task-title" onDoubleClick={() => { if (!readonly && !reviewRow) onEdit?.(task.id); }}>{renderInlineMd(task.title)}</button>}
         {onMoveToNow && !editing && (
           <button className="move-now" title="Move to the top of the backlog so it can be planned into this week"
             onPointerDown={(e) => e.stopPropagation()}

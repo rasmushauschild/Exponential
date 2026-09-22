@@ -304,13 +304,25 @@ export function useData() {
     return () => { window.clearInterval(iv); window.removeEventListener('focus', check); };
   }, [!!cloud]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Realtime: one channel per open team.
+  // Realtime: one channel per open team. A HIDDEN window (the pre-loaded menu-bar widget all
+  // day, a closed-but-alive main window) doesn't reload on every teammate edit — that burned
+  // battery re-fetching and re-rendering for nobody; it catches up the moment it's shown.
   const teamId = cloud?.data?.id;
   const me = cloud?.me;
   useEffect(() => {
     if (!teamId || !me) return;
-    return subscribeTeam(teamId, me, () => reload(teamId));
+    return subscribeTeam(teamId, me, () => {
+      if (document.visibilityState === 'hidden') { reloadWanted.current = true; return; }
+      reload(teamId);
+    });
   }, [teamId, me, reload]);
+  useEffect(() => {
+    const vis = () => {
+      if (document.visibilityState === 'visible' && reloadWanted.current && inflight.current === 0) { reloadWanted.current = false; reload(); }
+    };
+    document.addEventListener('visibilitychange', vis);
+    return () => document.removeEventListener('visibilitychange', vis);
+  }, [reload]);
 
   // The widget and the main window are separate renderers on the same machine: after either one
   // writes, it pings the other through the main process so changes (deletes included) show instantly.
@@ -319,7 +331,10 @@ export function useData() {
     const off = window.exponential?.onCloudPing?.(() => {
       if (!cloudRef.current) return;
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => reload(), 150);
+      timer = window.setTimeout(() => {
+        if (document.visibilityState === 'hidden') { reloadWanted.current = true; return; }
+        reload();
+      }, 150);
     });
     return () => { window.clearTimeout(timer); off?.(); };
   }, [reload]);

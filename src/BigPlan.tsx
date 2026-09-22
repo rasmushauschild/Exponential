@@ -40,7 +40,7 @@ interface Props {
   onDuplicateProject: (id: string) => void; // context menu Duplicate
   onCollapseGroup?: (projectIds: string[]) => void; // a collapsing group's bars leave the multi-selection
   onMoveDeadline: (id: string, date: ISODate) => void;
-  onCreateProject: (start: ISODate, lane: number, groupId?: string) => void;
+  onCreateProject: (start: ISODate, lane: number, groupId?: string, atTop?: boolean) => void; // atTop: from a group's label row — existing lanes shift down
   onRename: (id: string, name: string) => void;
   onStartRename: (id: string) => void; // double-click on a bar
   onOpenRetro: (monday: ISODate) => void;
@@ -198,25 +198,38 @@ export function BigPlan(props: Props) {
   // Wheel: pinch (ctrlKey) zooms so the day under the cursor stays put; otherwise scroll horizontally.
   useEffect(() => {
     const el = ref.current!;
+    // Trackpads fire far more wheel events than there are frames: fold them into refs and
+    // commit at most one setState per animation frame — panning/zooming renders 60×/s, not 300×/s.
+    let raf = 0;
+    let pendingScroll: number | null = null;
+    let pendingView: View | null = null; // NOT viewRef — that mirror is rewritten from state on every render
+    const flush = () => {
+      raf = 0;
+      if (pendingScroll !== null) { setScrollY(clampRef.current(pendingScroll)); pendingScroll = null; }
+      if (pendingView) { setView(pendingView); pendingView = null; }
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(flush); };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const v = viewRef.current;
-      if (!(e.ctrlKey || e.metaKey) && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) { setScrollY(clampRef.current(scrollRef.current + e.deltaY)); return; }
+      const v = pendingView ?? viewRef.current;
+      if (!(e.ctrlKey || e.metaKey) && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) {
+        pendingScroll = clampRef.current((pendingScroll ?? scrollRef.current) + e.deltaY);
+        schedule();
+        return;
+      }
       touchView();
       if (e.ctrlKey || e.metaKey) {
         const mx = e.clientX - el.getBoundingClientRect().left;
         const next = Math.min(MAX_PPD, Math.max(MIN_PPD, v.ppd * Math.exp(-e.deltaY * 0.01)));
         const dayUnderCursor = v.origin + mx / v.ppd;
-        viewRef.current = { ppd: next, origin: dayUnderCursor - mx / next };
+        pendingView = { ppd: next, origin: dayUnderCursor - mx / next };
       } else {
-        // Sideways scrolling pans the timeline; vertical scrolling moves the lanes when they overflow.
-        if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) { setScrollY(clampRef.current(scrollRef.current + e.deltaY)); return; }
-        viewRef.current = { ppd: v.ppd, origin: v.origin + e.deltaX / v.ppd };
+        pendingView = { ppd: v.ppd, origin: v.origin + e.deltaX / v.ppd };
       }
-      setView(viewRef.current);
+      schedule();
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    return () => { el.removeEventListener('wheel', onWheel); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
   const x = (iso: ISODate) => (dayIndex(iso) - origin) * ppd;
@@ -248,9 +261,9 @@ export function BigPlan(props: Props) {
     const yc = clientY - rect.top + scrollY;
     for (const sec of sections) {
       if (yc >= sec.laneTop && yc < sec.laneTop + sec.lanes * ROW_H) return { day, lane: Math.floor((yc - sec.laneTop) / ROW_H), groupId: sec.groupId };
-      if (!sec.collapsed && (groups.length > 0 || !locked) && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId }; // label row = append to this group (collapsed groups are tucked away)
+      if (!sec.collapsed && (groups.length > 0 || !locked) && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId, header: true }; // label row: bar-drops append; hover/create go to the group's TOP (collapsed groups are tucked away)
     }
-    return { day, lane: -2, groupId: undefined as string | undefined };
+    return { day, lane: -2, groupId: undefined as string | undefined, header: false };
   };
 
   const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .week-label, .tl-group');
@@ -290,9 +303,9 @@ export function BigPlan(props: Props) {
       (ev) => {
         setPanning(false);
         if (locked || moved || inRetroStrip(ev.clientY)) return;
-        const { day, lane, groupId } = slotAt(ev.clientX, ev.clientY);
+        const { day, lane, groupId, header } = slotAt(ev.clientX, ev.clientY);
         if (inDeadlineRow(ev.clientY)) onCreateDeadline(fromDayIndex(day));
-        else if (lane >= 0) onCreateProject(fromDayIndex(day), lane, groupId);
+        else if (lane >= 0) onCreateProject(fromDayIndex(day), header ? 0 : lane, groupId, header);
       },
     );
   };
@@ -306,7 +319,8 @@ export function BigPlan(props: Props) {
     setEdgeHover(!!hit);
     if (hit) { setGhost(null); return; } // no create-ghost while hovering a resize grip
     if (inDeadlineRow(e.clientY)) { setGhost({ day, lane: -1 }); return; } // lane -1 = deadline row
-    setGhost(lane >= 0 ? { day, lane, groupId } : null);
+    const slot = slotAt(e.clientX, e.clientY);
+    setGhost(lane >= 0 ? { day, lane: slot.header ? 0 : lane, groupId } : null);
   };
 
   const onBandDown = (e: React.PointerEvent) => {
@@ -455,11 +469,14 @@ export function BigPlan(props: Props) {
     <div
       ref={ref}
       className={`timeline${panning ? ' panning' : ''}${drag || dlDrag ? ' dragging-item' : ''}`}
-      style={{ backgroundPosition: `0 0, ${dotX}px ${14 - scrollY}px`, cursor: edgeHover ? 'ew-resize' : undefined }} /* header fade stays put; dots pan/scroll with the plan, frozen through zooms */
+      style={{ cursor: edgeHover ? 'ew-resize' : undefined }}
       onPointerDown={onPointerDown}
       onPointerMove={onHover}
       onPointerLeave={() => { setGhost(null); setHoverWeek(null); }}
     >
+      {/* dot grid on its own composited layer: panning/scrolling translates it (GPU), nothing repaints */}
+      <div className="tl-dots" style={{ transform: `translate3d(${((dotX % 32) + 32) % 32}px, ${(((14 - scrollY) % 32) + 32) % 32}px, 0)` }} />
+      <div className="tl-dot-fade" />
       {weeks.map((m) => {
         const odd = Math.floor(m / 7) % 2 === 1;
         const hovered = hoverWeek === m;
