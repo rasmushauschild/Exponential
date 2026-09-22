@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('exponential', {
   meetingAppend: (id, buf) => ipcRenderer.invoke('meeting:append', id, buf),
   meetingRead: (id) => ipcRenderer.invoke('meeting:read', id),
   meetingDelete: (id) => ipcRenderer.invoke('meeting:delete', id),
+  linkPreview: (url) => ipcRenderer.invoke('link:preview', url),
   openNotificationSettings: () => ipcRenderer.send('notify:openSettings'),
   setSharedState: (p) => ipcRenderer.send('state:set', p),
   connectClaude: () => ipcRenderer.invoke('mcp:connect'),

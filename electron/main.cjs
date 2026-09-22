@@ -441,6 +441,44 @@ const meetingFile = (id) => {
   if (!/^[0-9a-f-]{36}$/i.test(String(id))) throw new Error('bad meeting id');
   return path.join(meetingsDir(), `${id}.webm`);
 };
+/* ── Link previews: the renderer can't fetch cross-origin, the main process can.
+   Reads at most 512KB of HTML with an 8s cap and returns OpenGraph-ish metadata. ── */
+ipcMain.handle('link:preview', async (_e, url) => {
+  try {
+    const u = new URL(String(url));
+    if (!/^https?:$/.test(u.protocol)) return null;
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const res = await fetch(u, { signal: ctrl.signal, redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) ExponentialLinkPreview/1.0', accept: 'text/html,*/*' } });
+    clearTimeout(timer);
+    if (!res.ok || !(res.headers.get('content-type') ?? '').includes('html')) return null;
+    const reader = res.body.getReader();
+    let html = '';
+    while (html.length < 512 * 1024) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += Buffer.from(value).toString('utf8');
+      if (html.includes('</head>')) break;
+    }
+    reader.cancel().catch(() => {});
+    const pick = (re) => { const m2 = html.match(re); return m2 ? m2[1].trim() : undefined; };
+    const meta = (prop) => pick(new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]*?content=["']([^"']+)["']`, 'i'))
+      ?? pick(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*?(?:property|name)=["']${prop}["']`, 'i'));
+    const decode = (s) => s && s.replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&#x27;/gi, "'").replace(/&nbsp;/g, ' ');
+    const title = decode(meta('og:title') ?? meta('twitter:title') ?? pick(/<title[^>]*>([^<]+)<\/title>/i));
+    if (!title) return null;
+    let image = decode(meta('og:image') ?? meta('twitter:image'));
+    if (image && !/^https?:/i.test(image)) { try { image = new URL(image, u).href; } catch { image = undefined; } }
+    return {
+      url: u.href,
+      title: title.slice(0, 200),
+      desc: (decode(meta('og:description') ?? meta('description')) ?? '').slice(0, 300) || null,
+      image: image ?? null,
+      site: decode(meta('og:site_name')) ?? u.hostname.replace(/^www\./, ''),
+    };
+  } catch { return null; }
+});
+
 ipcMain.handle('meeting:append', (_e, id, buf) => { fs.appendFileSync(meetingFile(id), Buffer.from(buf)); });
 ipcMain.handle('meeting:read', (_e, id) => fs.readFileSync(meetingFile(id)));
 ipcMain.handle('meeting:delete', (_e, id) => { try { fs.rmSync(meetingFile(id), { force: true }); } catch { /* gone is gone */ } });

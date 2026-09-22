@@ -5,7 +5,7 @@ import { shortName } from './types';
 import { Avatar } from './WeekPlan';
 import { decorate } from './richtext';
 import {
-  attachmentUrl, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
+  attachLinkPreview, attachmentUrl, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
   fetchMessages, fetchPreviews, isDm, markRead, messageCache, onChatEvent, openDm, sendMessage, setChannelMembers,
   toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
@@ -263,6 +263,7 @@ export function ChatPage(p: Props) {
                 setMsgs((ms) => (ms.some((x) => x.id === m.id) ? ms : [...ms, m]));
                 setPreviews((pv) => ({ ...pv, [active.id]: { body: body || 'Attachment', author: me, at: m.at } }));
               }
+              attachLinkPreview(teamId, m, cloud).catch(() => {}); // fire and forget
               stickBottom.current = true;
             }} />
         </div>
@@ -462,6 +463,16 @@ function renderChat(text: string) {
 function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boolean; onImage: (url: string) => void }) {
   const [url, setUrl] = useState<string | null>(att.path.startsWith('data:') ? att.path : null);
   const isImage = att.type.startsWith('image/');
+  if (att.type === 'link/preview') {
+    return (
+      <a className="link-card" href={att.path} target="_blank" rel="noreferrer">
+        <span className="link-card-site">{att.site}</span>
+        <span className="link-card-title">{att.name}</span>
+        {att.desc && <span className="link-card-desc">{att.desc}</span>}
+        {att.img && <img className="link-card-img" src={att.img} alt="" loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />}
+      </a>
+    );
+  }
   useEffect(() => {
     let gone = false;
     if (!url) attachmentUrl(att, cloud).then((u) => { if (!gone) setUrl(u); }).catch(() => {});

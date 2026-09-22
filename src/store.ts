@@ -31,6 +31,7 @@ declare global {
       meetingAppend?: (id: string, buf: ArrayBuffer) => Promise<void>;
       meetingRead?: (id: string) => Promise<ArrayBuffer>;
       meetingDelete?: (id: string) => Promise<void>;
+      linkPreview?: (url: string) => Promise<{ url: string; title: string; desc: string | null; image: string | null; site: string } | null>;
       openNotificationSettings?: () => void;
       setSharedState?: (p: { teamId: string | null; teamName: string | null; planUnlocked: boolean }) => void;
       connectClaude?: () => Promise<{ ok: boolean; messages: string[] }>;

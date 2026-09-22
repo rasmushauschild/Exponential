@@ -10,7 +10,11 @@ import { uid } from './store';
  * the same API against localStorage so the UI works without a backend.
  */
 
-export interface Attachment { path: string; name: string; size: number; type: string; w?: number; h?: number }
+export interface Attachment {
+  path: string; name: string; size: number; type: string; w?: number; h?: number;
+  // type 'link/preview': path = url, name = title, plus these
+  desc?: string; img?: string; site?: string;
+}
 export interface ChatMessage {
   id: string; channelId: string; author?: string; body: string;
   attachments?: Attachment[]; reactions?: Record<string, string[]>; // emoji → user ids
@@ -333,6 +337,33 @@ export async function fetchPreviews(teamId: string, cloud: boolean): Promise<Rec
   }
   previewCache.set(teamId, out);
   return out;
+}
+
+/* ── link previews: the SENDER unfurls once (Electron main process) and writes the
+   card into the message's attachments — receivers get it over realtime for free. ── */
+
+const URL_RE = /https?:\/\/[^\s<>"')\]]+/i;
+
+export async function attachLinkPreview(teamId: string, msg: ChatMessage, cloud: boolean) {
+  const unfurl = window.exponential?.linkPreview;
+  if (!unfurl) return; // browser preview has no main process — links stay plain
+  if (msg.attachments?.some((a) => a.type === 'link/preview')) return;
+  const url = msg.body.match(URL_RE)?.[0];
+  if (!url) return;
+  const p = await unfurl(url).catch(() => null);
+  if (!p) return;
+  const att: Attachment = { path: p.url, name: p.title, size: 0, type: 'link/preview', desc: p.desc ?? undefined, img: p.image ?? undefined, site: p.site };
+  const attachments = [...(msg.attachments ?? []), att];
+  const next = { ...msg, attachments };
+  if (!cloud) {
+    const st = localLoad();
+    st.messages[msg.channelId] = (st.messages[msg.channelId] ?? []).map((x) => (x.id === msg.id ? next : x));
+    localSave(st);
+    emit({ type: 'message-changed', teamId, message: next });
+    return;
+  }
+  const { error } = await supabase.from('messages').update({ attachments }).eq('id', msg.id);
+  if (!error) emit({ type: 'message-changed', teamId, message: next });
 }
 
 /* ── attachments ── */
