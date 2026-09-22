@@ -619,7 +619,9 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         if (e.key.toLowerCase() === 'x') removeSel();
       } else if (e.key === 'Escape') setSel(null);
     };
-    const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.blk-list, .toolbar')) setSel(null); };
+    // .slash-menu counts as inside: clearing the selection on the menu's own pointerdown made
+    // the pick land on a single block (turnInto saw no selection by click time)
+    const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.blk-list, .toolbar, .slash-menu')) setSel(null); };
     window.addEventListener('keydown', key);
     window.addEventListener('pointerdown', down);
     return () => { window.removeEventListener('keydown', key); window.removeEventListener('pointerdown', down); };

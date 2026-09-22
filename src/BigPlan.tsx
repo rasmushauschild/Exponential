@@ -214,6 +214,18 @@ export function BigPlan(props: Props) {
     if (barsPanLayer.current) barsPanLayer.current.style.transform = `translate3d(${px}px, 0, 0)`;
     if (scrollLayer.current) scrollLayer.current.style.transform = `translate3d(0, ${-p.scrollY}px, 0)`;
     if (dotsLayer.current) dotsLayer.current.style.transform = `translate3d(${mod(dxv)}px, ${mod(14 - p.scrollY)}px, 0)`;
+    // Sticky content follows per-frame too: bar names pad against the viewport's left edge and
+    // month labels clamp to it — React re-derives the exact same values on commit.
+    if (barsPanLayer.current) for (const el of barsPanLayer.current.querySelectorAll<HTMLElement>('.tl-project[data-l]')) {
+      const l = +el.dataset.l!;
+      const pad = `${Math.max(12, Math.min(+el.dataset.w! - 12, 12 - (l + px)))}px`;
+      if (el.style.paddingLeft !== pad) el.style.paddingLeft = pad;
+    }
+    if (panLayer.current) for (const el of panLayer.current.querySelectorAll<HTMLElement>('.tl-month[data-l]')) {
+      const l = +el.dataset.l!;
+      const left = `${Math.min(Math.max(l, -px), l + +el.dataset.w! - 70) + 18}px`;
+      if (el.style.left !== left) el.style.left = left;
+    }
   };
   const commitGesture = () => {
     window.clearTimeout(settleTimer.current);
@@ -284,7 +296,6 @@ export function BigPlan(props: Props) {
   // All day-positioned chrome lives in transform-panned containers: children get STABLE
   // epoch-relative lefts (no per-frame layout/paint), only the containers' translate changes.
   const epoch = epochRef.current;
-  const panX = (epoch - origin) * ppd;
   // renders that happen MID-GESTURE (hover state etc.) must not stomp the imperative transforms
   const gOrigin = pendRef.current?.origin ?? origin;
   const gScroll = pendRef.current?.scrollY ?? scrollY;
@@ -559,7 +570,7 @@ export function BigPlan(props: Props) {
         );
       })}
       {months.map((m) => (
-        <div key={m.iso} className="tl-month" style={{ left: Math.min(Math.max(m.left, -panXg), m.left + m.w - 70) + 18, opacity: m.w < 40 ? 0 : 1 }} /* clamp against the viewport's left edge in epoch coords (-panX); +18 (+8px CSS padding) = 26px */>
+        <div key={m.iso} className="tl-month" data-l={m.left} data-w={m.w} style={{ left: Math.min(Math.max(m.left, -panXg), m.left + m.w - 70) + 18, opacity: m.w < 40 ? 0 : 1 }} /* clamp against the viewport's left edge in epoch coords (-panX); +18 (+8px CSS padding) = 26px; applyGesture re-clamps per frame via data-l/w */>
           {monthShort(m.iso)} {m.iso.slice(0, 4)}
         </div>
       ))}
@@ -687,6 +698,8 @@ export function BigPlan(props: Props) {
           <div
             key={p.id}
             data-pid={p.id}
+            data-l={left}
+            data-w={w}
             className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}${!p.groupId || !groups.some((g) => g.id === p.groupId) ? ' nogroup' : ''}${gDrag && sec.groupId && gDrag.id !== sec.groupId ? ' gshift' : ''}${fold && fold.gid === sec.groupId ? (fold.on ? ' fold-out' : ' fold-in') : ''}`}
             style={{
               left,
@@ -695,7 +708,7 @@ export function BigPlan(props: Props) {
               transform: gDrag && sec.groupId ? `translateY(${gShift(sec.groupId)}px)` : undefined,
               zIndex: gDrag && gDrag.id === sec.groupId ? 40 : selectedId === p.id || selectedIds?.has(p.id) ? 3 : undefined,
               ['--pc' as string]: color,
-              paddingLeft: Math.max(12, Math.min(w - 12, 12 - (left + panX))),
+              paddingLeft: Math.max(12, Math.min(w - 12, 12 - (left + panXg))),
               cursor: locked ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
             }}
             onPointerDown={(e) => onProjectDown(e, p)}
