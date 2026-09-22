@@ -316,7 +316,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-project.live::before { opacity: 0.38; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
-.bar-avatars { display: inline-flex; flex: none; margin-left: -8px; margin-right: -6px; } /* hug the name and the bar edge — the flex gap alone read too wide */
+.bar-avatars { display: inline-flex; flex: none; margin-left: -10px; margin-right: -6px; } /* cancels the 10px flex gap: only the ellipsis' own trailing space separates a truncated name from the stack */
 .bar-avatars .avatar { margin-left: -5px; }
 .bar-avatars .avatar:first-child { margin-left: 0; }
 
