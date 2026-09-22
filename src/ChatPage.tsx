@@ -5,8 +5,8 @@ import { shortName } from './types';
 import { Avatar } from './WeekPlan';
 import { decorate } from './richtext';
 import {
-  attachmentUrl, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
-  fetchMessages, fetchPreviews, isDm, markRead, onChatEvent, openDm, sendMessage, setChannelMembers,
+  attachmentUrl, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
+  fetchMessages, fetchPreviews, isDm, markRead, messageCache, onChatEvent, openDm, sendMessage, setChannelMembers,
   toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
 import { InboxList } from './DetailPanel';
@@ -49,26 +49,28 @@ export function ChatPage(p: Props) {
   const active = channels.find((c) => c.id === activeId) ?? null;
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [olderDone, setOlderDone] = useState(false);
-  const cache = useRef(new Map<string, ChatMessage[]>());
   const listRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [newChannel, setNewChannel] = useState(false);
   // iMessage-style: a conversations screen first; threads and notifications drill in
   const [screen, setScreen] = useState<'list' | 'thread' | 'inbox'>('list');
-  const [previews, setPreviews] = useState<Record<string, { body: string; author?: string; at: string }>>({});
-  useEffect(() => { fetchPreviews(teamId, cloud).then(setPreviews).catch(() => {}); }, [teamId, cloud]);
+  const [previews, setPreviews] = useState<Record<string, { body: string; author?: string; at: string }>>(() => cachedPreviews(teamId) ?? {});
+  useEffect(() => {
+    setPreviews(cachedPreviews(teamId) ?? {}); // instant from cache, then reconcile
+    fetchPreviews(teamId, cloud).then(setPreviews).catch(() => {});
+  }, [teamId, cloud]);
 
   // Load (or restore) the open channel's messages; mark it read.
   useEffect(() => {
     if (!active) return;
     let gone = false;
-    const cached = cache.current.get(active.id);
+    const cached = messageCache.get(active.id);
     if (cached) setMsgs(cached);
     setOlderDone(false);
     fetchMessages(teamId, active.id, cloud).then((m) => {
       if (gone) return;
-      cache.current.set(active.id, m);
+      messageCache.set(active.id, m);
       setMsgs(m);
       setOlderDone(m.length < 60);
       markRead(teamId, active.id, me, cloud).then(p.onRefreshChannels);
@@ -83,8 +85,6 @@ export function ChatPage(p: Props) {
     if (e.type === 'message') {
       const d = e.message.body || (e.message.attachments?.length ? (e.message.attachments[0].type.startsWith('image/') ? '📷 Image' : e.message.attachments[0].name) : '');
       setPreviews((pv) => ({ ...pv, [e.message.channelId]: { body: d, author: e.message.author, at: e.message.at } }));
-      const cur = cache.current.get(e.message.channelId);
-      if (cur && !cur.some((m) => m.id === e.message.id)) cache.current.set(e.message.channelId, [...cur, e.message]);
       if (e.message.channelId === activeId) {
         setMsgs((ms) => (ms.some((m) => m.id === e.message.id) ? ms : [...ms, e.message]));
         if (document.hasFocus()) markRead(teamId, e.message.channelId, me, cloud).then(p.onRefreshChannels);
@@ -94,8 +94,6 @@ export function ChatPage(p: Props) {
       const patch = (ms: ChatMessage[]) => (e.message.at === '' || e.message.deletedAt
         ? ms.filter((m) => m.id !== e.message.id)
         : ms.map((m) => (m.id === e.message.id ? { ...e.message } : m)));
-      const cur = cache.current.get(e.message.channelId);
-      if (cur) cache.current.set(e.message.channelId, patch(cur));
       if (e.message.channelId === activeId) setMsgs(patch);
     }
   }), [teamId, activeId, cloud, me]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -117,7 +115,7 @@ export function ChatPage(p: Props) {
     const older = await fetchMessages(teamId, active.id, cloud, msgs[0].at);
     if (older.length < 60) setOlderDone(true);
     const merged = [...older, ...msgs.filter((m) => !older.some((o) => o.id === m.id))];
-    cache.current.set(active.id, merged);
+    messageCache.set(active.id, merged);
     stickBottom.current = false;
     setMsgs(merged);
     requestAnimationFrame(() => { el.scrollTop = el.scrollHeight - keep; });
@@ -261,7 +259,7 @@ export function ChatPage(p: Props) {
             onSend={async (body, atts) => {
               const m = await sendMessage(teamId, active.id, me, body, atts, cloud);
               if (cloud) {
-                cache.current.set(active.id, [...(cache.current.get(active.id) ?? []), m]);
+                messageCache.set(active.id, [...(messageCache.get(active.id) ?? []), m]);
                 setMsgs((ms) => (ms.some((x) => x.id === m.id) ? ms : [...ms, m]));
                 setPreviews((pv) => ({ ...pv, [active.id]: { body: body || 'Attachment', author: me, at: m.at } }));
               }

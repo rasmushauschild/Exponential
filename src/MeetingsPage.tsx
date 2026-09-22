@@ -6,7 +6,7 @@ import { Avatar } from './WeekPlan';
 import { uid } from './store';
 import { activeRecording, startRecording, type RecordingSession } from './recorder';
 import {
-  createMeeting, deleteMeeting, fetchMeetings, fetchVoicePrints, meetingAudioUrl,
+  cachedMeetings, createMeeting, deleteMeeting, fetchMeetings, fetchVoicePrints, meetingAudioUrl,
   subscribeMeetings, updateMeeting, uploadMeetingAudio, type Meeting, type Segment,
 } from './meetings';
 import { SendToAgent } from './DetailPanel';
@@ -43,7 +43,7 @@ type Progress = { label: string; pct?: number };
 
 export function MeetingsPage(p: Props) {
   const { teamId, me, people, cloud } = p;
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>(() => cachedMeetings(teamId) ?? []);
   const [selected, setSelected] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const [rec, setRec] = useState<RecordingSession | null>(() => activeRecording());
@@ -51,7 +51,7 @@ export function MeetingsPage(p: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refetch = () => fetchMeetings(teamId, cloud).then(setMeetings).catch((e) => p.onError(String((e as Error).message ?? e)));
-  useEffect(() => { setMeetings([]); setSelected(null); refetch(); return subscribeMeetings(teamId, cloud, () => refetch()); }, [teamId, cloud]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setMeetings(cachedMeetings(teamId) ?? []); setSelected(null); refetch(); return subscribeMeetings(teamId, cloud, () => refetch()); }, [teamId, cloud]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setProg = (id: string, v: Progress | null) => setProgress((m) => {
     const n = { ...m };

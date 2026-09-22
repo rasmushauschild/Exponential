@@ -58,13 +58,24 @@ const toMeeting = (r: MeetingRow): Meeting => ({
   status: r.status, isOpen: r.is_open, access: r.access ?? [],
 });
 
+/* ── module cache: warm across panel open/close; the always-on realtime subscription
+   below keeps it current, so the list renders instantly on open. ── */
+const meetCache = new Map<string, Meeting[]>();
+export const cachedMeetings = (teamId: string) => meetCache.get(teamId);
+
 /* ── CRUD ── */
 
 export async function fetchMeetings(teamId: string, cloud: boolean): Promise<Meeting[]> {
-  if (!cloud) return (localLoad()[teamId] ?? []).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  if (!cloud) {
+    const rows = (localLoad()[teamId] ?? []).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+    meetCache.set(teamId, rows);
+    return rows;
+  }
   const { data, error } = await supabase.from('meetings').select('*').eq('team_id', teamId).order('started_at', { ascending: false });
   if (error) throw error;
-  return (data as MeetingRow[]).map(toMeeting);
+  const rows = (data as MeetingRow[]).map(toMeeting);
+  meetCache.set(teamId, rows);
+  return rows;
 }
 
 export async function createMeeting(teamId: string, me: string, m: Omit<Meeting, 'owner'>, cloud: boolean): Promise<void> {
@@ -167,7 +178,21 @@ export async function saveVoicePrint(me: string, embedding: number[], cloud: boo
 export function subscribeMeetings(teamId: string, cloud: boolean, onChange: (m?: Meeting, ev?: string) => void, name = 'meetings'): () => void {
   if (!cloud) return () => {};
   const ch = supabase.channel(`${name}:${teamId}`);
-  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'meetings', filter: `team_id=eq.${teamId}` }, (p) => onChange(p.new && (p.new as { id?: string }).id ? toMeeting(p.new as MeetingRow) : undefined, p.eventType));
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'meetings', filter: `team_id=eq.${teamId}` }, (p) => {
+    const row = p.new && (p.new as { id?: string }).id ? toMeeting(p.new as MeetingRow) : undefined;
+    const cur = meetCache.get(teamId);
+    if (cur) {
+      if (p.eventType === 'DELETE') {
+        const oldId = (p.old as { id?: string } | null)?.id;
+        if (oldId) meetCache.set(teamId, cur.filter((x) => x.id !== oldId));
+      } else if (row) {
+        meetCache.set(teamId, cur.some((x) => x.id === row.id)
+          ? cur.map((x) => (x.id === row.id ? row : x))
+          : [row, ...cur].sort((a, b) => b.startedAt.localeCompare(a.startedAt)));
+      }
+    }
+    onChange(row, p.eventType);
+  });
   ch.subscribe();
   return () => { supabase.removeChannel(ch); };
 }

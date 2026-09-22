@@ -33,6 +33,33 @@ const listeners = new Set<(e: ChatEvent) => void>();
 export function onChatEvent(cb: (e: ChatEvent) => void) { listeners.add(cb); return () => { listeners.delete(cb); }; }
 const emit = (e: ChatEvent) => listeners.forEach((cb) => cb(e));
 
+/* ── module-level caches: the panel unmounts when closed, but App's realtime
+   subscription keeps running — these stay warm, so reopening renders instantly
+   and already includes everything that arrived meanwhile. ── */
+
+export const messageCache = new Map<string, ChatMessage[]>(); // channelId → latest page + live tail
+const previewCache = new Map<string, Record<string, { body: string; author?: string; at: string }>>();
+export const cachedPreviews = (teamId: string) => previewCache.get(teamId);
+
+const digestMsg = (m: ChatMessage) => ({ body: m.body || (m.attachments?.length ? (m.attachments[0].type.startsWith('image/') ? '📷 Image' : m.attachments[0].name) : ''), author: m.author, at: m.at });
+
+onChatEvent((e) => {
+  if (e.type === 'message') {
+    const cur = messageCache.get(e.message.channelId);
+    if (cur && !cur.some((m) => m.id === e.message.id)) messageCache.set(e.message.channelId, [...cur, e.message]);
+    const pv = previewCache.get(e.teamId) ?? {};
+    previewCache.set(e.teamId, { ...pv, [e.message.channelId]: digestMsg(e.message) });
+  }
+  if (e.type === 'message-changed') {
+    const cur = messageCache.get(e.message.channelId);
+    if (cur) {
+      messageCache.set(e.message.channelId, e.message.deletedAt || e.message.at === ''
+        ? cur.filter((m) => m.id !== e.message.id)
+        : cur.map((m) => (m.id === e.message.id ? e.message : m)));
+    }
+  }
+});
+
 /* ── local (preview) store ── */
 
 interface LocalStore { channels: Record<string, Channel[]>; messages: Record<string, ChatMessage[]>; reads: Record<string, string> }
@@ -193,13 +220,23 @@ export async function fetchMessages(teamId: string, channelId: string, cloud: bo
   if (!cloud) {
     const all = localLoad().messages[channelId] ?? [];
     const upTo = before ? all.filter((m) => m.at < before) : all;
-    return upTo.slice(-limit);
+    const page = upTo.slice(-limit);
+    if (!before) messageCache.set(channelId, page);
+    return page;
   }
   let q = supabase.from('messages').select('*').eq('channel_id', channelId).is('deleted_at', null).order('created_at', { ascending: false }).limit(limit);
   if (before) q = q.lt('created_at', before);
   const { data, error } = await q;
   if (error) throw error;
-  return (data as MessageRow[]).map(toMessage).reverse();
+  const page = (data as MessageRow[]).map(toMessage).reverse();
+  if (!before) {
+    // refresh the cache, keeping anything realtime appended after this page was cut
+    const cached = messageCache.get(channelId) ?? [];
+    const newest = page[page.length - 1]?.at ?? '';
+    const tail = cached.filter((m) => m.at > newest && !page.some((x) => x.id === m.id));
+    messageCache.set(channelId, [...page, ...tail]);
+  }
+  return page;
 }
 
 export async function sendMessage(teamId: string, channelId: string, me: string, body: string, attachments: Attachment[] | undefined, cloud: boolean): Promise<ChatMessage> {
@@ -274,7 +311,7 @@ export async function toggleReaction(teamId: string, msg: ChatMessage, emoji: st
 /** One line per conversation for the iMessage-style list: the latest message of each
  *  channel (one query for all of them; local mode reads the store). */
 export async function fetchPreviews(teamId: string, cloud: boolean): Promise<Record<string, { body: string; author?: string; at: string }>> {
-  const out: Record<string, { body: string; author?: string; at: string }> = {};
+  const out: Record<string, { body: string; author?: string; at: string }> = { ...(previewCache.get(teamId) ?? {}) };
   const digest = (m: ChatMessage) => ({ body: m.body || (m.attachments?.length ? (m.attachments[0].type.startsWith('image/') ? '📷 Image' : m.attachments[0].name) : ''), author: m.author, at: m.at });
   if (!cloud) {
     const st = localLoad();
@@ -282,6 +319,7 @@ export async function fetchPreviews(teamId: string, cloud: boolean): Promise<Rec
       const last = msgs[msgs.length - 1];
       if (last) out[chId] = digest(last);
     }
+    previewCache.set(teamId, out);
     return out;
   }
   const { data, error } = await supabase.from('messages')
@@ -289,9 +327,11 @@ export async function fetchPreviews(teamId: string, cloud: boolean): Promise<Rec
     .eq('team_id', teamId).is('deleted_at', null)
     .order('created_at', { ascending: false }).limit(200);
   if (error) return out;
+  const seen = new Set<string>();
   for (const r of data as MessageRow[]) {
-    if (!out[r.channel_id]) out[r.channel_id] = digest(toMessage(r));
+    if (!seen.has(r.channel_id)) { seen.add(r.channel_id); out[r.channel_id] = digest(toMessage(r)); }
   }
+  previewCache.set(teamId, out);
   return out;
 }
 
@@ -299,17 +339,21 @@ export async function fetchPreviews(teamId: string, cloud: boolean): Promise<Rec
 
 const MAX_FILE = 25 * 1024 * 1024;
 
-/** Pasted/dropped images are downscaled like notes images (the egress lesson). */
+/** Pasted/dropped images are downscaled like notes images (the egress lesson).
+ *  GIFs pass through untouched (re-encoding kills the animation) and PNGs stay PNG
+ *  (JPEG would flatten transparency onto black); photos go to JPEG q0.82 at ≤1600px. */
 async function shrinkImage(file: File): Promise<{ blob: Blob; w: number; h: number }> {
   const bmp = await createImageBitmap(file);
-  const big = file.size >= 150 * 1024 && Math.max(bmp.width, bmp.height) > 1600;
+  if (file.type === 'image/gif') return { blob: file, w: bmp.width, h: bmp.height };
+  const big = Math.max(bmp.width, bmp.height) > 1600;
+  if (!big && (file.size < 150 * 1024 || file.type === 'image/png')) return { blob: file, w: bmp.width, h: bmp.height };
   const scale = big ? 1600 / Math.max(bmp.width, bmp.height) : 1;
-  if (!big && file.size < 150 * 1024) return { blob: file, w: bmp.width, h: bmp.height };
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bmp.width * scale);
   canvas.height = Math.round(bmp.height * scale);
   canvas.getContext('2d')!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), 'image/jpeg', 0.82));
+  const type = file.type === 'image/png' ? 'image/png' : 'image/jpeg';
+  const blob = await new Promise<Blob>((res) => canvas.toBlob((b) => res(b!), type, 0.82));
   return blob.size < file.size ? { blob, w: canvas.width, h: canvas.height } : { blob: file, w: bmp.width, h: bmp.height };
 }
 
