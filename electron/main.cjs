@@ -19,9 +19,17 @@ let reallyQuit = false; // ⌘Q only closes the main window; the tray's Quit (an
    a MacBook panel's logical width shrinks as the user zooms the system in, so scaling
    our UI by logicalWidth/1512 keeps it the same physical size on every setting. ── */
 const zoomFile = () => path.join(app.getPath('userData'), 'zoom.json');
-const DEFAULT_ZOOM = 0.8;
+const DEFAULT_ZOOM = 0.9;
 let zoomFactor = DEFAULT_ZOOM;
-try { zoomFactor = JSON.parse(fs.readFileSync(zoomFile(), 'utf8')).factor || DEFAULT_ZOOM; } catch { /* default */ }
+try {
+  const saved = JSON.parse(fs.readFileSync(zoomFile(), 'utf8'));
+  zoomFactor = saved.factor || DEFAULT_ZOOM;
+  // One-time bump: 0.8 was the old default; carry everyone who sat on it up to the new one.
+  if (saved.factor === 0.8 && !saved.bumped9) {
+    zoomFactor = DEFAULT_ZOOM;
+    fs.writeFileSync(zoomFile(), JSON.stringify({ factor: DEFAULT_ZOOM, bumped9: true }));
+  }
+} catch { /* default */ }
 function displayZoom() {
   if (process.platform !== 'darwin') return 1;
   try {
@@ -36,7 +44,7 @@ function applyZoom() {
 function setZoom(f) {
   zoomFactor = Math.min(1.6, Math.max(0.7, Math.round(f * 10) / 10));
   applyZoom();
-  try { fs.writeFileSync(zoomFile(), JSON.stringify({ factor: zoomFactor })); } catch { /* ignore */ }
+  try { fs.writeFileSync(zoomFile(), JSON.stringify({ factor: zoomFactor, bumped9: true })); } catch { /* ignore */ }
 }
 
 const WIDGET_W = 640;
@@ -281,10 +289,38 @@ ipcMain.on('state:set', (_e, p) => {
 // System notifications for the inbox. Both renderers (main + widget) report what they see,
 // so dedupe by notification id here; clicking one opens the referenced item in the main window.
 const notifiedIds = new Set();
+/* macOS quietly drops notifications when the user turned them off (or hit "Don't Allow" on the
+   first prompt). There is no Electron API for that state, but the system keeps it in
+   com.apple.ncprefs: delivery-style bits 3+4 of `flags` are 0 when the style is "None".
+   Checked once per launch, on the first notification we try to send; if delivery is off, the
+   windows are told so the app can ask the user to re-enable it (with a button to the pane). */
+let ncChecked = false;
+function checkNotificationAccess() {
+  if (process.platform !== 'darwin' || !app.isPackaged || ncChecked) return;
+  ncChecked = true;
+  const { execFile } = require('child_process');
+  execFile('sh', ['-c', 'defaults export com.apple.ncprefs - | plutil -convert json -o - -- -'], { timeout: 4000 }, (err, out) => {
+    if (err) return; // can't tell — stay quiet
+    try {
+      const apps = JSON.parse(out).apps ?? [];
+      const mine = apps.find((a) => a['bundle-id'] === 'com.airy.exponential');
+      if (mine && (mine.flags & 0b11000) === 0) {
+        for (const w of BrowserWindow.getAllWindows()) w.webContents.send('notify:blocked');
+      }
+    } catch { /* format drifted — stay quiet */ }
+  });
+}
+ipcMain.on('notify:openSettings', () => {
+  shell.openExternal(process.platform === 'darwin'
+    ? 'x-apple.systempreferences:com.apple.preference.notifications'
+    : 'ms-settings:notifications');
+});
+
 ipcMain.on('notify', (_e, { id, title, body, ref }) => {
   if (!id || notifiedIds.has(id) || !Notification.isSupported()) return;
   notifiedIds.add(id);
   if (notifiedIds.size > 1000) notifiedIds.delete(notifiedIds.values().next().value);
+  checkNotificationAccess();
   const n = new Notification({ title: title || 'Exponential', body: body || '' });
   n.on('click', () => {
     const win = createMainWindow();

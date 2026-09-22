@@ -26,6 +26,8 @@ declare global {
       pingCloud?: () => void;
       onCloudPing?: (cb: () => void) => () => void;
       notify?: (p: { id: string; title: string; body: string; ref?: { kind: string; id: string } }) => void;
+      onNotifyBlocked?: (cb: () => void) => () => void;
+      openNotificationSettings?: () => void;
       setSharedState?: (p: { teamId: string | null; teamName: string | null; planUnlocked: boolean }) => void;
       connectClaude?: () => Promise<{ ok: boolean; messages: string[] }>;
       sendToClaude?: (text: string) => Promise<'app' | 'app-paste' | 'web' | 'copied'>;

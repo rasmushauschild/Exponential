@@ -795,6 +795,12 @@ img { display: block; -webkit-user-drag: none; }
   background: var(--text); color: var(--bg); font-weight: 600; font-size: 13px; box-shadow: var(--menu-shadow); animation: pop 0.2s ease-out; max-width: 80vw;
 }
 .error-toast { background: var(--today); color: #fff; }
+.toast { display: flex; align-items: center; gap: 10px; }
+.toast-btn { padding: 3px 10px; border-radius: 999px; background: rgba(255, 255, 255, 0.18); color: inherit; font-weight: 600; font-size: 12px; }
+.toast-btn:hover { background: rgba(255, 255, 255, 0.3); }
+.toast-x { font-size: 15px; opacity: 0.7; padding: 0 2px; color: inherit; }
+.toast-x:hover { opacity: 1; }
+.cal-reauth { margin-left: 8px; padding: 2px 9px; font-size: 11px; text-transform: none; letter-spacing: 0; }
 
 /* ─── Sheets ────────────────────────────────────────── */
 

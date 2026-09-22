@@ -71,18 +71,21 @@ export default function App() {
     if (wasOpen !== isOpen) setSlotAnimating(true);
   }, [openKind]);
 
-  // Doing something elsewhere (side panel, week view, sidebar) locks the master plan again;
-  // merely opening a project or deadline from within the plan keeps it unlocked.
+  // The plan stays unlocked while you work in the app; it relocks only when the window
+  // loses focus, Team settings opens, or the team changes.
   useEffect(() => {
     if (!unlocked) return;
-    const down = (e: PointerEvent) => {
-      const t = e.target as HTMLElement;
-      if (planSecRef.current?.contains(t) || t.closest('.backdrop, .status-menu')) return;
-      setUnlocked(false);
-    };
-    window.addEventListener('pointerdown', down);
-    return () => window.removeEventListener('pointerdown', down);
+    const blur = () => setUnlocked(false);
+    window.addEventListener('blur', blur);
+    return () => window.removeEventListener('blur', blur);
   }, [unlocked]);
+  useEffect(() => { if (view === 'team') setUnlocked(false); }, [view]);
+  const teamIdForLock = data?.id;
+  useEffect(() => { setUnlocked(false); }, [teamIdForLock]);
+
+  // macOS says notifications are off for the app: offer the settings pane once.
+  const [notifyBlocked, setNotifyBlocked] = useState(false);
+  useEffect(() => window.exponential?.onNotifyBlocked?.(() => setNotifyBlocked(true)), []);
 
   // Theme follows the system by default ('' = auto, live); toggling to the opposite of the system
   // is an explicit override, toggling back to what the system shows returns to following it.
@@ -352,14 +355,29 @@ export default function App() {
     if (!calEventsRef.current[key]) setCalNote('Loading…'); // first look shows a note; refreshes are invisible
     let cancelled = false;
     window.exponential.google.events(calendarId, week, addDays(week, 6))
-      .then((ev) => { if (!cancelled) { setCalEvents((c) => ({ ...c, [key]: ev })); setCalNote(undefined); } })
+      .then((ev) => { if (!cancelled) { setCalEvents((c) => ({ ...c, [key]: ev })); setCalNote(undefined); setCalReauth(false); } })
       .catch((err: Error) => {
         if (cancelled) return;
-        setCalNote(/404|403/.test(err.message) ? 'Calendar not shared with you' : err.message);
+        // My own calendar failing auth-wise = the grant was revoked or expired: offer to reconnect.
+        if (calendarId === 'primary' && /401|403|invalid|insufficient|denied|scope/i.test(err.message)) {
+          setCalNote('Calendar access was lost');
+          setCalReauth(true);
+        } else setCalNote(/404|403/.test(err.message) ? 'Calendar not shared with you' : err.message);
         setCalEvents((c) => (c[key] ? c : { ...c, [key]: [] })); // keep the last good events on a failed refresh
       });
     return () => { cancelled = true; };
   }, [!!data, calendarOn, googleUser, person, week, calTick]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [calReauth, setCalReauth] = useState(false);
+  const reauthCalendar = async () => {
+    const g = window.exponential?.google;
+    if (!g) return;
+    setCalNote('Waiting for Google in your browser…');
+    const ok = await g.grantCalendar().catch(() => false);
+    if (!ok) { setCalNote('Calendar access was not granted'); return; }
+    setCalReauth(false);
+    setCalEvents({});
+    setCalTick((t) => t + 1);
+  };
 
   // Five minutes before one of my meetings a system notification fires. Today's own
   // calendar refreshes every 10 minutes; the countdown check runs every 30 seconds.
@@ -713,6 +731,7 @@ export default function App() {
                 available: !!googleUser,
                 events: calEvents[calKey] ?? [],
                 note: !window.exponential ? 'Available in the desktop app' : !googleUser ? 'Sign in with Google to see events' : calNote,
+                onReauth: calReauth ? reauthCalendar : undefined,
               }}
               onToggleCalendar={async () => {
                 if (calendarOn) { setCalendarOn(false); return; }
@@ -800,6 +819,13 @@ export default function App() {
       </div>
 
       {saveError && <div className="toast error-toast">{saveError}</div>}
+      {notifyBlocked && !saveError && (
+        <div className="toast">
+          Notifications are turned off for Exponential
+          <button className="toast-btn" onClick={() => { window.exponential?.openNotificationSettings?.(); setNotifyBlocked(false); }}>Turn on</button>
+          <button className="toast-x" onClick={() => setNotifyBlocked(false)}>×</button>
+        </div>
+      )}
       {sheet === 'group' && (
         <GroupSheet
           group={editGroup}

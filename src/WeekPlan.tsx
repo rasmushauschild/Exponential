@@ -33,7 +33,7 @@ interface Props {
   onOpen: (t: Task) => void;
   onReorder: (id: string, afterId: string | null) => void; // drop the task right after this one (null = top of its day)
   onWeekChange: (monday: ISODate) => void;
-  calendar: { enabled: boolean; available: boolean; events: CalendarEvent[]; note?: string };
+  calendar: { enabled: boolean; available: boolean; events: CalendarEvent[]; note?: string; onReauth?: () => void };
   onToggleCalendar: () => void;
   teamBadge?: (id: string) => { id?: string; name: string; icon?: string } | undefined; // set for tasks pulled in from OTHER teams
   allTeams?: { on: boolean; toggle: () => void }; // "All teams" pill (multi-team members only)
@@ -313,6 +313,7 @@ export function WeekPlan(props: Props) {
                 <div className="wk-section">
                   Calendar
                   {calendar.note && <span className="wk-note"> · {calendar.note}</span>}
+                  {calendar.onReauth && <button className="pill cal-reauth" onClick={calendar.onReauth}>Reconnect</button>}
                 </div>
                 {events.map((e) => (
                   <div key={e.id} className="wk-row event" ref={(el) => { if (el) evRowEls.current.set(e.id, el); else evRowEls.current.delete(e.id); }}>
