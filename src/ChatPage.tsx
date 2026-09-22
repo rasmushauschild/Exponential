@@ -287,15 +287,26 @@ function NewChannelForm({ people, me, onCreate, onClose }: { people: Person[]; m
   const [name, setName] = useState('');
   const [priv, setPriv] = useState(false);
   const [members, setMembers] = useState<Set<string>>(new Set());
+  const rootRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const down = (e: PointerEvent) => { if (!rootRef.current?.contains(e.target as Node)) onClose(); };
+    window.addEventListener('pointerdown', down);
+    return () => window.removeEventListener('pointerdown', down);
+  }, [onClose]);
+  const create = () => { if (name.trim()) onCreate(name.trim(), priv, [...members]); };
   return (
-    <div className="chat-new">
-      <input autoFocus placeholder="channel-name" value={name}
-        onChange={(e) => setName(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/^dm:+/, ''))}
-        onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), priv, [...members]); if (e.key === 'Escape') onClose(); }} />
-      <label className="chat-priv"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} /> Private</label>
+    <div ref={rootRef} className="chat-newrow-wrap">
+      <div className="convo chat-newrow">
+        <span className="convo-dot" />
+        <span className="convo-icon"><span className="convo-hash">#</span></span>
+        <input autoFocus placeholder="channel-name" value={name}
+          onChange={(e) => setName(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/^dm:+/, ''))}
+          onKeyDown={(e) => { if (e.key === 'Enter') create(); if (e.key === 'Escape') onClose(); }} />
+        <button className={`pill small-pill${priv ? ' toggle active' : ''}`} onClick={() => setPriv(!priv)} title="Only invited people can see a private channel">Private</button>
+      </div>
       {priv && (
         <div className="chat-member-pick">
-          {people.filter((x) => x.id !== me).map((x) => (
+          {people.filter((x) => x.id !== me && !x.id.startsWith('pending:')).map((x) => (
             <button key={x.id} className={`pill${members.has(x.id) ? ' toggle active' : ''}`}
               onClick={() => setMembers((s) => { const n = new Set(s); if (n.has(x.id)) n.delete(x.id); else n.add(x.id); return n; })}>
               {shortName(x.name)}
@@ -303,10 +314,6 @@ function NewChannelForm({ people, me, onCreate, onClose }: { people: Person[]; m
           ))}
         </div>
       )}
-      <div className="chat-new-foot">
-        <button className="pill" onClick={onClose}>Cancel</button>
-        <button className="pill toggle active" disabled={!name.trim()} onClick={() => name.trim() && onCreate(name.trim(), priv, [...members])}>Create</button>
-      </div>
     </div>
   );
 }

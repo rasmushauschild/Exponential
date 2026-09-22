@@ -6,7 +6,7 @@ import { Avatar } from './WeekPlan';
 import { uid } from './store';
 import { activeRecording, startRecording, type RecordingSession } from './recorder';
 import {
-  createMeeting, deleteMeeting, fetchMeetings, fetchVoicePrints, meetingAudioUrl, saveVoicePrint,
+  createMeeting, deleteMeeting, fetchMeetings, fetchVoicePrints, meetingAudioUrl,
   subscribeMeetings, updateMeeting, uploadMeetingAudio, type Meeting, type Segment,
 } from './meetings';
 import { SendToAgent } from './DetailPanel';
@@ -48,9 +48,6 @@ export function MeetingsPage(p: Props) {
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const [rec, setRec] = useState<RecordingSession | null>(() => activeRecording());
   const [drag, setDrag] = useState(false);
-  const [voiceRec, setVoiceRec] = useState<'idle' | 'recording' | 'saving'>('idle');
-  const [voiceSecs, setVoiceSecs] = useState(8);
-  const voiceCancel = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refetch = () => fetchMeetings(teamId, cloud).then(setMeetings).catch((e) => p.onError(String((e as Error).message ?? e)));
@@ -121,33 +118,6 @@ export function MeetingsPage(p: Props) {
     }
   };
 
-  /** ~8 s reading the on-screen script → my voice print; transcripts then name me automatically. */
-  const learnVoice = async () => {
-    try {
-      voiceCancel.current = false;
-      setVoiceSecs(8);
-      setVoiceRec('recording');
-      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recd = new MediaRecorder(mic, { mimeType: 'audio/webm;codecs=opus' });
-      const chunks: Blob[] = [];
-      recd.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-      recd.start();
-      for (let s = 8; s > 0; s--) {
-        setVoiceSecs(s);
-        await new Promise((r) => setTimeout(r, 1000));
-        if (voiceCancel.current) break;
-      }
-      await new Promise<void>((r) => { recd.onstop = () => r(); recd.stop(); });
-      mic.getTracks().forEach((t) => t.stop());
-      if (voiceCancel.current) { setVoiceRec('idle'); return; }
-      setVoiceRec('saving');
-      const { voiceEmbedding } = await import('./transcribe');
-      const emb = await voiceEmbedding(new Blob(chunks, { type: 'audio/webm' }));
-      await saveVoicePrint(me, emb, cloud);
-      setVoiceRec('idle');
-    } catch (e) { setVoiceRec('idle'); p.onError(String((e as Error).message ?? e)); }
-  };
-
   const sel = meetings.find((m) => m.id === selected) ?? null;
 
   return (
@@ -185,10 +155,6 @@ export function MeetingsPage(p: Props) {
         )}
         <button className="pill" onClick={() => fileRef.current?.click()} title="Transcribe an existing recording">Import audio</button>
         <span className="panel-spacer" />
-        <button className="pill" onClick={learnVoice} disabled={voiceRec !== 'idle'}
-          title="Record ~8 seconds of your voice once — transcripts will then label your parts automatically">
-          {voiceRec === 'recording' ? 'Listening… speak normally' : voiceRec === 'saving' ? 'Saving voice…' : 'Learn my voice'}
-        </button>
         <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
       </div>
       {rec && <RecordBar rec={rec} onStop={stop} />}
@@ -212,23 +178,6 @@ export function MeetingsPage(p: Props) {
       </div>
       </>
       )}
-      {voiceRec !== 'idle' && createPortal(
-        <div className="sheet-veil">
-          <div className="sheet voice-sheet">
-            <div className="sheet-title">Learn my voice</div>
-            <p className="voice-hint">Read this out loud, at your normal pace:</p>
-            <p className="voice-script">
-              “Hi team, it's just me teaching Exponential my voice. Every week we plan projects,
-              set priorities and review progress together. One, two, three, four, five — that
-              should be plenty to recognise me from now on.”
-            </p>
-            <div className="voice-foot">
-              {voiceRec === 'recording' ? <><span className="meet-reddot" /> Listening… {voiceSecs}s</> : 'Saving your voice…'}
-              <span className="panel-spacer" />
-              {voiceRec === 'recording' && <button className="pill" onClick={() => { voiceCancel.current = true; }}>Cancel</button>}
-            </div>
-          </div>
-        </div>, document.body)}
       {drag && <div className="meet-drop-hint">Drop audio to transcribe</div>}
     </div>
   );
