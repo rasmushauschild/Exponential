@@ -186,6 +186,49 @@ export function BigPlan(props: Props) {
   }
   const dotX = 9 - (origin * ppd - dotRef.current.comp);
 
+  /* ── gesture engine: while the wheel (or an empty-space drag) is moving the plan, ONLY the
+     composited layers' transforms are written — no React render per frame. The pending
+     origin/scrollY commit to state when the gesture settles (or on pointer-up). ── */
+  const panLayer = useRef<HTMLDivElement>(null);
+  const panTopLayer = useRef<HTMLDivElement>(null);
+  const ghostPanLayer = useRef<HTMLDivElement>(null);
+  const barsPanLayer = useRef<HTMLDivElement>(null);
+  const scrollLayer = useRef<HTMLDivElement>(null);
+  const dotsLayer = useRef<HTMLDivElement>(null);
+  const pendRef = useRef<{ origin: number; scrollY: number } | null>(null);
+  const dotXRef = useRef(dotX);
+  dotXRef.current = dotX;
+  const epochRef = useRef(Math.round(view.origin));
+  const settleTimer = useRef<number | undefined>(undefined);
+  const applyGesture = () => {
+    const p = pendRef.current;
+    if (!p) return;
+    const v = viewRef.current;
+    const px = (epochRef.current - p.origin) * v.ppd;
+    const dxv = dotXRef.current + (v.origin - p.origin) * v.ppd;
+    const mod = (n: number) => ((n % 32) + 32) % 32;
+    if (panLayer.current) panLayer.current.style.transform = `translate3d(${px}px, 0, 0)`;
+    if (panTopLayer.current) panTopLayer.current.style.transform = `translate3d(${px}px, 0, 0)`;
+    if (ghostPanLayer.current) ghostPanLayer.current.style.transform = `translate3d(${px}px, 0, 0)`;
+    if (barsPanLayer.current) barsPanLayer.current.style.transform = `translate3d(${px}px, 0, 0)`;
+    if (scrollLayer.current) scrollLayer.current.style.transform = `translate3d(0, ${-p.scrollY}px, 0)`;
+    if (dotsLayer.current) dotsLayer.current.style.transform = `translate3d(${mod(dxv)}px, ${mod(14 - p.scrollY)}px, 0)`;
+  };
+  const commitGesture = () => {
+    window.clearTimeout(settleTimer.current);
+    const p = pendRef.current;
+    if (!p) return;
+    pendRef.current = null;
+    setScrollY(clampRef.current(p.scrollY));
+    if (p.origin !== viewRef.current.origin) { viewRef.current = { ppd: viewRef.current.ppd, origin: p.origin }; setView(viewRef.current); }
+  };
+  const gesture = (originV: number, scrollYv: number) => {
+    pendRef.current = { origin: originV, scrollY: scrollYv };
+    applyGesture();
+    window.clearTimeout(settleTimer.current);
+    settleTimer.current = window.setTimeout(commitGesture, 140);
+  };
+
   useLayoutEffect(() => {
     const el = ref.current!;
     const ro = new ResizeObserver(() => { setWidth(el.clientWidth); setHeight(el.clientHeight); });
@@ -198,45 +241,49 @@ export function BigPlan(props: Props) {
   // Wheel: pinch (ctrlKey) zooms so the day under the cursor stays put; otherwise scroll horizontally.
   useEffect(() => {
     const el = ref.current!;
-    // Trackpads fire far more wheel events than there are frames: fold them into refs and
-    // commit at most one setState per animation frame — panning/zooming renders 60×/s, not 300×/s.
+    // Pan and vertical scroll never touch React mid-gesture (pure transform writes via
+    // gesture()); zoom re-renders, coalesced to one setView per frame.
     let raf = 0;
-    let pendingScroll: number | null = null;
     let pendingView: View | null = null; // NOT viewRef — that mirror is rewritten from state on every render
     const flush = () => {
       raf = 0;
-      if (pendingScroll !== null) { setScrollY(clampRef.current(pendingScroll)); pendingScroll = null; }
-      if (pendingView) { setView(pendingView); pendingView = null; }
+      if (pendingView) { viewRef.current = pendingView; setView(pendingView); pendingView = null; }
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(flush); };
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      const v = pendingView ?? viewRef.current;
+      const cur = pendRef.current ?? { origin: (pendingView ?? viewRef.current).origin, scrollY: scrollRef.current };
       if (!(e.ctrlKey || e.metaKey) && Math.abs(e.deltaX) <= Math.abs(e.deltaY)) {
-        pendingScroll = clampRef.current((pendingScroll ?? scrollRef.current) + e.deltaY);
-        schedule();
+        gesture(cur.origin, clampRef.current(cur.scrollY + e.deltaY));
         return;
       }
       touchView();
       if (e.ctrlKey || e.metaKey) {
+        // zoom: fold any pending pan in, then go through React so every left/width refits
+        const basePpd = (pendingView ?? viewRef.current).ppd;
+        window.clearTimeout(settleTimer.current);
+        if (pendRef.current) { setScrollY(clampRef.current(pendRef.current.scrollY)); pendRef.current = null; }
         const mx = e.clientX - el.getBoundingClientRect().left;
-        const next = Math.min(MAX_PPD, Math.max(MIN_PPD, v.ppd * Math.exp(-e.deltaY * 0.01)));
-        const dayUnderCursor = v.origin + mx / v.ppd;
+        const next = Math.min(MAX_PPD, Math.max(MIN_PPD, basePpd * Math.exp(-e.deltaY * 0.01)));
+        const dayUnderCursor = cur.origin + mx / basePpd;
         pendingView = { ppd: next, origin: dayUnderCursor - mx / next };
+        schedule();
       } else {
-        pendingView = { ppd: v.ppd, origin: v.origin + e.deltaX / v.ppd };
+        gesture(cur.origin + e.deltaX / viewRef.current.ppd, cur.scrollY);
       }
-      schedule();
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => { el.removeEventListener('wheel', onWheel); if (raf) cancelAnimationFrame(raf); };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // All day-positioned chrome lives in transform-panned containers: children get STABLE
   // epoch-relative lefts (no per-frame layout/paint), only the containers' translate changes.
-  const epochRef = useRef(Math.round(view.origin));
   const epoch = epochRef.current;
   const panX = (epoch - origin) * ppd;
+  // renders that happen MID-GESTURE (hover state etc.) must not stomp the imperative transforms
+  const gOrigin = pendRef.current?.origin ?? origin;
+  const gScroll = pendRef.current?.scrollY ?? scrollY;
+  const panXg = (epoch - gOrigin) * ppd;
   const xe = (iso: ISODate) => (dayIndex(iso) - epoch) * ppd;
   const x = (iso: ISODate) => (dayIndex(iso) - origin) * ppd;
 
@@ -267,9 +314,15 @@ export function BigPlan(props: Props) {
     const yc = clientY - rect.top + scrollY;
     for (const sec of sections) {
       if (yc >= sec.laneTop && yc < sec.laneTop + sec.lanes * ROW_H) return { day, lane: Math.floor((yc - sec.laneTop) / ROW_H), groupId: sec.groupId };
-      if (!sec.collapsed && (groups.length > 0 || !locked) && yc >= sec.headerTop && yc < sec.laneTop) return { day, lane: sec.lanes, groupId: sec.groupId, header: true }; // label row: bar-drops append; hover/create go to the group's TOP (collapsed groups are tucked away)
+      if (!sec.collapsed && (groups.length > 0 || !locked) && yc >= sec.headerTop && yc < sec.laneTop) {
+        // label row: a bar DROP appends to this group (lane/groupId); hover/create instead
+        // extend the group ABOVE — the new bar lands on this very line (prevAppend).
+        const above = sections[sections.indexOf(sec) - 1];
+        const prevAppend = above && !above.collapsed ? { groupId: above.groupId, lane: above.lanes } : null;
+        return { day, lane: sec.lanes, groupId: sec.groupId, header: true, prevAppend };
+      }
     }
-    return { day, lane: -2, groupId: undefined as string | undefined, header: false };
+    return { day, lane: -2, groupId: undefined as string | undefined, header: false, prevAppend: null as { groupId?: string; lane: number } | null };
   };
 
   const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .week-label, .tl-group');
@@ -304,14 +357,17 @@ export function BigPlan(props: Props) {
     track(
       (ev) => {
         if (Math.abs(ev.clientX - startX) > 3) moved = true;
-        if (moved) { touchView(); setPanning(true); setView({ ppd, origin: startOrigin - (ev.clientX - startX) / ppd }); }
+        if (moved) { touchView(); setPanning(true); gesture(startOrigin - (ev.clientX - startX) / ppd, pendRef.current?.scrollY ?? scrollRef.current); }
       },
       (ev) => {
         setPanning(false);
+        commitGesture();
         if (locked || moved || inRetroStrip(ev.clientY)) return;
-        const { day, lane, groupId, header } = slotAt(ev.clientX, ev.clientY);
+        const slot = slotAt(ev.clientX, ev.clientY);
+        const { day } = slot;
         if (inDeadlineRow(ev.clientY)) onCreateDeadline(fromDayIndex(day));
-        else if (lane >= 0) onCreateProject(fromDayIndex(day), header ? 0 : lane, groupId, header);
+        else if (slot.header && slot.prevAppend) onCreateProject(fromDayIndex(day), slot.prevAppend.lane, slot.prevAppend.groupId);
+        else if (slot.lane >= 0) onCreateProject(fromDayIndex(day), slot.header ? 0 : slot.lane, slot.groupId, slot.header);
       },
     );
   };
@@ -326,7 +382,8 @@ export function BigPlan(props: Props) {
     if (hit) { setGhost(null); return; } // no create-ghost while hovering a resize grip
     if (inDeadlineRow(e.clientY)) { setGhost({ day, lane: -1 }); return; } // lane -1 = deadline row
     const slot = slotAt(e.clientX, e.clientY);
-    setGhost(lane >= 0 ? { day, lane: slot.header ? 0 : lane, groupId, hdr: slot.header } : null);
+    if (slot.header && slot.prevAppend) setGhost({ day, lane: slot.prevAppend.lane, groupId: slot.prevAppend.groupId });
+    else setGhost(lane >= 0 ? { day, lane: slot.header ? 0 : lane, groupId, hdr: slot.header } : null);
   };
 
   const onBandDown = (e: React.PointerEvent) => {
@@ -454,7 +511,7 @@ export function BigPlan(props: Props) {
       const mStart = dayIndex(`${y}-${String(m).padStart(2, '0')}-01`);
       const nextM = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
       const mEnd = dayIndex(nextM);
-      months.push({ iso, left: (mStart - origin) * ppd, w: (mEnd - mStart) * ppd });
+      months.push({ iso, left: (mStart - epoch) * ppd, w: (mEnd - mStart) * ppd }); // epoch coords — rendered inside .tl-pan
       d = mEnd;
     }
   }
@@ -481,31 +538,20 @@ export function BigPlan(props: Props) {
       onPointerLeave={() => { setGhost(null); setHoverWeek(null); }}
     >
       {/* dot grid on its own composited layer: panning/scrolling translates it (GPU), nothing repaints */}
-      <div className="tl-dots" style={{ transform: `translate3d(${((dotX % 32) + 32) % 32}px, ${(((14 - scrollY) % 32) + 32) % 32}px, 0)` }} />
+      <div ref={dotsLayer} className="tl-dots" style={{ transform: `translate3d(${(((dotX + (origin - gOrigin) * ppd) % 32) + 32) % 32}px, ${(((14 - gScroll) % 32) + 32) % 32}px, 0)` }} />
       <div className="tl-dot-fade" />
-      <div className="tl-pan" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
+      <div ref={panLayer} className="tl-pan" style={{ transform: `translate3d(${panXg}px, 0, 0)` }}>
       {weeks.map((m) => {
         const odd = Math.floor(m / 7) % 2 === 1;
         const hovered = hoverWeek === m;
         return (
           <div key={m}>
             {odd && <div className="tl-week-tint" style={{ left: (m - epoch) * ppd, width: ppd * 7 }} />}
-            {hovered && m !== dayIndex(week) && ppd * 7 >= 70 && (
-              <button
-                className="week-label hover"
-                style={{ left: (m - epoch + 3.5) * ppd }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onClick={() => onOpenRetro(fromDayIndex(m))}
-                title="Open this week's retro"
-              >
-                Week {isoWeekNumber(fromDayIndex(m))}
-              </button>
-            )}
           </div>
         );
       })}
       {months.map((m) => (
-        <div key={m.iso} className="tl-month" style={{ left: Math.min(Math.max(m.left, 0), m.left + m.w - 70) + 18, opacity: m.w < 40 ? 0 : 1 }} /* +18 (+8px CSS padding) = 26px, flush with the panel title */>
+        <div key={m.iso} className="tl-month" style={{ left: Math.min(Math.max(m.left, -panXg), m.left + m.w - 70) + 18, opacity: m.w < 40 ? 0 : 1 }} /* clamp against the viewport's left edge in epoch coords (-panX); +18 (+8px CSS padding) = 26px */>
           {monthShort(m.iso)} {m.iso.slice(0, 4)}
         </div>
       ))}
@@ -525,33 +571,7 @@ export function BigPlan(props: Props) {
         onPointerDown={onBandDown}
         title="Drag to choose the week shown below"
       >
-        {ppd * 7 >= 70 && (
-          <button
-            className="week-label current"
-            title="Open this week's retro — drag to move the week"
-            onPointerDown={(e) => {
-              // A still press opens the retro; pulling sideways drags the week band along.
-              e.stopPropagation();
-              e.preventDefault();
-              if (e.button !== 0) return;
-              const startX = e.clientX;
-              const startWeek = dayIndex(week);
-              let moved = false;
-              track(
-                (ev) => {
-                  if (Math.abs(ev.clientX - startX) > 3) { moved = true; setBandDrag(true); }
-                  if (!moved) return;
-                  const shift = Math.round((ev.clientX - startX) / ppd / 7) * 7;
-                  const next = fromDayIndex(startWeek + shift);
-                  if (next !== weekRef.current) onWeekChange(next);
-                },
-                () => { setBandDrag(false); if (!moved) onOpenRetro(week); },
-              );
-            }}
-          >
-            Week {weekNum}
-          </button>
-        )}
+
       </div>
 
       {ghost && !drag && ghost.lane === -1 && (
@@ -586,8 +606,8 @@ export function BigPlan(props: Props) {
       </div>{/* .tl-pan */}
 
       <div className={`tl-lanes${fold ? ' glide' : ''}`} style={{ top: projectTop - 6 }}>
-      <div className="tl-scrollv" style={{ transform: `translate3d(0, ${-scrollY}px, 0)` }}>
-      <div className="tl-panh" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
+      <div ref={scrollLayer} className="tl-scrollv" style={{ transform: `translate3d(0, ${-gScroll}px, 0)` }}>
+      <div ref={ghostPanLayer} className="tl-panh" style={{ transform: `translate3d(${panXg}px, 0, 0)` }}>
       {ghost && !drag && !gDrag && ghost.lane >= 0 && (
         <div className="tl-project ghost" style={{ left: (ghost.day - epoch) * ppd, width: ppd * 7, top: (ghost.hdr ? sectionOf(ghost.groupId).headerTop : sectionOf(ghost.groupId).laneTop + ghost.lane * ROW_H) - projectTop + 3 }}>
           New project
@@ -639,7 +659,7 @@ export function BigPlan(props: Props) {
             : <>+ Add group</>}
         </button>
       ))}
-      <div className="tl-panh" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
+      <div ref={barsPanLayer} className="tl-panh" style={{ transform: `translate3d(${panXg}px, 0, 0)` }}>
       {[...projects].sort((a, b) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end)).map((p) => {
         const live = drag?.id === p.id ? drag : null;
         // Bars in the dragged multi-selection follow the grabbed one in time.
@@ -694,8 +714,51 @@ export function BigPlan(props: Props) {
       </div>{/* .tl-scrollv */}
       </div>
 
-      <div className="tl-pan tl-pan-top" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
+      <div ref={panTopLayer} className="tl-pan tl-pan-top" style={{ transform: `translate3d(${panXg}px, 0, 0)` }}>
         <div className="today-line" style={{ left: xe(today) + ppd / 2 }} />
+        {/* week labels live up here: the pan layers are stacking contexts, so a z-index down
+            inside .tl-pan could never climb above .tl-lanes the way the old global z:6 did */}
+        {ppd * 7 >= 70 && (
+          <div className="wlab-slot" style={{ left: xe(week), width: ppd * 7 }}>
+            <button
+            className="week-label current"
+            title="Open this week's retro — drag to move the week"
+            onPointerDown={(e) => {
+              // A still press opens the retro; pulling sideways drags the week band along.
+              e.stopPropagation();
+              e.preventDefault();
+              if (e.button !== 0) return;
+              const startX = e.clientX;
+              const startWeek = dayIndex(week);
+              let moved = false;
+              track(
+                (ev) => {
+                  if (Math.abs(ev.clientX - startX) > 3) { moved = true; setBandDrag(true); }
+                  if (!moved) return;
+                  const shift = Math.round((ev.clientX - startX) / ppd / 7) * 7;
+                  const next = fromDayIndex(startWeek + shift);
+                  if (next !== weekRef.current) onWeekChange(next);
+                },
+                () => { setBandDrag(false); if (!moved) onOpenRetro(week); },
+              );
+            }}
+          >
+            Week {weekNum}
+          </button>
+          </div>
+        )}
+        {hoverWeek !== null && hoverWeek !== dayIndex(week) && ppd * 7 >= 70 && (
+          <div className="wlab-slot" style={{ left: (hoverWeek - epoch) * ppd, width: ppd * 7 }}>
+            <button
+              className="week-label hover"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onOpenRetro(fromDayIndex(hoverWeek))}
+              title="Open this week's retro"
+            >
+              Week {isoWeekNumber(fromDayIndex(hoverWeek))}
+            </button>
+          </div>
+        )}
       </div>
 
       {ctx && createPortal(

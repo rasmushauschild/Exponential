@@ -157,7 +157,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     { label: 'Task', kind: 'task' },
     { label: 'Toggle', kind: 'tog' },
   ];
-  const [slash, setSlash] = useState<{ i: number; rect: DOMRect; at?: number; forSel?: boolean } | null>(null);
+  const [slash, setSlash] = useState<{ i: number; rect: DOMRect; at?: number; forSel?: boolean; fresh?: boolean } | null>(null);
   const slashRef = useRef(slash);
   slashRef.current = slash;
   const [slashSel, setSlashSel] = useState(0);
@@ -202,13 +202,18 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       setFocus({ index: i, caret: 'end' });
     }
   };
-  // The menu follows the editor: it closes when the '/' that opened it is gone.
+  // The menu follows the editor: it closes when the '/' that opened it is gone. Two subtleties:
+  // the effect can flush BETWEEN the keydown and the character landing (real typing does this,
+  // synthetic events don't) — so the first run after opening is skipped, and "nothing at that
+  // position yet" counts as open (matches the old empty-block behaviour).
   useEffect(() => {
     if (!slash) return;
+    if (slash.fresh) { setSlash({ ...slash, fresh: false }); return; }
     if (!slash.forSel) {
       const b = blocks[slash.i];
       const md = liveMd(slash.i) ?? (b && 'text' in b ? b.text : b?.kind === 'task' ? tasksRef.current.find((t) => t.id === b.taskId)?.title ?? '' : null);
-      if (md === null || md[slash.at ?? 0] !== '/') { setSlash(null); return; }
+      const at = slash.at ?? 0;
+      if (md === null || (md.length > at && md[at] !== '/')) { setSlash(null); return; }
     }
     setSlashSel((v) => Math.min(v, Math.max(0, slashOptions().length - 1)));
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.slash-menu')) setSlash(null); };
@@ -263,7 +268,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
     }
     if (e.key === '/') {
-      setSlash({ i, rect: el.getBoundingClientRect(), at: mdOffsetOf(b.text, caretOffsets(el).start) });
+      setSlash({ i, rect: el.getBoundingClientRect(), at: mdOffsetOf(b.text, caretOffsets(el).start), fresh: true });
       setSlashSel(0);
     }
     if (e.key === 'Tab') {
@@ -312,7 +317,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
     }
     if (e.key === '/') {
-      setSlash({ i, rect: el.getBoundingClientRect(), at: mdOffsetOf(title, caretOffsets(el).start) });
+      setSlash({ i, rect: el.getBoundingClientRect(), at: mdOffsetOf(title, caretOffsets(el).start), fresh: true });
       setSlashSel(0);
     }
     if (e.key === 'Tab') {

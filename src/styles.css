@@ -41,15 +41,15 @@
 }
 
 [data-theme='dark'] {
-  --bg: #0b0b0b;
-  --panel: #141414;
-  --surface: #141414;
+  --bg: #050505;
+  --panel: #0e0e0e;
+  --surface: #0e0e0e;
   --text: #fafafa;
   --text-2: #a0a0a0;
   --text-3: #707070;
   --soft: rgba(255, 255, 255, 0.05);
-  --row-hov: #1f1f1f;
-  --row-sel: #292929;
+  --row-hov: #191919;
+  --row-sel: #232323;
   --soft-2: rgba(255, 255, 255, 0.1);
   --accent: #3b9cff;
   --today: #ff5b52;
@@ -63,12 +63,12 @@
   --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.1);
   --dot: rgba(255, 255, 255, 0.18);
-  --dot-fade: #131313; /* must match the rendered dark panel surface */
-  --frost: rgba(20, 20, 20, 0.85);
-  --frost-deep: rgba(15, 15, 15, 0.92);
-  --tint: #0b0b0b;
-  --bar: #151515;
-  --veil: rgba(11, 11, 11, 0.6);
+  --dot-fade: #0d0d0d; /* must match the rendered dark panel surface */
+  --frost: rgba(14, 14, 14, 0.85);
+  --frost-deep: rgba(10, 10, 10, 0.92);
+  --tint: #060606;
+  --bar: #101010;
+  --veil: rgba(6, 6, 6, 0.6);
   --wk-tint: rgba(255, 255, 255, 0.028);
   --edge: rgba(255, 255, 255, 0.15);
   --rim: rgba(255, 255, 255, 0.13); /* dark mode: definition comes from a light hairline, not black */
@@ -264,9 +264,10 @@ img { display: block; -webkit-user-drag: none; }
 .tl-lanes { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; }
 /* pan/scroll are pure compositor transforms on these wrappers; children keep stable positions */
 .tl-pan, .tl-panh, .tl-scrollv { position: absolute; inset: 0; will-change: transform; pointer-events: none; }
-.tl-pan > *, .tl-panh > *, .tl-scrollv > * { pointer-events: auto; }
-.tl-pan-top { z-index: 5; pointer-events: none; }
-.tl-pan-top > * { pointer-events: none; }
+.tl-pan > *:not(.tl-panh):not(.tl-scrollv), .tl-panh > *, .tl-scrollv > *:not(.tl-panh) { pointer-events: auto; }
+.tl-pan-top { z-index: 6; } /* today line + week labels float above the lanes */
+.wlab-slot { position: absolute; top: 0; bottom: 0; pointer-events: none; }
+.wlab-slot > * { pointer-events: auto; }
 .tl-group {
   position: absolute; left: 14px; height: 20px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px 0 6px; border-radius: 999px;
   font-size: 12px; font-weight: 700; color: var(--text-2); background: transparent; z-index: 3; white-space: nowrap;
@@ -315,7 +316,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-project.live::before { opacity: 0.38; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
-.bar-avatars { display: inline-flex; flex: none; margin-left: -4px; } /* the flex gap alone read too wide next to ellipsised names */
+.bar-avatars { display: inline-flex; flex: none; margin-left: -6px; margin-right: -5px; } /* hug the name and the bar edge — the flex gap alone read too wide */
 .bar-avatars .avatar { margin-left: -5px; }
 .bar-avatars .avatar:first-child { margin-left: 0; }
 
