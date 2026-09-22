@@ -81,7 +81,7 @@ export async function transcribe(blob: Blob, onProgress: (p: TranscribeProgress)
    OPTIONAL: any failure returns the transcript without speaker labels. ── */
 
 const SEG_MODEL = 'onnx-community/pyannote-segmentation-3.0';
-const EMB_MODEL = 'Xenova/wavlm-base-plus-sv'; // public x-vector model; wespeaker's repo is gated
+const EMB_MODEL = 'onnx-community/wespeaker-voxceleb-resnet34-LM'; // diarization-grade (pyannote 3.1 uses this family); the Xenova mirror is gated, onnx-community is public
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 let segP: Promise<{ processor: any; model: any }> | null = null;
@@ -97,9 +97,9 @@ async function loadSeg() {
 }
 async function loadEmb() {
   if (!embP) embP = (async () => {
-    const { AutoProcessor, AutoModelForXVector } = await import('@huggingface/transformers');
+    const { AutoProcessor, AutoModel } = await import('@huggingface/transformers');
     const processor = await AutoProcessor.from_pretrained(EMB_MODEL);
-    const model = await AutoModelForXVector.from_pretrained(EMB_MODEL, { dtype: 'q8' } as never);
+    const model = await AutoModel.from_pretrained(EMB_MODEL, { dtype: 'fp32' } as never);
     return { processor, model };
   })().catch((e) => { embP = null; throw e; });
   return embP;
@@ -116,9 +116,17 @@ async function embed(audio: Float32Array): Promise<number[]> {
   return l2(Array.from(t.data));
 }
 
-/** ~8s of speech → a voice print for "Learn my voice". */
+/** Enrollment sample → a robust voice print: the MEAN embedding over 3s slices. */
 export async function voiceEmbedding(blob: Blob): Promise<number[]> {
-  return embed(await decodeTo16k(blob));
+  const audio = await decodeTo16k(blob);
+  const SR = 16000, SLICE = 3 * SR;
+  const embs: number[][] = [];
+  for (let off = 0; off + SR <= audio.length && embs.length < 8; off += SLICE) {
+    const e = await embed(audio.subarray(off, Math.min(audio.length, off + SLICE))).catch(() => null);
+    if (e) embs.push(e);
+  }
+  if (!embs.length) return embed(audio);
+  return l2(embs[0].map((_, i) => embs.reduce((a, v) => a + v[i], 0) / embs.length));
 }
 
 export interface Enrolled { id: string; embedding: number[] }
@@ -135,7 +143,7 @@ export async function labelSpeakers(audio: Float32Array, segments: Segment[], en
   const { processor, model } = await loadSeg();
   type Turn = { start: number; end: number; win: number; local: number };
   const turns: Turn[] = [];
-  const WIN = 30 * SR, HOP = 25 * SR;
+  const WIN = 10 * SR, HOP = 8 * SR; // 10s is the model's native scale AND it caps at 3 concurrent speakers per window — 30s windows collapsed 4-person rooms
   let winIdx = 0;
   for (let off = 0; off < audio.length; off += HOP, winIdx++) {
     const chunk = audio.subarray(off, Math.min(audio.length, off + WIN));
@@ -179,10 +187,14 @@ export async function labelSpeakers(audio: Float32Array, segments: Segment[], en
   const groupEmb = new Map<string, number[] | null>();
   const embFor = async (k: string) => {
     if (groupEmb.has(k)) return groupEmb.get(k)!;
-    const t = [...byGroup.get(k)!].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
-    const mid = (t.start + t.end) / 2, half = Math.min(3, (t.end - t.start) / 2);
-    const a = audio.subarray(Math.max(0, Math.floor((mid - half) * SR)), Math.floor((mid + half) * SR));
-    const e = a.length >= SR * 0.8 ? await embed(a).catch(() => null) : null;
+    const sorted = [...byGroup.get(k)!].sort((a, b) => (b.end - b.start) - (a.end - a.start)).slice(0, 3);
+    const embs: number[][] = [];
+    for (const t of sorted) {
+      const mid = (t.start + t.end) / 2, half = Math.min(3, (t.end - t.start) / 2);
+      const a = audio.subarray(Math.max(0, Math.floor((mid - half) * SR)), Math.floor((mid + half) * SR));
+      if (a.length >= SR * 0.8) { const e = await embed(a).catch(() => null); if (e) embs.push(e); }
+    }
+    const e = embs.length ? l2(embs[0].map((_, i) => embs.reduce((a2, v) => a2 + v[i], 0) / embs.length)) : null;
     groupEmb.set(k, e);
     return e;
   };
@@ -202,34 +214,68 @@ export async function labelSpeakers(audio: Float32Array, segments: Segment[], en
     if (!clusterRep.has(c)) clusterRep.set(c, k);
   }
 
-  // clusters → labels: enrolled voice prints first, then Speaker N by first appearance
+  // With enrolled voice prints, identification is PER TURN (closed-set): each turn is
+  // scored against every teammate's print. Cluster identity is only smoothing — the
+  // segmentation model tops out at 3 concurrent speakers per window, so clusters are
+  // unreliable with a full room, but individual turns are clean slices of one voice.
+  const turnLabel = new Map<Turn, string>();
+  if (enrolled.length) {
+    const prints = enrolled.map((en) => ({ id: en.id, e: l2(en.embedding) }));
+    const turnEmb = new Map<Turn, number[] | null>();
+    for (const t of turns) {
+      if (t.end - t.start < 0.8) { turnEmb.set(t, null); continue; }
+      const mid = (t.start + t.end) / 2, half = Math.min(1.5, (t.end - t.start) / 2);
+      const a = audio.subarray(Math.max(0, Math.floor((mid - half) * SR)), Math.floor((mid + half) * SR));
+      turnEmb.set(t, await embed(a).catch(() => null));
+    }
+    for (const t of turns) {
+      const e = turnEmb.get(t);
+      if (!e) continue;
+      const sims = prints.map((p2) => ({ id: p2.id, sim: cos(e, p2.e) })).sort((a, b) => b.sim - a.sim);
+      if (sims[0] && sims[0].sim >= 0.4 && (sims[0].sim - (sims[1]?.sim ?? 0) >= 0.05 || sims[0].sim >= 0.7)) {
+        turnLabel.set(t, sims[0].id);
+      }
+    }
+    // smoothing: unidentified turns inherit the majority label of their window-local group
+    for (const group of byGroup.values()) {
+      const votes = new Map<string, number>();
+      for (const t of group) { const l = turnLabel.get(t); if (l) votes.set(l, (votes.get(l) ?? 0) + (t.end - t.start)); }
+      let best = '', bw = 0;
+      for (const [l, w] of votes) if (w > bw) { best = l; bw = w; }
+      if (best) for (const t of group) if (!turnLabel.has(t)) turnLabel.set(t, best);
+    }
+    // exclusivity: two overlapping turns can't be the same person — the shorter goes anonymous
+    for (const a of turns) for (const b of turns) {
+      if (a === b) continue;
+      const la = turnLabel.get(a), lb = turnLabel.get(b);
+      if (!la || la !== lb) continue;
+      if (Math.min(a.end, b.end) - Math.max(a.start, b.start) > 0.5) {
+        turnLabel.delete((a.end - a.start) < (b.end - b.start) ? a : b);
+      }
+    }
+  }
+
+  // anything still unlabeled falls back to the stitch clusters as Speaker N
   const label = new Map<number, string>();
   let anon = 0;
   for (const k of orderedKeys) {
     const c = clusterOf.get(k)!;
-    if (label.has(c)) continue;
-    let who = '';
-    if (enrolled.length) {
-      const e = await embFor(clusterRep.get(c) ?? k);
-      if (e) {
-        let sim = 0.6;
-        for (const en of enrolled) { const s2 = cos(e, l2(en.embedding)); if (s2 > sim) { who = en.id; sim = s2; } }
-      }
-    }
-    label.set(c, who || `Speaker ${++anon}`);
+    if (!label.has(c)) label.set(c, `Speaker ${++anon}`);
   }
 
-  // each whisper segment takes the speaker whose turns overlap it most
+  // each whisper segment takes the speaker whose turns overlap it most (per-turn
+  // identities first; stitch-cluster Speaker N covers the rest)
   return segments.map((s2) => {
-    const share = new Map<number, number>();
+    const share = new Map<string, number>();
     for (const t of turns) {
       const ov = Math.min(s2.t1, t.end) - Math.max(s2.t0, t.start);
-      if (ov > 0.15) share.set(clusterOf.get(key(t))!, (share.get(clusterOf.get(key(t))!) ?? 0) + ov);
+      if (ov <= 0.15) continue;
+      const who = turnLabel.get(t) ?? label.get(clusterOf.get(key(t))!)!;
+      share.set(who, (share.get(who) ?? 0) + ov);
     }
-    let best = -1, bestOv = 0.2;
-    for (const [c, ov] of share) if (ov > bestOv) { best = c; bestOv = ov; }
-    const who = best >= 0 ? label.get(best) : undefined;
-    return who ? { ...s2, who } : s2;
+    let best = '', bestOv = 0.2;
+    for (const [w, ov] of share) if (ov > bestOv) { best = w; bestOv = ov; }
+    return best ? { ...s2, who: best } : s2;
   });
 }
 

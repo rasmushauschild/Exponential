@@ -7,7 +7,7 @@ import { uid } from './store';
 import { activeRecording, startRecording, type RecordingSession } from './recorder';
 import {
   cachedMeetings, createMeeting, deleteMeeting, fetchMeetings, fetchVoicePrints, meetingAudioUrl,
-  subscribeMeetings, updateMeeting, uploadMeetingAudio, type Meeting, type Segment,
+  saveVoicePrint, subscribeMeetings, updateMeeting, uploadMeetingAudio, type Meeting, type Segment,
 } from './meetings';
 import { SendToAgent } from './DetailPanel';
 
@@ -48,6 +48,9 @@ export function MeetingsPage(p: Props) {
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const [rec, setRec] = useState<RecordingSession | null>(() => activeRecording());
   const [drag, setDrag] = useState(false);
+  const [voiceRec, setVoiceRec] = useState<'idle' | 'recording' | 'saving'>('idle');
+  const [voiceSecs, setVoiceSecs] = useState(20);
+  const voiceCancel = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refetch = () => fetchMeetings(teamId, cloud).then(setMeetings).catch((e) => p.onError(String((e as Error).message ?? e)));
@@ -118,6 +121,36 @@ export function MeetingsPage(p: Props) {
     }
   };
 
+  /** ~20s reading the on-screen script → a voice print; transcripts then attribute this
+   *  person BY NAME (closed-set identification — the reliable path for a shared-mic room). */
+  const learnVoice = async () => {
+    try {
+      voiceCancel.current = false;
+      setVoiceSecs(20);
+      setVoiceRec('recording');
+      const allowed = await window.exponential?.micEnsure?.() ?? true;
+      if (!allowed) { setVoiceRec('idle'); window.exponential?.micOpenSettings?.(); p.onError('Microphone access is off for Exponential — enable it in System Settings.'); return; }
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recd = new MediaRecorder(mic, { mimeType: 'audio/webm;codecs=opus' });
+      const chunks: Blob[] = [];
+      recd.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      recd.start();
+      for (let s = 20; s > 0; s--) {
+        setVoiceSecs(s);
+        await new Promise((r) => setTimeout(r, 1000));
+        if (voiceCancel.current) break;
+      }
+      await new Promise<void>((r) => { recd.onstop = () => r(); recd.stop(); });
+      mic.getTracks().forEach((t) => t.stop());
+      if (voiceCancel.current) { setVoiceRec('idle'); return; }
+      setVoiceRec('saving');
+      const { voiceEmbedding } = await import('./transcribe');
+      const emb = await voiceEmbedding(new Blob(chunks, { type: 'audio/webm' }));
+      await saveVoicePrint(me, emb, cloud);
+      setVoiceRec('idle');
+    } catch (e) { setVoiceRec('idle'); p.onError(String((e as Error).message ?? e)); }
+  };
+
   const sel = meetings.find((m) => m.id === selected) ?? null;
 
   return (
@@ -155,6 +188,10 @@ export function MeetingsPage(p: Props) {
         )}
         <button className="pill" onClick={() => fileRef.current?.click()} title="Transcribe an existing recording">Import audio</button>
         <span className="panel-spacer" />
+        <button className="pill" onClick={learnVoice} disabled={voiceRec !== 'idle'}
+          title="Read a short script once — transcripts will then label your parts with your name">
+          Learn my voice
+        </button>
         <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
       </div>
       {rec && <RecordBar rec={rec} onStop={stop} />}
@@ -178,6 +215,25 @@ export function MeetingsPage(p: Props) {
       </div>
       </>
       )}
+      {voiceRec !== 'idle' && createPortal(
+        <div className="sheet-veil">
+          <div className="sheet voice-sheet">
+            <div className="sheet-title">Learn my voice</div>
+            <p className="voice-hint">Read this out loud, at your normal pace — it takes about twenty seconds:</p>
+            <p className="voice-script">
+              “Hi team, it's just me teaching Exponential my voice. Every week we plan projects,
+              set priorities and review progress together around this table. Sometimes I speak
+              quickly when I'm excited, and sometimes slowly when I'm thinking something through.
+              One, two, three, four, five, six, seven — red, green, blue, yellow. That should be
+              plenty for the app to recognise me in our meetings from now on.”
+            </p>
+            <div className="voice-foot">
+              {voiceRec === 'recording' ? <><span className="meet-reddot" /> Listening… {voiceSecs}s</> : 'Saving your voice…'}
+              <span className="panel-spacer" />
+              {voiceRec === 'recording' && <button className="pill" onClick={() => { voiceCancel.current = true; }}>Cancel</button>}
+            </div>
+          </div>
+        </div>, document.body)}
       {drag && <div className="meet-drop-hint">Drop audio to transcribe</div>}
     </div>
   );
