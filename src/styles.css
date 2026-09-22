@@ -1098,16 +1098,16 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .side-title { font-size: 24px; font-weight: 800; letter-spacing: -0.03em; flex: none; }
 .chat-back { margin: 0; flex: none; }
 /* iMessage-style conversations */
-.chat-convos { flex: 1; overflow-y: auto; padding: 10px 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.chat-convos { flex: 1; overflow-y: auto; padding: 10px 16px 16px; display: flex; flex-direction: column; gap: 2px; }
 .chat-convos::-webkit-scrollbar { width: 0; }
+/* rows line up with the title: icon left edge = 26px (16 pad + 10 row pad) */
 .convo { display: flex; align-items: center; gap: 11px; padding: 9px 10px; border-radius: 11px; text-align: left; color: var(--text); flex: none; }
 .convo.ghost .convo-name { color: var(--text-3); font-weight: 600; }
 .convo.ghost .convo-hash { background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--text-3); font-size: 17px; font-weight: 500; }
 .convo.ghost:hover .convo-name { color: var(--text-2); }
 .convo:hover { background: var(--row-hov, var(--soft)); }
-.convo-dot { width: 8px; flex: none; display: grid; place-items: center; }
-.convo-dot > span { width: 8px; height: 8px; border-radius: 999px; background: var(--accent); }
-.convo-icon { flex: none; display: grid; place-items: center; }
+.convo-icon { flex: none; display: grid; place-items: center; position: relative; }
+.convo.unread .convo-icon::after { content: ''; position: absolute; top: -1px; right: -2px; width: 9px; height: 9px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 2px var(--frost); }
 .convo-hash { width: 34px; height: 34px; border-radius: 999px; background: var(--soft); box-shadow: inset 0 0 0 1px var(--line); display: grid; place-items: center; font-size: 15px; font-weight: 700; color: var(--text-2); }
 .convo-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .convo-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

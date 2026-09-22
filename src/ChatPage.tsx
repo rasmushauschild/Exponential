@@ -165,7 +165,6 @@ export function ChatPage(p: Props) {
 
   const convoRow = (ch: Channel, icon: React.ReactNode, name: React.ReactNode, onClick: () => void) => (
     <button key={ch.id} className={`convo${ch.unread ? ' unread' : ''}`} onClick={onClick}>
-      <span className="convo-dot">{ch.unread > 0 && <span />}</span>
       <span className="convo-icon">{icon}</span>
       <span className="convo-main">
         <span className="convo-name">{name}</span>
@@ -197,7 +196,6 @@ export function ChatPage(p: Props) {
                 }} />
             ) : (
               <button className="convo ghost" onClick={() => setNewChannel(true)}>
-                <span className="convo-dot" />
                 <span className="convo-icon"><span className="convo-hash">+</span></span>
                 <span className="convo-main"><span className="convo-name">New channel</span></span>
               </button>
@@ -211,7 +209,6 @@ export function ChatPage(p: Props) {
                 () => openDmWith(x.id));
             })}
             <button className={`convo notifs${p.notifUnread ? ' unread' : ''}`} onClick={() => setScreen('inbox')}>
-              <span className="convo-dot">{p.notifUnread > 0 && <span />}</span>
               <span className="convo-icon"><span className="convo-hash"><BellGlyph /></span></span>
               <span className="convo-main">
                 <span className="convo-name">Notifications</span>
@@ -301,7 +298,6 @@ function NewChannelForm({ people, me, onCreate, onClose }: { people: Person[]; m
   return (
     <div ref={rootRef} className="chat-newrow-wrap">
       <div className="convo chat-newrow">
-        <span className="convo-dot" />
         <span className="convo-icon"><span className="convo-hash">#</span></span>
         <input autoFocus placeholder="channel-name" value={name}
           onChange={(e) => setName(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/^dm:+/, ''))}
