@@ -101,7 +101,7 @@ export function BigPlan(props: Props) {
   const [ctx, setCtx] = useState<{ x: number; y: number; id: string } | null>(null); // right-click menu on a bar
   const [gDrag, setGDrag] = useState<{ id: string; dy: number } | null>(null); // group label being reordered
   const [hoverCursor, setHoverCursor] = useState<string>('');
-  const [ghost, setGhost] = useState<{ day: number; lane: number; groupId?: string } | null>(null);
+  const [ghost, setGhost] = useState<{ day: number; lane: number; groupId?: string; hdr?: boolean } | null>(null);
   const [hoverWeek, setHoverWeek] = useState<number | null>(null); // day index of a Monday
   const [scrollY, setScrollY] = useState(0); // vertical offset of the lanes when they don't fit
   const scrollRef = useRef(0);
@@ -232,6 +232,12 @@ export function BigPlan(props: Props) {
     return () => { el.removeEventListener('wheel', onWheel); if (raf) cancelAnimationFrame(raf); };
   }, []);
 
+  // All day-positioned chrome lives in transform-panned containers: children get STABLE
+  // epoch-relative lefts (no per-frame layout/paint), only the containers' translate changes.
+  const epochRef = useRef(Math.round(view.origin));
+  const epoch = epochRef.current;
+  const panX = (epoch - origin) * ppd;
+  const xe = (iso: ISODate) => (dayIndex(iso) - epoch) * ppd;
   const x = (iso: ISODate) => (dayIndex(iso) - origin) * ppd;
 
   const track = (move: (ev: PointerEvent) => void, up: (ev: PointerEvent) => void) => {
@@ -320,7 +326,7 @@ export function BigPlan(props: Props) {
     if (hit) { setGhost(null); return; } // no create-ghost while hovering a resize grip
     if (inDeadlineRow(e.clientY)) { setGhost({ day, lane: -1 }); return; } // lane -1 = deadline row
     const slot = slotAt(e.clientX, e.clientY);
-    setGhost(lane >= 0 ? { day, lane: slot.header ? 0 : lane, groupId } : null);
+    setGhost(lane >= 0 ? { day, lane: slot.header ? 0 : lane, groupId, hdr: slot.header } : null);
   };
 
   const onBandDown = (e: React.PointerEvent) => {
@@ -461,7 +467,7 @@ export function BigPlan(props: Props) {
   // Deadlines share one row: each label may only use the space up to the next star.
   const dlSorted = [...deadlines].sort((a, b) => a.date.localeCompare(b.date));
   // centred on the day, like the today line
-  const dlLeft = (d: Deadline) => ((dlDrag?.id === d.id ? dlDrag.date : dayIndex(d.date)) - origin) * ppd + ppd / 2;
+  const dlLeft = (d: Deadline) => ((dlDrag?.id === d.id ? dlDrag.date : dayIndex(d.date)) - epoch) * ppd + ppd / 2; // inside .tl-pan
 
   const weekNum = isoWeekNumber(week);
 
@@ -477,16 +483,17 @@ export function BigPlan(props: Props) {
       {/* dot grid on its own composited layer: panning/scrolling translates it (GPU), nothing repaints */}
       <div className="tl-dots" style={{ transform: `translate3d(${((dotX % 32) + 32) % 32}px, ${(((14 - scrollY) % 32) + 32) % 32}px, 0)` }} />
       <div className="tl-dot-fade" />
+      <div className="tl-pan" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
       {weeks.map((m) => {
         const odd = Math.floor(m / 7) % 2 === 1;
         const hovered = hoverWeek === m;
         return (
           <div key={m}>
-            {odd && <div className="tl-week-tint" style={{ left: (m - origin) * ppd, width: ppd * 7 }} />}
+            {odd && <div className="tl-week-tint" style={{ left: (m - epoch) * ppd, width: ppd * 7 }} />}
             {hovered && m !== dayIndex(week) && ppd * 7 >= 70 && (
               <button
                 className="week-label hover"
-                style={{ left: (m - origin + 3.5) * ppd }}
+                style={{ left: (m - epoch + 3.5) * ppd }}
                 onPointerDown={(e) => e.stopPropagation()}
                 onClick={() => onOpenRetro(fromDayIndex(m))}
                 title="Open this week's retro"
@@ -506,7 +513,7 @@ export function BigPlan(props: Props) {
         const iso = fromDayIndex(d);
         const wk = (d + 3) % 7 >= 5;
         return (
-          <div key={d} className={`tl-day${wk ? ' weekend' : ''}`} style={{ left: (d - origin) * ppd, width: ppd }}>
+          <div key={d} className={`tl-day${wk ? ' weekend' : ''}`} style={{ left: (d - epoch) * ppd, width: ppd }}>
             {ppd >= 40 ? `${weekdayShort(iso)[0]} ${dayOfMonth(iso)}` : dayOfMonth(iso)}
           </div>
         );
@@ -514,7 +521,7 @@ export function BigPlan(props: Props) {
 
       <div
         className={`week-band${bandDrag ? ' dragging' : viewMoving || panning ? ' no-anim' : ''}`}
-        style={{ left: x(week), width: ppd * 7 }}
+        style={{ left: xe(week), width: ppd * 7 }}
         onPointerDown={onBandDown}
         title="Drag to choose the week shown below"
       >
@@ -548,7 +555,7 @@ export function BigPlan(props: Props) {
       </div>
 
       {ghost && !drag && ghost.lane === -1 && (
-        <div className="tl-deadline ghost" style={{ left: (ghost.day - origin) * ppd + ppd / 2, top: HEADER_H }}>
+        <div className="tl-deadline ghost" style={{ left: (ghost.day - epoch) * ppd + ppd / 2, top: HEADER_H }}>
           <span className="dot" /><span className="label">New deadline</span>
         </div>
       )}
@@ -576,15 +583,20 @@ export function BigPlan(props: Props) {
         );
       })}
 
+      </div>{/* .tl-pan */}
+
       <div className={`tl-lanes${fold ? ' glide' : ''}`} style={{ top: projectTop - 6 }}>
+      <div className="tl-scrollv" style={{ transform: `translate3d(0, ${-scrollY}px, 0)` }}>
+      <div className="tl-panh" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
       {ghost && !drag && !gDrag && ghost.lane >= 0 && (
-        <div className="tl-project ghost" style={{ left: (ghost.day - origin) * ppd, width: ppd * 7, top: sectionOf(ghost.groupId).laneTop - projectTop + 3 + ghost.lane * ROW_H - scrollY }}>
+        <div className="tl-project ghost" style={{ left: (ghost.day - epoch) * ppd, width: ppd * 7, top: (ghost.hdr ? sectionOf(ghost.groupId).headerTop : sectionOf(ghost.groupId).laneTop + ghost.lane * ROW_H) - projectTop + 3 }}>
           New project
         </div>
       )}
+      </div>{/* ghost panh */}
       {sections.map((sec) => (groups.length > 0 || !locked) && (
         <button key={sec.groupId ?? 'none'} className={`tl-group${sec.groupId ? '' : ' none'}${!sec.groupId && !locked ? ' add' : ''}${gDrag && gDrag.id === sec.groupId ? ' dragging' : gDrag && sec.groupId ? ' gshift' : ''}`}
-          style={{ top: sec.headerTop - projectTop + 6 - scrollY, ...(gDrag && sec.groupId ? { transform: `translateY(${gShift(sec.groupId)}px)`, zIndex: gDrag.id === sec.groupId ? 40 : undefined } : null) }}
+          style={{ top: sec.headerTop - projectTop + 6, ...(gDrag && sec.groupId ? { transform: `translateY(${gShift(sec.groupId)}px)`, zIndex: gDrag.id === sec.groupId ? 40 : undefined } : null) }}
           onPointerDown={(e) => {
             e.stopPropagation();
             const g = groups.find((x) => x.id === sec.groupId);
@@ -627,7 +639,8 @@ export function BigPlan(props: Props) {
             : <>+ Add group</>}
         </button>
       ))}
-      {projects.map((p) => {
+      <div className="tl-panh" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
+      {[...projects].sort((a, b) => a.start.localeCompare(b.start) || b.end.localeCompare(a.end)).map((p) => {
         const live = drag?.id === p.id ? drag : null;
         // Bars in the dragged multi-selection follow the grabbed one in time.
         const follow = !live && drag?.ids?.includes(p.id) ? drag.dd ?? 0 : 0;
@@ -638,7 +651,7 @@ export function BigPlan(props: Props) {
         // tucked away with its group — except while collapsing, when the bars stay to fade out
         if (sec.collapsed && !(fold?.on && fold.gid === sec.groupId)) return null;
         // 2px shaved off each end: bars that meet on a date keep a slight gap
-        const left = (s - origin) * ppd + 2;
+        const left = (s - epoch) * ppd + 2; // inside .tl-panh; viewport-relative = left + panX
         const w = Math.max(ppd - 4, (en - s + 1) * ppd - 4);
         const color = projectColor(p, groups);
         const editing = editingId === p.id;
@@ -650,11 +663,11 @@ export function BigPlan(props: Props) {
             style={{
               left,
               width: w,
-              top: sec.laneTop - projectTop + 3 + lane * ROW_H - scrollY,
+              top: sec.laneTop - projectTop + 3 + lane * ROW_H,
               transform: gDrag && sec.groupId ? `translateY(${gShift(sec.groupId)}px)` : undefined,
-              zIndex: gDrag && gDrag.id === sec.groupId ? 40 : undefined,
+              zIndex: gDrag && gDrag.id === sec.groupId ? 40 : selectedId === p.id || selectedIds?.has(p.id) ? 3 : undefined,
               ['--pc' as string]: color,
-              paddingLeft: Math.max(12, Math.min(w - 12, 12 - left)),
+              paddingLeft: Math.max(12, Math.min(w - 12, 12 - (left + panX))),
               cursor: locked ? 'pointer' : live ? (live.mode === 'move' ? 'grabbing' : 'ew-resize') : hoverCursor || 'grab',
             }}
             onPointerDown={(e) => onProjectDown(e, p)}
@@ -677,9 +690,13 @@ export function BigPlan(props: Props) {
           </div>
         );
       })}
+      </div>{/* .tl-panh (bars) */}
+      </div>{/* .tl-scrollv */}
       </div>
 
-      <div className="today-line" style={{ left: x(today) + ppd / 2 }} />
+      <div className="tl-pan tl-pan-top" style={{ transform: `translate3d(${panX}px, 0, 0)` }}>
+        <div className="today-line" style={{ left: xe(today) + ppd / 2 }} />
+      </div>
 
       {ctx && createPortal(
         <div className="status-menu ctx-menu" style={{ position: 'fixed', left: Math.min(ctx.x, window.innerWidth - 180), top: Math.min(ctx.y, window.innerHeight - 52) }} onPointerDown={(e) => e.stopPropagation()}>

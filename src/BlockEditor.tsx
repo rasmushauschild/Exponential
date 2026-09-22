@@ -157,51 +157,59 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     { label: 'Task', kind: 'task' },
     { label: 'Toggle', kind: 'tog' },
   ];
-  const [slash, setSlash] = useState<{ i: number; rect: DOMRect } | null>(null);
+  const [slash, setSlash] = useState<{ i: number; rect: DOMRect; at?: number; forSel?: boolean } | null>(null);
   const slashRef = useRef(slash);
   slashRef.current = slash;
   const [slashSel, setSlashSel] = useState(0);
   const slashSelRef = useRef(0);
   slashSelRef.current = slashSel;
+  const liveMd = (i: number): string | null => {
+    const el = listRef.current?.querySelectorAll('.blk')[i]?.querySelector<HTMLElement>('[contenteditable]');
+    return el ? htmlToMd(el).replace(/\u00a0/g, ' ') : null;
+  };
   const slashOptions = () => {
     const sl = slashRef.current;
-    if (!sl) return SLASH_OPTS;
+    if (!sl || sl.forSel) return SLASH_OPTS;
     const b = blocksRef.current[sl.i];
-    const q = (b && 'text' in b ? b.text : b?.kind === 'task' ? tasksRef.current.find((t) => t.id === b.taskId)?.title ?? '' : '').slice(1).toLowerCase();
+    const md = liveMd(sl.i) ?? (b && 'text' in b ? b.text : b?.kind === 'task' ? tasksRef.current.find((t) => t.id === b.taskId)?.title ?? '' : '');
+    const q = md.slice((sl.at ?? 0) + 1).toLowerCase();
     return SLASH_OPTS.filter((o) => o.label.toLowerCase().includes(q));
   };
   const applySlash = (kind: 'h1' | 'h2' | 'p' | 'tog' | 'task') => {
     const sl = slashRef.current;
     if (!sl) return;
-    const i = sl.i;
     setSlash(null);
+    if (sl.forSel) { turnInto(kind); return; } // a block selection: the whole selection converts / wraps
+    const i = sl.i;
     const b = blocksRef.current[i];
     if (!b || b.kind === 'img') return;
+    // the text before the '/' survives; the "/query" itself is consumed
+    const md = liveMd(i) ?? (('text' in b ? b.text : tasksRef.current.find((t) => t.id === (b as Extract<Block, { kind: 'task' }>).taskId)?.title) ?? '');
+    const keep = md.slice(0, sl.at ?? 0);
     if (b.kind === 'task') {
-      // converting a task block away deletes its (still unnamed) task
       if (kind === 'task') return;
       onDeleteTask(b.taskId);
-      commit(blocksRef.current.map((x, j) => (j === i ? { key: newKey(), kind, text: '', indent: b.indent } as Block : x)));
-      setFocus({ index: i, caret: 'start' });
+      commit(blocksRef.current.map((x, j) => (j === i ? { key: newKey(), kind, text: keep, indent: b.indent } as Block : x)));
+      setFocus({ index: i, caret: 'end' });
       return;
     }
     if (kind === 'task') {
-      const id = createTask('');
+      const id = createTask(keep);
       commit(blocksRef.current.map((x, j) => (j === i ? { key: newKey(), kind: 'task', taskId: id, indent: b.indent } as Block : x)));
       setFocus({ index: i, caret: 'end' });
     } else {
-      commit(blocksRef.current.map((x, j) => (j === i ? { ...b, kind, text: '' } as Block : x)));
-      setFocus({ index: i, caret: 'start' });
+      commit(blocksRef.current.map((x, j) => (j === i ? { ...b, kind, text: keep } as Block : x)));
+      setFocus({ index: i, caret: 'end' });
     }
   };
-  // What the menu filters on: the block's text, or the task's title for task blocks.
-  const slashText = (b: Block | undefined) => (b && 'text' in b ? b.text : b?.kind === 'task' ? tasksRef.current.find((t) => t.id === b.taskId)?.title ?? '' : null);
-  // The menu follows the block's text: it closes when the '/' is gone or the block changed shape.
+  // The menu follows the editor: it closes when the '/' that opened it is gone.
   useEffect(() => {
     if (!slash) return;
-    const b = blocks[slash.i];
-    const txt = slashText(b);
-    if (txt === null || (txt !== '' && !txt.startsWith('/'))) { setSlash(null); return; }
+    if (!slash.forSel) {
+      const b = blocks[slash.i];
+      const md = liveMd(slash.i) ?? (b && 'text' in b ? b.text : b?.kind === 'task' ? tasksRef.current.find((t) => t.id === b.taskId)?.title ?? '' : null);
+      if (md === null || md[slash.at ?? 0] !== '/') { setSlash(null); return; }
+    }
     setSlashSel((v) => Math.min(v, Math.max(0, slashOptions().length - 1)));
     const down = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.slash-menu')) setSlash(null); };
     window.addEventListener('pointerdown', down);
@@ -254,8 +262,8 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       if (e.key === 'Enter') { e.preventDefault(); const o = opts[Math.min(slashSelRef.current, opts.length - 1)]; if (o) applySlash(o.kind); else setSlash(null); return; }
       if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
     }
-    if (e.key === '/' && b.text === '') {
-      setSlash({ i, rect: el.getBoundingClientRect() });
+    if (e.key === '/') {
+      setSlash({ i, rect: el.getBoundingClientRect(), at: mdOffsetOf(b.text, caretOffsets(el).start) });
       setSlashSel(0);
     }
     if (e.key === 'Tab') {
@@ -303,8 +311,8 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       if (e.key === 'Enter') { e.preventDefault(); const o = opts[Math.min(slashSelRef.current, opts.length - 1)]; if (o) applySlash(o.kind); else setSlash(null); return; }
       if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
     }
-    if (e.key === '/' && title === '') {
-      setSlash({ i, rect: el.getBoundingClientRect() });
+    if (e.key === '/') {
+      setSlash({ i, rect: el.getBoundingClientRect(), at: mdOffsetOf(title, caretOffsets(el).start) });
       setSlashSel(0);
     }
     if (e.key === 'Tab') {
@@ -570,6 +578,20 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       setSel(null);
     };
     const key = (e: KeyboardEvent) => {
+      const sl = slashRef.current;
+      if (sl?.forSel) {
+        const opts = slashOptions();
+        if (e.key === 'ArrowDown') { e.preventDefault(); setSlashSel((v) => Math.min(opts.length - 1, v + 1)); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); setSlashSel((v) => Math.max(0, v - 1)); return; }
+        if (e.key === 'Enter') { e.preventDefault(); const o = opts[Math.min(slashSelRef.current, opts.length - 1)]; if (o) applySlash(o.kind); else setSlash(null); return; }
+        if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
+      }
+      if (e.key === '/') {
+        e.preventDefault();
+        const row = listRef.current?.querySelectorAll('.blk')[lo];
+        if (row) { setSlash({ i: lo, rect: row.getBoundingClientRect(), forSel: true }); setSlashSel(0); }
+        return;
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         const d = e.shiftKey ? -1 : 1;
@@ -759,8 +781,10 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || block.text === lastEmitted.current) return;
+    const keep = document.activeElement === el ? caretOffsets(el) : null;
     el.innerHTML = mdToHtml(block.text);
     lastEmitted.current = block.text;
+    if (keep) setCaretAt(el, Math.min(keep.start, (el.textContent ?? '').length));
   }, [block.text, block.kind]);
 
   const emit = () => {
@@ -828,8 +852,10 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el || title === lastDrawn.current) return;
+    const keep = document.activeElement === el ? caretOffsets(el) : null;
     el.innerHTML = mdToHtml(title);
     lastDrawn.current = title;
+    if (keep) setCaretAt(el, Math.min(keep.start, (el.textContent ?? '').length)); // e.g. right after a join, before this redraw lands
   }, [title]);
   useEffect(() => { if (task && task.title !== title && document.activeElement !== ref.current) setTitle(task.title); }, [task?.title]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {

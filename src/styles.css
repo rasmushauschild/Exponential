@@ -41,15 +41,15 @@
 }
 
 [data-theme='dark'] {
-  --bg: #0c0d11;
-  --panel: #121317;
-  --surface: #121317;
+  --bg: #0b0b0b;
+  --panel: #141414;
+  --surface: #141414;
   --text: #fafafa;
   --text-2: #a0a0a0;
   --text-3: #707070;
   --soft: rgba(255, 255, 255, 0.05);
-  --row-hov: #1e2027;
-  --row-sel: #262831;
+  --row-hov: #1f1f1f;
+  --row-sel: #292929;
   --soft-2: rgba(255, 255, 255, 0.1);
   --accent: #3b9cff;
   --today: #ff5b52;
@@ -63,12 +63,12 @@
   --sel-blk: rgba(59, 156, 255, 0.16);
   --line: rgba(255, 255, 255, 0.1);
   --dot: rgba(255, 255, 255, 0.18);
-  --dot-fade: #121318; /* must match the rendered dark panel surface */
-  --frost: rgba(19, 20, 25, 0.85);
-  --frost-deep: rgba(14, 15, 19, 0.92);
-  --tint: #0b0c10;
-  --bar: #14151a;
-  --veil: rgba(10, 11, 15, 0.6);
+  --dot-fade: #131313; /* must match the rendered dark panel surface */
+  --frost: rgba(20, 20, 20, 0.85);
+  --frost-deep: rgba(15, 15, 15, 0.92);
+  --tint: #0b0b0b;
+  --bar: #151515;
+  --veil: rgba(11, 11, 11, 0.6);
   --wk-tint: rgba(255, 255, 255, 0.028);
   --edge: rgba(255, 255, 255, 0.15);
   --rim: rgba(255, 255, 255, 0.13); /* dark mode: definition comes from a light hairline, not black */
@@ -262,6 +262,11 @@ img { display: block; -webkit-user-drag: none; }
 .today-line { position: absolute; top: 20px; bottom: 10px; border-radius: 2px; width: 2px; margin-left: -1px; background: var(--today); pointer-events: none; z-index: 5; }
 
 .tl-lanes { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; }
+/* pan/scroll are pure compositor transforms on these wrappers; children keep stable positions */
+.tl-pan, .tl-panh, .tl-scrollv { position: absolute; inset: 0; will-change: transform; pointer-events: none; }
+.tl-pan > *, .tl-panh > *, .tl-scrollv > * { pointer-events: auto; }
+.tl-pan-top { z-index: 5; pointer-events: none; }
+.tl-pan-top > * { pointer-events: none; }
 .tl-group {
   position: absolute; left: 14px; height: 20px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px 0 6px; border-radius: 999px;
   font-size: 12px; font-weight: 700; color: var(--text-2); background: transparent; z-index: 3; white-space: nowrap;
@@ -310,7 +315,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-project.live::before { opacity: 0.38; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
-.bar-avatars { display: inline-flex; flex: none; }
+.bar-avatars { display: inline-flex; flex: none; margin-left: -4px; } /* the flex gap alone read too wide next to ellipsised names */
 .bar-avatars .avatar { margin-left: -5px; }
 .bar-avatars .avatar:first-child { margin-left: 0; }
 

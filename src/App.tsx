@@ -172,7 +172,7 @@ export default function App() {
         if (selection && allowed.has(selection.id)) setSelection(null);
         setMulti(new Set());
       }
-      if (e.key === 'Escape' && multi.size) setMulti(new Set());
+      if (e.key === 'Escape') { if (multi.size) setMulti(new Set()); setUnlocked(false); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
