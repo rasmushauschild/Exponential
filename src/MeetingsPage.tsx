@@ -274,6 +274,9 @@ function AccessPicker({ m, me, people, onPatch }: { m: Meeting; me: string; peop
           <button className={m.isOpen ? 'on' : ''} onClick={() => { onPatch({ isOpen: true, access: [] }); setMenu(null); }}>
             Everyone on the team {m.isOpen ? '✓' : ''}
           </button>
+          <button className={!m.isOpen && m.access.length === 0 ? 'on' : ''} onClick={() => { onPatch({ isOpen: false, access: [] }); setMenu(null); }}>
+            Only me {!m.isOpen && m.access.length === 0 ? '✓' : ''}
+          </button>
           <div className="menu-sep" />
           {people.filter((x) => x.id !== me && !x.id.startsWith('pending:')).map((x) => {
             const has = !m.isOpen && m.access.includes(x.id);
