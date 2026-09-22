@@ -264,7 +264,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-lanes { position: absolute; left: 0; right: 0; bottom: 0; overflow: hidden; }
 /* pan/scroll are pure compositor transforms on these wrappers; children keep stable positions */
 .tl-pan, .tl-panh, .tl-scrollv { position: absolute; inset: 0; will-change: transform; pointer-events: none; }
-.tl-pan > *:not(.tl-panh):not(.tl-scrollv), .tl-panh > *, .tl-scrollv > *:not(.tl-panh) { pointer-events: auto; }
+.tl-pan > *:not(.tl-panh):not(.tl-scrollv):not(.wlab-slot):not(.today-line), .tl-panh > *, .tl-scrollv > *:not(.tl-panh) { pointer-events: auto; }
 .tl-pan-top { z-index: 6; } /* today line + week labels float above the lanes */
 .wlab-slot { position: absolute; top: 0; bottom: 0; pointer-events: none; }
 .wlab-slot > * { pointer-events: auto; }
@@ -316,7 +316,7 @@ img { display: block; -webkit-user-drag: none; }
 .tl-project.live::before { opacity: 0.38; }
 .tl-project-dates { font-weight: 500; color: var(--text-2); font-size: 12px; }
 .tl-project-name { overflow: hidden; text-overflow: ellipsis; }
-.bar-avatars { display: inline-flex; flex: none; margin-left: -6px; margin-right: -5px; } /* hug the name and the bar edge — the flex gap alone read too wide */
+.bar-avatars { display: inline-flex; flex: none; margin-left: -8px; margin-right: -6px; } /* hug the name and the bar edge — the flex gap alone read too wide */
 .bar-avatars .avatar { margin-left: -5px; }
 .bar-avatars .avatar:first-child { margin-left: 0; }
 

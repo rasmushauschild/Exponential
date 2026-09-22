@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, ipcMain, Menu, Notification, Tray, nativeImage, screen, shell } = require('electron');
+const { app, BrowserWindow, clipboard, ipcMain, Menu, Notification, Tray, nativeImage, powerMonitor, screen, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
@@ -391,11 +391,32 @@ function setupUpdates() {
   autoUpdater.on('update-available', (i) => tell('available', { version: i.version }));
   autoUpdater.on('update-not-available', () => tell('none'));
   autoUpdater.on('download-progress', (p) => tell('downloading', { percent: Math.round(p.percent) }));
-  autoUpdater.on('update-downloaded', (i) => tell('ready', { version: i.version }));
+  autoUpdater.on('update-downloaded', (i) => { tell('ready', { version: i.version }); armRestart(log); });
   autoUpdater.on('error', (e) => { console.error('[updater]', e); tell('error', { message: String(e?.message ?? e) }); });
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 8_000);
   setInterval(check, 2 * 60 * 60 * 1000);
+}
+
+/** People leave the app running for weeks and never press Restart — so once an update is
+ *  downloaded, restart into it the moment they're not looking: immediately if no window is
+ *  focused, otherwise on the next blur (re-checked after a beat, so a focus hop between our
+ *  own windows doesn't count) or after 5 min without input. Every write is already persisted
+ *  as it happens, so a background restart loses nothing. */
+let restartArmed = false;
+function armRestart(log) {
+  if (restartArmed) return;
+  restartArmed = true;
+  const away = () => BrowserWindow.getAllWindows().every((w) => !w.isFocused());
+  const install = () => {
+    if (reallyQuit) return;
+    log('info', 'auto-restarting into the downloaded update');
+    reallyQuit = true;
+    autoUpdater.quitAndInstall(true, true);
+  };
+  if (away()) return install();
+  app.on('browser-window-blur', () => setTimeout(() => { if (away()) install(); }, 1_500));
+  setInterval(() => { if (away() || powerMonitor.getSystemIdleTime() >= 300) install(); }, 60_000);
 }
 ipcMain.on('update:install', () => { if (app.isPackaged) { reallyQuit = true; autoUpdater.quitAndInstall(); } });
 ipcMain.on('update:check', () => { if (app.isPackaged) autoUpdater.checkForUpdates().catch(() => {}); });

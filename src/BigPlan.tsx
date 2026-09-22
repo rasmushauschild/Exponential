@@ -90,6 +90,7 @@ export function BigPlan(props: Props) {
   const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup, onReorderGroups, onCollapseGroup, onDuplicateProject } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
+  const widthRef = useRef(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
   const viewRef = useRef(view);
   viewRef.current = view;
@@ -226,12 +227,16 @@ export function BigPlan(props: Props) {
     pendRef.current = { origin: originV, scrollY: scrollYv };
     applyGesture();
     window.clearTimeout(settleTimer.current);
+    // outrun half the render buffer mid-fling → commit now so the chrome re-centres under you
+    const v = viewRef.current;
+    const buf = widthRef.current / v.ppd / 2;
+    if (Math.abs(originV - v.origin) > buf) { commitGesture(); return; }
     settleTimer.current = window.setTimeout(commitGesture, 140);
   };
 
   useLayoutEffect(() => {
     const el = ref.current!;
-    const ro = new ResizeObserver(() => { setWidth(el.clientWidth); setHeight(el.clientHeight); });
+    const ro = new ResizeObserver(() => { widthRef.current = el.clientWidth; setWidth(el.clientWidth); setHeight(el.clientHeight); });
     ro.observe(el);
     setWidth(el.clientWidth);
     setHeight(el.clientHeight);
@@ -500,8 +505,11 @@ export function BigPlan(props: Props) {
     setHoverCursor(local < EDGE || bar.width - local < EDGE ? 'ew-resize' : 'grab');
   };
 
-  const firstDay = Math.floor(origin) - 1;
-  const lastDay = Math.ceil(origin + width / ppd) + 1;
+  // One full viewport of buffer each side: imperative pans stay fully drawn; a fling past
+  // half a buffer commits mid-gesture (one render) to re-centre it.
+  const bufDays = Math.ceil(width / ppd);
+  const firstDay = Math.floor(origin) - 1 - bufDays;
+  const lastDay = Math.ceil(origin + width / ppd) + 1 + bufDays;
   const months: { iso: ISODate; left: number; w: number }[] = [];
   {
     let d = firstDay;
