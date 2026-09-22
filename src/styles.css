@@ -966,15 +966,35 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
   0% { background: color-mix(in srgb, var(--st) 0%, transparent); }
   100% { background: color-mix(in srgb, var(--st) 16%, transparent); }
 }
+/* zero-width slot: the ✓/✗ float over the text's tail only while hovered (or set) — no reserved space */
+.rl-marks { position: relative; flex: none; width: 0; align-self: stretch; }
 .rl-mark {
-  flex: none; width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center;
-  font-size: 12px; font-weight: 700; color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity 0.12s, background 0.15s, color 0.15s;
+  position: absolute; top: 50%; transform: translateY(-50%); width: 20px; height: 20px; border-radius: 7px; display: grid; place-items: center;
+  background: var(--frost); font-size: 12px; font-weight: 700; color: var(--text-3); cursor: pointer; opacity: 0; transition: opacity 0.12s, background 0.15s, color 0.15s;
+  pointer-events: none;
 }
+.rl-mark.yes { right: 24px; }
+.rl-mark.no { right: 0; }
+.rl-row:hover .rl-mark, .rl-mark.on { pointer-events: auto; }
+/* a set mark stays visible, so the text yields to it permanently (not just on hover) */
+.rl-row.done .rl-text, .rl-row.missed .rl-text { padding-right: 50px; }
 .rl-row:hover .rl-mark { opacity: 1; }
+.rl-row:hover .rl-text { padding-right: 50px; }
 .rl-mark:hover { background: var(--soft-2); }
 .rl-mark.yes:hover, .rl-mark.yes.on { color: var(--st, #34c759); }
 .rl-mark.no:hover, .rl-mark.no.on { color: var(--st, #ff3b30); }
 .rl-mark.on { opacity: 1; }
+.rl-row.done .rl-mark, .rl-row.missed .rl-mark { background: transparent; }
+/* assignees on a priority row */
+.rl-who { display: inline-flex; align-items: center; gap: 3px; flex: none; }
+.rl-who .avatar { box-shadow: 0 0 0 1.5px var(--panel); }
+.rl-who-add {
+  width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 600;
+  color: var(--text-3); background: var(--soft); opacity: 0; transition: opacity 0.12s, background 0.15s, color 0.15s;
+}
+.rl-row:hover .rl-who-add { opacity: 1; }
+.rl-who-add:hover { background: var(--soft-2); color: var(--text); }
+.who-menu button { font-size: 13px; }
 .rl-p {
   flex: none; width: 26px; height: 18px; border-radius: 999px; font-size: 10px; font-weight: 800; letter-spacing: 0.02em;
   color: var(--pc); background: color-mix(in srgb, var(--pc) 13%, transparent); cursor: grab; transition: background 0.15s;

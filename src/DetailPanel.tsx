@@ -1,4 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { confettiBurst } from './confetti';
 import type { Deadline, Group, HealthMark, ISODate, Notification, Person, Project, Retro, RetroAnswers, RetroField, RetroTemplate, Status, Task } from './types';
 import { DEFAULT_HEALTH_METRICS } from './types';
 import { ConfidenceStepper } from './ConfidenceStepper';
@@ -261,7 +263,7 @@ function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, leg
 
         <div className="retro-sec">
           <div className="retro-sec-title">Priorities this week</div>
-          <RetroList value={(a.priorities as string) ?? ''} withPriority placeholder="New priority" readOnly={locked}
+          <RetroList value={(a.priorities as string) ?? ''} withPriority placeholder="New priority" readOnly={locked} people={people}
             onChange={(v) => save({ priorities: v }, 'priorities')} />
         </div>
 
@@ -348,22 +350,28 @@ function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, leg
  * carried improvements, and the MCP server keep working); priorities lines
  * carry a leading "P1 " / "P2 " / "P3 " tag rendered as a clickable chip.
  */
-type ListItem = { text: string; p: 1 | 2 | 3; r?: 'y' | 'n' }; // r: reached / not reached
-const P_COLORS: Record<1 | 2 | 3, string> = { 1: '#ff3b30', 2: '#ff9500', 3: '#8e8e93' };
+type ListItem = { text: string; r?: 'y' | 'n'; who: string[] }; // r: reached / not reached; who: assigned people
+const P_COLORS = ['#ff3b30', '#ff9500', '#8e8e93']; // by position; everything past #3 stays grey
 
+/** Lines like "P2✓ Ship the thing @[uuid|uuid]" — number, outcome mark, text, assignees. */
 const parseList = (v: string, withP: boolean): ListItem[] =>
   v.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
+    let who: string[] = [];
+    l = l.replace(/ ?@\[([^\]]*)\]\s*$/, (_, ids: string) => { who = ids.split('|').filter(Boolean); return ''; });
     if (withP) {
-      const m = /^P([123])([✓✗]?)[\s.:—-]*(.*)$/i.exec(l);
-      if (m) return { text: m[3], p: Number(m[1]) as 1 | 2 | 3, r: m[2] === '✓' ? 'y' as const : m[2] === '✗' ? 'n' as const : undefined };
+      const m = /^P(\d+)([✓✗]?)[\s.:—-]*(.*)$/i.exec(l);
+      if (m) return { text: m[3], r: m[2] === '✓' ? 'y' as const : m[2] === '✗' ? 'n' as const : undefined, who };
     }
-    return { text: l.replace(/^[-•]\s*/, ''), p: 1 };
+    return { text: l.replace(/^[-•]\s*/, ''), who };
   });
 const serializeList = (items: ListItem[], withP: boolean) =>
-  items.filter((i) => i.text.trim()).map((i) => (withP ? `P${i.p}${i.r === 'y' ? '✓' : i.r === 'n' ? '✗' : ''} ${i.text.trim()}` : i.text.trim())).join('\n');
+  items.filter((i) => i.text.trim()).map((i, k) => {
+    const who = i.who.length ? ` @[${i.who.join('|')}]` : '';
+    return withP ? `P${k + 1}${i.r === 'y' ? '✓' : i.r === 'n' ? '✗' : ''} ${i.text.trim()}${who}` : `${i.text.trim()}${who}`;
+  }).join('\n');
 
-function RetroList({ value, onChange, withPriority, placeholder, readOnly }: {
-  value: string; onChange: (v: string) => void; withPriority?: boolean; placeholder: string; readOnly?: boolean;
+function RetroList({ value, onChange, withPriority, placeholder, readOnly, people }: {
+  value: string; onChange: (v: string) => void; withPriority?: boolean; placeholder: string; readOnly?: boolean; people?: Person[];
 }) {
   const ro = !!readOnly;
   const withP = !!withPriority;
@@ -394,12 +402,21 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly }: {
     const s = serializeList(next, withP);
     if (s !== lastSent.current) { lastSent.current = s; onChange(s); }
   };
-  const insertAt = (i: number, p: 1 | 2 | 3) => {
+  const insertAt = (i: number) => {
     const next = [...items];
-    next.splice(i, 0, { text: '', p });
+    next.splice(i, 0, { text: '', who: [] });
     commit(next);
     focusAt.current = i;
   };
+  const [whoMenu, setWhoMenu] = useState<{ i: number; rect: DOMRect } | null>(null);
+  useEffect(() => {
+    if (!whoMenu) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.who-menu')) setWhoMenu(null); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [whoMenu]);
+  const toggleWho = (i: number, id: string) =>
+    commit(itemsRef.current.map((x, j) => (j === i ? { ...x, who: x.who.includes(id) ? x.who.filter((w) => w !== id) : [...x.who, id] } : x)));
   const removeAt = (i: number, refocus: boolean) => {
     commit(items.filter((_, j) => j !== i));
     if (refocus && i > 0) focusAt.current = i - 1;
@@ -433,10 +450,10 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly }: {
           {withP ? (
             <button
               className={`rl-p${ro ? ' ro' : ''}`}
-              style={{ ['--pc' as string]: P_COLORS[it.p] }}
-              title={ro ? `Priority ${it.p}` : `Priority ${it.p} — click to change, drag to reorder`}
-              onPointerDown={ro ? undefined : (e) => startDrag(i, e, () => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, p: (x.p % 3) + 1 as 1 | 2 | 3 } : x))))}
-            >P{it.p}</button>
+              style={{ ['--pc' as string]: P_COLORS[Math.min(i, P_COLORS.length - 1)] }}
+              title={ro ? `Priority ${i + 1}` : `Priority ${i + 1} — drag to reorder`}
+              onPointerDown={ro ? undefined : (e) => startDrag(i, e)}
+            >P{i + 1}</button>
           ) : (
             <button className={`rl-dot${ro ? ' ro' : ''}`} title={ro ? undefined : 'Drag to reorder'} onPointerDown={ro ? undefined : (e) => startDrag(i, e)} />
           )}
@@ -448,7 +465,7 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly }: {
             readOnly={ro}
             onChange={(e) => !ro && commit(items.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))}
             onKeyDown={ro ? undefined : (e) => {
-              if (e.key === 'Enter') { e.preventDefault(); insertAt(i + 1, it.p); }
+              if (e.key === 'Enter') { e.preventDefault(); insertAt(i + 1); }
               else if (e.key === 'Backspace' && it.text === '') { e.preventDefault(); removeAt(i, true); }
               else if (e.key === 'ArrowUp') { e.preventDefault(); inputs.current[i - 1]?.focus(); }
               else if (e.key === 'ArrowDown') { e.preventDefault(); inputs.current[i + 1]?.focus(); }
@@ -457,21 +474,46 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly }: {
               if (it.text.trim() === '' && !(e.relatedTarget instanceof Node && e.currentTarget.parentElement?.contains(e.relatedTarget))) removeAt(i, false);
             }}
           />
-          {withP && ro && it.r && (
-            <span className={`rl-mark ${it.r === 'y' ? 'yes' : 'no'} on`}>{it.r === 'y' ? '✓' : '✗'}</span>
+          <span className="rl-marks">
+            {withP && ro && it.r && (
+              <span className={`rl-mark ${it.r === 'y' ? 'yes' : 'no'} on`}>{it.r === 'y' ? '✓' : '✗'}</span>
+            )}
+            {withP && !ro && (
+              <>
+                <button className={`rl-mark yes${it.r === 'y' ? ' on' : ''}`} title="Reached"
+                  onClick={(e) => {
+                    const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); // before setState — the event is recycled
+                    const turningOn = it.r !== 'y';
+                    commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'y' ? undefined : 'y' as const } : x)));
+                    if (turningOn) confettiBurst(r.left + r.width / 2, r.top + r.height / 2);
+                  }}>✓</button>
+                <button className={`rl-mark no${it.r === 'n' ? ' on' : ''}`} title="Not reached"
+                  onClick={() => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'n' ? undefined : 'n' as const } : x)))}>✗</button>
+              </>
+            )}
+          </span>
+          {withP && (it.who.length > 0 || !ro) && (
+            <span className="rl-who" onPointerDown={(e) => e.stopPropagation()}>
+              {it.who.map((id) => { const per = people?.find((x) => x.id === id); return per ? <Avatar key={id} person={per} size={16} /> : null; })}
+              {!ro && (
+                <button className="rl-who-add" title="Assign people"
+                  onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setWhoMenu((m) => (m?.i === i ? null : { i, rect: r })); }}>+</button>
+              )}
+            </span>
           )}
-          {withP && !ro && (
-            <>
-              <button className={`rl-mark yes${it.r === 'y' ? ' on' : ''}`} title="Reached"
-                onClick={() => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'y' ? undefined : 'y' as const } : x)))}>✓</button>
-              <button className={`rl-mark no${it.r === 'n' ? ' on' : ''}`} title="Not reached"
-                onClick={() => commit(itemsRef.current.map((x, j) => (j === i ? { ...x, r: x.r === 'n' ? undefined : 'n' as const } : x)))}>✗</button>
-            </>
-          )}
-          {!ro && <button className="rl-x" title="Delete" onClick={() => removeAt(i, false)}>×</button>}
         </div>
       ))}
-      {!ro && <button className="rl-add" onClick={() => insertAt(items.length, withP ? (items[items.length - 1]?.p ?? 1) : 1)}>+ Add</button>}
+      {!ro && <button className="rl-add" onClick={() => insertAt(items.length)}>+ Add</button>}
+      {whoMenu && createPortal(
+        <div className="status-menu who-menu" style={{ position: 'fixed', left: Math.min(whoMenu.rect.left, window.innerWidth - 200), top: whoMenu.rect.bottom + 6 }} onPointerDown={(e) => e.stopPropagation()}>
+          {(people ?? []).map((p) => (
+            <button key={p.id} className={items[whoMenu.i]?.who.includes(p.id) ? 'current' : ''} onClick={() => toggleWho(whoMenu.i, p.id)}>
+              <Avatar person={p} size={18} /> {shortName(p.name)}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
