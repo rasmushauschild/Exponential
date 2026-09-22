@@ -7,7 +7,7 @@ import { decorate } from './richtext';
 import {
   attachmentUrl, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
   fetchMessages, isDm, markRead, onChatEvent, openDm, sendMessage, setChannelMembers,
-  updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
+  toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
 
 const EMOJI = ['👍', '❤️', '😂', '🎉', '🙌', '🔥', '👀', '✅', '💯', '😅', '😍', '🤔', '😢', '😮', '🙏', '👏', '🚀', '⭐', '☕', '🍿', '💪', '🫡', '🤝', '🥳', '😴', '🤯', '🧠', '⚡', '🌱', '🍾', '🎯', '🛠️'];
@@ -127,10 +127,13 @@ export function ChatPage(p: Props) {
   return (
     <div className="chat">
       <aside className="chat-rail">
+        <div className="panel-head chat-rail-top">
+          <div className="panel-title">Chat</div>
+        </div>
         <div className="chat-rail-head">
           <span className="chat-rail-title">Channels</span>
           <span className="panel-spacer" />
-          <button className="icon-btn" title="New channel" onClick={() => setNewChannel(true)}>+</button>
+          <button className="icon-btn small" title="New channel" onClick={() => setNewChannel(true)}>+</button>
         </div>
         {regular.map((c) => (
           <button key={c.id} className={`chat-ch${c.id === activeId ? ' active' : ''}${c.unread ? ' unread' : ''}`} onClick={() => onActive(c.id)}>
@@ -169,8 +172,8 @@ export function ChatPage(p: Props) {
       {active ? (
         <div className="chat-main">
           {isDm(active) ? (
-            <div className="chat-head">
-              {(() => { const other = people.find((x) => x.id === dmOther(active, me)); return other ? <><Avatar person={other} size={24} /><span className="chat-head-name">{shortName(other.name)}{other.id === me ? ' (you)' : ''}</span></> : <span className="chat-head-name">Direct message</span>; })()}
+            <div className="panel-head chat-head">
+              {(() => { const other = people.find((x) => x.id === dmOther(active, me)); return other ? <><Avatar person={other} size={30} /><span className="panel-title">{shortName(other.name)}{other.id === me ? ' (you)' : ''}</span></> : <span className="panel-title">Direct message</span>; })()}
             </div>
           ) : (
           <ChannelHead key={`head-${active.id}`} channel={active} me={me} people={people} canModerate={p.canModerate} /* key must differ from the sibling Composer's — same-key siblings made React orphan the old head in the DOM */
@@ -185,9 +188,10 @@ export function ChatPage(p: Props) {
             {grouped.map(({ msg, head, day }) => (
               <div key={msg.id}>
                 {day && <div className="chat-day"><span>{day}</span></div>}
-                <MessageRow msg={msg} head={head} author={person(msg.author)} mine={msg.author === me} canModerate={p.canModerate} cloud={cloud}
+                <MessageRow msg={msg} head={head} author={person(msg.author)} mine={msg.author === me} me={me} people={people} canModerate={p.canModerate} cloud={cloud}
                   onEdit={(body) => editMessage(teamId, msg, body, cloud).catch((e) => p.onError(String(e.message ?? e)))}
                   onDelete={() => deleteMessage(teamId, msg, cloud).catch((e) => p.onError(String(e.message ?? e)))}
+                  onReact={(emoji) => toggleReaction(teamId, msg, emoji, me, cloud).catch((e) => p.onError(String(e.message ?? e)))}
                   onImage={setLightbox} />
               </div>
             ))}
@@ -264,13 +268,13 @@ function ChannelHead({ channel, me, people, canModerate, onRename, onTopic, onMe
     return () => window.removeEventListener('pointerdown', close);
   }, [menu]);
   return (
-    <div className="chat-head">
+    <div className="panel-head chat-head">
       {renaming ? (
         <input className="chat-rename" autoFocus defaultValue={channel.name}
           onBlur={(e) => { const v = e.target.value.trim().toLowerCase().replace(/\s+/g, '-'); if (v && v !== channel.name) onRename(v); setRenaming(false); }}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setRenaming(false); }} />
       ) : (
-        <span className="chat-head-name">{channel.private ? <LockGlyph /> : '#'} {channel.name}</span>
+        <span className="panel-title"><span className="chat-hash-big">{channel.private ? <LockGlyph /> : '#'}</span>{channel.name}</span>
       )}
       {editTopic ? (
         <input className="chat-topic-input" autoFocus defaultValue={channel.topic ?? ''} placeholder="Add a topic"
@@ -323,11 +327,18 @@ function MembersSheet({ channel, me, people, onClose, onSave }: { channel: Chann
     </div>, document.body);
 }
 
-function MessageRow({ msg, head, author, mine, canModerate, cloud, onEdit, onDelete, onImage }: {
-  msg: ChatMessage; head: boolean; author?: Person; mine: boolean; canModerate: boolean; cloud: boolean;
-  onEdit: (body: string) => void; onDelete: () => void; onImage: (url: string) => void;
+function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, onEdit, onDelete, onReact, onImage }: {
+  msg: ChatMessage; head: boolean; author?: Person; mine: boolean; me: string; people: Person[]; canModerate: boolean; cloud: boolean;
+  onEdit: (body: string) => void; onDelete: () => void; onReact: (emoji: string) => void; onImage: (url: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [pick, setPick] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!pick) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.chat-emoji-pop')) setPick(null); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [pick]);
   return (
     <div className={`chat-msg${head ? ' head' : ''}`}>
       <span className="chat-gutter">
@@ -352,15 +363,34 @@ function MessageRow({ msg, head, author, mine, canModerate, cloud, onEdit, onDel
           msg.body && <div className="chat-body">{renderChat(msg.body)}{msg.editedAt && !head ? <span className="chat-time"> (edited)</span> : null}</div>
         )}
         {msg.attachments?.map((a, i) => <AttachmentView key={i} att={a} cloud={cloud} onImage={onImage} />)}
+        {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+          <div className="chat-reacts">
+            {Object.entries(msg.reactions).map(([emo, users]) => (
+              <button key={emo} className={users.includes(me) ? 'on' : ''} onClick={() => onReact(emo)}
+                title={users.map((u) => shortName(people.find((x) => x.id === u)?.name ?? 'Someone')).join(', ')}>
+                {emo} <span>{users.length}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
-      {(mine || canModerate) && !editing && (
+      {!editing && (
         <span className="chat-actions">
+          <button title="React" onClick={(e) => setPick((e.currentTarget as HTMLElement).getBoundingClientRect())}><SmileGlyph /></button>
           {mine && <button title="Edit" onClick={() => setEditing(true)}><PencilGlyph /></button>}
-          <button title="Delete" onClick={onDelete}><CrossGlyph /></button>
+          {(mine || canModerate) && <button title="Delete" onClick={onDelete}><CrossGlyph /></button>}
         </span>
       )}
+      {pick && createPortal(
+        <div className="status-menu chat-emoji-pop" style={{ position: 'fixed', top: Math.min(pick.bottom + 6, window.innerHeight - 180), right: Math.max(12, window.innerWidth - pick.right - 60) }}>
+          {EMOJI.map((emo) => <button key={emo} onClick={() => { onReact(emo); setPick(null); }}>{emo}</button>)}
+        </div>, document.body)}
     </div>
   );
+}
+
+function SmileGlyph() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M8.5 14a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01" /></svg>;
 }
 
 /** Like renderInlineMd, but URLs become real links (opened externally by Electron). */
@@ -406,18 +436,10 @@ function Composer({ channel, label, teamId, cloud, onSend, onError }: {
   const [text, setText] = useState('');
   const [atts, setAtts] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(0);
-  const [emoji, setEmoji] = useState<DOMRect | null>(null);
   const [drag, setDrag] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sending = useRef(false);
-
-  useEffect(() => {
-    if (!emoji) return;
-    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.chat-emoji-pop')) setEmoji(null); };
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [emoji]);
 
   const grow = () => {
     const ta = taRef.current;
@@ -483,21 +505,8 @@ function Composer({ channel, label, teamId, cloud, onSend, onError }: {
             if (imgs.length) { e.preventDefault(); addFiles(imgs); }
           }}
         />
-        <button className="icon-btn" title="Emoji" onClick={(e) => setEmoji((e.currentTarget as HTMLElement).getBoundingClientRect())}>☺</button>
         <button className="pill toggle active chat-send" disabled={(!text.trim() && !atts.length) || uploading > 0} onClick={send}>Send</button>
       </div>
-      {emoji && createPortal(
-        <div className="status-menu chat-emoji-pop" style={{ position: 'fixed', bottom: window.innerHeight - emoji.top + 8, right: window.innerWidth - emoji.right }}>
-          {EMOJI.map((e) => (
-            <button key={e} onClick={() => {
-              const ta = taRef.current!;
-              const at = ta.selectionStart ?? text.length;
-              setText(text.slice(0, at) + e + text.slice(ta.selectionEnd ?? at));
-              setEmoji(null);
-              requestAnimationFrame(() => { ta.focus(); ta.selectionStart = ta.selectionEnd = at + e.length; });
-            }}>{e}</button>
-          ))}
-        </div>, document.body)}
     </div>
   );
 }

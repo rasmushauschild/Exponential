@@ -15,11 +15,11 @@ import { addDays, todayISO, weekStart } from './dates';
 import { ChatPage } from './ChatPage';
 import { fetchChat, onChatEvent, subscribeChat, type Channel } from './chat';
 import { MeetingsPage } from './MeetingsPage';
-import { pushCalendarShare, removeCalendarShare } from './meetings';
+import { subscribeMeetings } from './meetings';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
-const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true, allTeams: false, shareCal: false };
+const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true, allTeams: false };
 const prefs: typeof DEFAULT_PREFS = (() => {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
 })();
@@ -110,8 +110,7 @@ export default function App() {
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const [calendarOn, setCalendarOn] = useState(() => prefs.calendar);
   const [allTeamsOn, setAllTeamsOn] = useState(() => prefs.allTeams);
-  const [shareCal, setShareCal] = useState(() => prefs.shareCal);
-  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn, shareCal }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn, shareCal]);
+  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -281,27 +280,27 @@ export default function App() {
     }
   }), [chatTeam, data, chat, refreshChat]);
 
-  // Opted-in calendar sharing: publish my next two weeks (titles + times only) to the
-  // team so the Meetings page can show everyone side by side. Re-pushed per team on
-  // launch and every 6 h; turning it off removes the row.
-  const shareTeam = data?.id;
+  // Meetings shared with me: a red dot on the sidebar + a system notification, from an
+  // app-level realtime subscription (the page has its own for its list).
+  const [meetDot, setMeetDot] = useState(false);
+  const meetSeen = useRef(new Set<string>());
+  const meetTeam = data?.id;
   useEffect(() => {
-    if (!cloudMode || !shareTeam || !data?.me) return;
-    if (!shareCal) { removeCalendarShare(shareTeam, data.me, cloudMode).catch(() => {}); return; }
-    let stop = false;
-    const push = () => {
-      window.exponential?.google.events('primary', todayISO(), addDays(todayISO(), 14))
-        .then((evs) => { if (!stop) return pushCalendarShare(shareTeam, data.me, evs.map((e) => ({ id: e.id, title: e.title, date: e.date, start: e.start, end: e.end, allDay: e.allDay })), cloudMode); })
-        .catch(() => {});
-    };
-    push();
-    const t = window.setInterval(push, 6 * 60 * 60 * 1000);
-    return () => { stop = true; window.clearInterval(t); };
-  }, [shareCal, shareTeam, cloudMode, data?.me]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!cloudMode || !meetTeam || !data?.me) return;
+    return subscribeMeetings(meetTeam, cloudMode, (m, ev) => {
+      if (!m || ev !== 'INSERT' || m.owner === data.me || meetSeen.current.has(m.id)) return;
+      meetSeen.current.add(m.id);
+      setMeetDot(true);
+      const who = shortName(data.people.find((x) => x.id === m.owner)?.name ?? 'Someone');
+      window.exponential?.notify?.({ id: `meet-${m.id}`, title: 'New meeting', body: `${who} shared “${m.title}”`, ref: { kind: 'meeting', id: m.id } });
+    }, 'meetings-inbox');
+  }, [cloudMode, meetTeam, data?.me]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (view === 'meetings') setMeetDot(false); }, [view]);
 
   // The menu-bar widget can ask the main window to open a specific item.
   useEffect(() => window.exponential?.onOpen((t) => {
     if (t.kind === 'chat') { setView('chat'); setChatActive(t.id); return; }
+    if (t.kind === 'meeting') { setView('meetings'); return; }
     setView('plan'); setSelection(t as Selection);
   }), []);
   useSystemNotifications(data);
@@ -632,11 +631,12 @@ export default function App() {
         </div>
         <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><PlanIcon /> <span className="nav-text">Plan</span></button>
         <button className={`nav-item${view === 'chat' ? ' active' : ''}`} onClick={() => setView('chat')}>
-          <ChatIcon /> <span className="nav-text">Chat</span>
-          {chatUnread > 0 && <span className="badge">{chatUnread}</span>}
+          <span className="nav-ico"><ChatIcon />{chatUnread > 0 && <span className="nav-dot" />}</span>
+          <span className="nav-text">Chat</span>
         </button>
         <button className={`nav-item${view === 'meetings' ? ' active' : ''}`} onClick={() => setView('meetings')}>
-          <MeetIcon /> <span className="nav-text">Meetings</span>
+          <span className="nav-ico"><MeetIcon />{meetDot && <span className="nav-dot" />}</span>
+          <span className="nav-text">Meetings</span>
         </button>
         <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
           <InboxIcon /> <span className="nav-text">Inbox</span>
@@ -703,9 +703,6 @@ export default function App() {
             people={data.people}
             canModerate={data.moderators.includes(data.me)}
             cloud={cloudMode}
-            calendarReady={!!googleUser}
-            shareCal={shareCal}
-            onShareCal={setShareCal}
             onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
           />
         )}
@@ -1017,17 +1014,17 @@ const ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke
 
 function MeetIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="9" y="2.5" width="6" height="11" rx="3" />
-      <path d="M5.5 10.5a6.5 6.5 0 0 0 13 0M12 17v4.5" />
+    <svg {...ICON}>
+      <rect x="9" y="3" width="6" height="11" rx="3" />
+      <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
     </svg>
   );
 }
 
 function ChatIcon() {
   return (
-    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.9 8.9 0 0 1-3.9-.9L3 20l1-4.9a8.4 8.4 0 1 1 17-3.6Z" />
+    <svg {...ICON}>
+      <path d="M6 4.5h12A2.5 2.5 0 0 1 20.5 7v6a2.5 2.5 0 0 1-2.5 2.5h-6.4L7.5 19v-3.5H6A2.5 2.5 0 0 1 3.5 13V7A2.5 2.5 0 0 1 6 4.5Z" />
     </svg>
   );
 }

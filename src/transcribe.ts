@@ -10,7 +10,8 @@ import type { Segment } from './meetings';
 export type TranscribeProgress =
   | { phase: 'model'; pct: number }
   | { phase: 'decode' }
-  | { phase: 'run'; pct: number };
+  | { phase: 'run'; pct: number }
+  | { phase: 'speakers' };
 
 const MODEL = 'onnx-community/whisper-base';
 
@@ -73,6 +74,134 @@ export async function transcribe(blob: Blob, onProgress: (p: TranscribeProgress)
   })).filter((s) => s.text);
   const text = out.text?.trim() ?? segments.map((s) => s.text).join(' ');
   return { segments: segments.length ? segments : text ? [{ t0: 0, t1: total, text }] : [], text, durationSecs: Math.round(total) };
+}
+
+/* ── speakers: on-device diarization (pyannote segmentation) + who-is-it matching
+   (wespeaker embeddings vs each member's enrolled voice print). Everything here is
+   OPTIONAL: any failure returns the transcript without speaker labels. ── */
+
+const SEG_MODEL = 'onnx-community/pyannote-segmentation-3.0';
+const EMB_MODEL = 'Xenova/wavlm-base-plus-sv'; // public x-vector model; wespeaker's repo is gated
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+let segP: Promise<{ processor: any; model: any }> | null = null;
+let embP: Promise<{ processor: any; model: any }> | null = null;
+async function loadSeg() {
+  if (!segP) segP = (async () => {
+    const { AutoProcessor, AutoModelForAudioFrameClassification } = await import('@huggingface/transformers');
+    const processor = await AutoProcessor.from_pretrained(SEG_MODEL);
+    const model = await AutoModelForAudioFrameClassification.from_pretrained(SEG_MODEL, { dtype: 'fp32' } as never);
+    return { processor, model };
+  })().catch((e) => { segP = null; throw e; });
+  return segP;
+}
+async function loadEmb() {
+  if (!embP) embP = (async () => {
+    const { AutoProcessor, AutoModelForXVector } = await import('@huggingface/transformers');
+    const processor = await AutoProcessor.from_pretrained(EMB_MODEL);
+    const model = await AutoModelForXVector.from_pretrained(EMB_MODEL, { dtype: 'q8' } as never);
+    return { processor, model };
+  })().catch((e) => { embP = null; throw e; });
+  return embP;
+}
+
+const l2 = (v: number[]) => { const n = Math.sqrt(v.reduce((a, x) => a + x * x, 0)) || 1; return v.map((x) => x / n); };
+const cos = (a: number[], b: number[]) => a.reduce((s, x, i) => s + x * (b[i] ?? 0), 0); // both l2-normalised
+
+async function embed(audio: Float32Array): Promise<number[]> {
+  const { processor, model } = await loadEmb();
+  const inputs = await processor(audio);
+  const out = await model(inputs);
+  const t = (out.embeddings ?? out.logits ?? Object.values(out)[0]) as { data: Float32Array };
+  return l2(Array.from(t.data));
+}
+
+/** ~8s of speech → a voice print for "Learn my voice". */
+export async function voiceEmbedding(blob: Blob): Promise<number[]> {
+  return embed(await decodeTo16k(blob));
+}
+
+export interface Enrolled { id: string; embedding: number[] }
+
+/** Label whisper segments with who spoke: diarize in 30s windows, embed each turn,
+ *  cluster turns globally, then match clusters to enrolled voice prints.
+ *  `who` = a user id when a print matches, else "Speaker N". */
+export async function labelSpeakers(audio: Float32Array, segments: Segment[], enrolled: Enrolled[]): Promise<Segment[]> {
+  const SR = 16000;
+  const { processor, model } = await loadSeg();
+  type Turn = { start: number; end: number; emb?: number[]; cluster?: number };
+  const turns: Turn[] = [];
+  const WIN = 30 * SR, HOP = 25 * SR;
+  for (let off = 0; off < audio.length; off += HOP) {
+    const chunk = audio.subarray(off, Math.min(audio.length, off + WIN));
+    if (chunk.length < SR) break;
+    const inputs = await processor(chunk);
+    const out = await model(inputs);
+    const res = processor.post_process_speaker_diarization(out.logits, chunk.length) as { id: number; start: number; end: number; confidence: number }[][];
+    for (const seg of res[0] ?? []) {
+      if (seg.id === 0 || seg.end - seg.start < 0.5) continue; // 0 = no speaker
+      const start = off / SR + seg.start, end = off / SR + seg.end;
+      if (turns.some((t) => t.start <= start + 0.1 && t.end >= end - 0.1)) continue; // overlap dupe
+      turns.push({ start, end });
+    }
+    if (off + WIN >= audio.length) break;
+  }
+  // one embedding per turn (capped at 6s of its middle), then greedy clustering
+  for (const t of turns) {
+    const mid = (t.start + t.end) / 2, half = Math.min(3, (t.end - t.start) / 2);
+    const a = audio.subarray(Math.floor((mid - half) * SR), Math.floor((mid + half) * SR));
+    if (a.length >= SR * 0.8) { try { t.emb = await embed(a); } catch { /* too short/odd — stays unclustered */ } }
+  }
+  const clusters: { mean: number[]; n: number }[] = [];
+  for (const t of turns) {
+    if (!t.emb) continue;
+    let best = -1, bestSim = 0.65; // same voice ≈0.9+, different ≈0.5 on wavlm-sv
+    clusters.forEach((c, i) => { const sim = cos(t.emb!, l2(c.mean)); if (sim > bestSim) { best = i; bestSim = sim; } });
+    if (best === -1) { clusters.push({ mean: [...t.emb], n: 1 }); t.cluster = clusters.length - 1; }
+    else { const c = clusters[best]; c.mean = c.mean.map((x, i) => x + t.emb![i]); c.n++; t.cluster = best; }
+  }
+  // clusters → names: enrolled prints first, anonymous numbering for the rest
+  const label = new Map<number, string>();
+  let anon = 0;
+  clusters.forEach((c, i) => {
+    const mean = l2(c.mean.map((x) => x / c.n));
+    let who = '', sim = 0.6;
+    for (const e of enrolled) { const s2 = cos(mean, l2(e.embedding)); if (s2 > sim) { who = e.id; sim = s2; } }
+    label.set(i, who || `Speaker ${++anon}`);
+  });
+  // each whisper segment takes the speaker it overlaps most
+  return segments.map((s2) => {
+    let bestT: Turn | null = null, bestOv = 0.2;
+    for (const t of turns) {
+      const ov = Math.min(s2.t1, t.end) - Math.max(s2.t0, t.start);
+      if (ov > bestOv) { bestOv = ov; bestT = t; }
+    }
+    const who = bestT?.cluster !== undefined ? label.get(bestT.cluster!) : undefined;
+    return who ? { ...s2, who } : s2;
+  });
+}
+
+/** The whole pipeline MeetingsPage uses: transcript, speaker labels, auto title. */
+export async function transcribeWithSpeakers(blob: Blob, enrolled: Enrolled[], onProgress: (p: TranscribeProgress) => void):
+  Promise<{ segments: Segment[]; text: string; durationSecs: number }> {
+  const asr = await loadAsr(onProgress);
+  onProgress({ phase: 'decode' });
+  const audio = await decodeTo16k(blob);
+  const total = audio.length / 16000;
+  onProgress({ phase: 'run', pct: 0 });
+  const out = await asr(audio, { chunk_length_s: 30, stride_length_s: 5, return_timestamps: true }) as { text: string; chunks?: { timestamp: [number, number | null]; text: string }[] };
+  const raw: Segment[] = (out.chunks ?? []).map((c) => ({
+    t0: Math.max(0, c.timestamp[0] ?? 0),
+    t1: Math.min(total, c.timestamp[1] ?? c.timestamp[0] ?? total),
+    text: c.text.trim(),
+  })).filter((x) => x.text);
+  const text = out.text?.trim() ?? raw.map((x) => x.text).join(' ');
+  let segments = raw.length ? raw : text ? [{ t0: 0, t1: total, text }] : [];
+  try {
+    onProgress({ phase: 'speakers' });
+    segments = await labelSpeakers(audio, segments, enrolled);
+  } catch (e) { console.warn('[speakers] skipped:', e); }
+  return { segments, text, durationSecs: Math.round(total) };
 }
 
 /* ── automatic naming: the most talked-about words become the title ── */

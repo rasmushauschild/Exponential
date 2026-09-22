@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CalendarEvent, Person } from './types';
+import { createPortal } from 'react-dom';
+import type { Person } from './types';
 import { shortName } from './types';
 import { Avatar } from './WeekPlan';
 import { uid } from './store';
-import { addDays, todayISO } from './dates';
 import { activeRecording, startRecording, type RecordingSession } from './recorder';
 import {
-  createMeeting, deleteMeeting, fetchCalendarShares, fetchMeetings, meetingAudioUrl,
-  subscribeMeetings, updateMeeting, uploadMeetingAudio, type Meeting, type SharedCalendar,
+  createMeeting, deleteMeeting, fetchMeetings, fetchVoicePrints, meetingAudioUrl, saveVoicePrint,
+  subscribeMeetings, updateMeeting, uploadMeetingAudio, type Meeting, type Segment,
 } from './meetings';
 
 /**
- * Meetings: the next two weeks of everyone's (shared) calendars, a Record button for
- * spontaneous meetings, drag-in audio files, and every past meeting with its on-device
- * transcript. Recording keeps running if you switch views — the session is a module
- * singleton and this page re-attaches to it.
+ * Meetings: one chronological list of recordings — yours and the ones shared with you.
+ * Record (mic + system loopback where the OS allows; pausable, Voice-Memos-style wave),
+ * or drop in an audio file. Transcription runs on device, names the meeting from what
+ * was discussed, and labels speakers — teammates who did the one-time "Learn my voice"
+ * are recognised automatically; the rest are Speaker 1/2… and can be renamed in place.
  */
 
 interface Props {
@@ -23,9 +24,6 @@ interface Props {
   people: Person[];
   canModerate: boolean;
   cloud: boolean;
-  calendarReady: boolean; // signed in to Google with calendar scope
-  shareCal: boolean;
-  onShareCal: (v: boolean) => void;
   onError: (m: string) => void;
 }
 
@@ -35,55 +33,24 @@ const fmtDur = (s?: number) => {
   return m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : m ? `${m}m` : `${s}s`;
 };
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
-const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-const fmtDay = (d: Date) => {
-  const today = new Date();
-  if (d.toDateString() === today.toDateString()) return 'Today';
-  if (d.toDateString() === new Date(Date.now() + 86_400_000).toDateString()) return 'Tomorrow';
-  return d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
-};
-const fmtStamp = (iso: string) => new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + fmtTime(iso);
+const fmtStamp = (iso: string) => new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const defaultTitle = (iso: string) => `Meeting — ${fmtStamp(iso)}`;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Progress = { label: string; pct?: number };
 
 export function MeetingsPage(p: Props) {
   const { teamId, me, people, cloud } = p;
   const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [shares, setShares] = useState<SharedCalendar[]>([]);
-  const [myEvents, setMyEvents] = useState<CalendarEvent[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [progress, setProgress] = useState<Record<string, Progress>>({});
-  const [hiddenCals, setHiddenCals] = useState<Set<string>>(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('exponential-meet-hidden') ?? '[]')); } catch { return new Set(); }
-  });
   const [rec, setRec] = useState<RecordingSession | null>(() => activeRecording());
-  const [recTick, setRecTick] = useState(0);
   const [drag, setDrag] = useState(false);
+  const [voiceRec, setVoiceRec] = useState<'idle' | 'recording' | 'saving'>('idle');
   const fileRef = useRef<HTMLInputElement>(null);
-  const levelRef = useRef<HTMLDivElement>(null);
 
-  const refetch = () => {
-    fetchMeetings(teamId, cloud).then(setMeetings).catch((e) => p.onError(String((e as Error).message ?? e)));
-    fetchCalendarShares(teamId, cloud).then(setShares).catch(() => {});
-  };
-  useEffect(() => { setMeetings([]); setShares([]); setSelected(null); refetch(); return subscribeMeetings(teamId, cloud, refetch); }, [teamId, cloud]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // my own next two weeks straight from Google (teammates' come from calendar_shares)
-  useEffect(() => {
-    if (!p.calendarReady) return;
-    window.exponential?.google.events('primary', todayISO(), addDays(todayISO(), 14)).then(setMyEvents).catch(() => {});
-  }, [p.calendarReady, teamId]);
-
-  // recording timer + level meter (cheap: one interval, level written straight to the DOM)
-  useEffect(() => {
-    if (!rec) return;
-    const t = window.setInterval(() => setRecTick((v) => v + 1), 1000);
-    let raf = 0;
-    const meter = () => { if (levelRef.current) levelRef.current.style.transform = `scaleX(${rec.level()})`; raf = requestAnimationFrame(meter); };
-    raf = requestAnimationFrame(meter);
-    return () => { window.clearInterval(t); cancelAnimationFrame(raf); };
-  }, [rec]);
+  const refetch = () => fetchMeetings(teamId, cloud).then(setMeetings).catch((e) => p.onError(String((e as Error).message ?? e)));
+  useEffect(() => { setMeetings([]); setSelected(null); refetch(); return subscribeMeetings(teamId, cloud, () => refetch()); }, [teamId, cloud]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setProg = (id: string, v: Progress | null) => setProgress((m) => {
     const n = { ...m };
@@ -91,18 +58,20 @@ export function MeetingsPage(p: Props) {
     return n;
   });
 
-  /** Shared tail for both record-stop and file import: upload, transcribe on device, name it. */
+  /** Upload, transcribe on device (with speaker labels), name it. */
   const processAudio = async (id: string, blob: Blob, startedAt: string, durationSecs?: number) => {
     try {
       setProg(id, { label: 'Saving' });
       const audioPath = await uploadMeetingAudio(id, blob, cloud);
       if (audioPath) await updateMeeting(teamId, id, { audioPath }, cloud);
-      const { transcribe, autoTitle } = await import('./transcribe');
+      const { transcribeWithSpeakers, autoTitle } = await import('./transcribe');
       await updateMeeting(teamId, id, { status: 'transcribing' }, cloud);
       refetch();
-      const out = await transcribe(blob, (pr) => setProg(id,
+      const enrolled = (await fetchVoicePrints(cloud)).map((v) => ({ id: v.userId, embedding: v.embedding }));
+      const out = await transcribeWithSpeakers(blob, enrolled, (pr) => setProg(id,
         pr.phase === 'model' ? { label: 'Downloading speech model (one-time)', pct: pr.pct }
         : pr.phase === 'decode' ? { label: 'Reading audio' }
+        : pr.phase === 'speakers' ? { label: 'Finding speakers' }
         : { label: 'Transcribing' }));
       const title = autoTitle(out.text, defaultTitle(startedAt));
       await updateMeeting(teamId, id, {
@@ -118,11 +87,8 @@ export function MeetingsPage(p: Props) {
   };
 
   const record = async () => {
-    try {
-      const id = uid();
-      const session = await startRecording(id);
-      setRec(session);
-    } catch (e) { p.onError(String((e as Error).message ?? e)); }
+    try { setRec(await startRecording(uid())); }
+    catch (e) { p.onError(String((e as Error).message ?? e)); }
   };
 
   const stop = async () => {
@@ -132,8 +98,7 @@ export function MeetingsPage(p: Props) {
     try {
       const { blob, durationSecs } = await session.stop();
       const startedAt = session.startedAt.toISOString();
-      const m: Omit<Meeting, 'owner'> = { id: session.meetingId, title: defaultTitle(startedAt), startedAt, durationSecs, status: 'recorded', isOpen: true, access: [] };
-      await createMeeting(teamId, me, m, cloud);
+      await createMeeting(teamId, me, { id: session.meetingId, title: defaultTitle(startedAt), startedAt, durationSecs, status: 'recorded', isOpen: true, access: [] }, cloud);
       refetch();
       setSelected(session.meetingId);
       await processAudio(session.meetingId, blob, startedAt, durationSecs);
@@ -145,131 +110,76 @@ export function MeetingsPage(p: Props) {
       if (!f.type.startsWith('audio/') && !/\.(mp3|m4a|wav|webm|ogg|aac|flac)$/i.test(f.name)) continue;
       const id = uid();
       const startedAt = new Date(f.lastModified || Date.now()).toISOString();
-      const m: Omit<Meeting, 'owner'> = { id, title: f.name.replace(/\.[a-z0-9]+$/i, ''), startedAt, status: 'recorded', isOpen: true, access: [] };
-      await createMeeting(teamId, me, m, cloud).catch((e) => p.onError(String((e as Error).message ?? e)));
+      await createMeeting(teamId, me, { id, title: f.name.replace(/\.[a-z0-9]+$/i, ''), startedAt, status: 'recorded', isOpen: true, access: [] }, cloud).catch((e) => p.onError(String((e as Error).message ?? e)));
       refetch();
       setSelected(id);
       await processAudio(id, f, startedAt);
     }
   };
 
-  /* agenda: 14 days of my events + visible teammates' shared events + recorded meetings */
-  type AgendaItem = { kind: 'event' | 'meeting'; id: string; title: string; when: string; sort: string; who?: string; meeting?: Meeting };
-  const days: { date: Date; items: AgendaItem[] }[] = [];
-  {
-    const byDay = new Map<string, AgendaItem[]>();
-    const push = (dayIso: string, item: AgendaItem) => {
-      if (!byDay.has(dayIso)) byDay.set(dayIso, []);
-      byDay.get(dayIso)!.push(item);
-    };
-    const evItem = (ev: CalendarEvent, who: string, idPrefix = ''): [string, AgendaItem] => [ev.date, {
-      kind: 'event', id: idPrefix + ev.id, title: ev.title, who,
-      when: ev.allDay || !ev.start ? 'All day' : `${ev.start}${ev.end ? `–${ev.end}` : ''}`,
-      sort: ev.allDay || !ev.start ? '00:00' : ev.start,
-    }];
-    if (!hiddenCals.has(me)) for (const ev of myEvents) { const [d, it] = evItem(ev, me); push(d, it); }
-    for (const sh of shares) {
-      if (sh.userId === me || hiddenCals.has(sh.userId)) continue;
-      for (const ev of sh.events) { const [d, it] = evItem(ev, sh.userId, `${sh.userId}:`); push(d, it); }
-    }
-    for (const m of meetings) push(m.startedAt.slice(0, 10), { kind: 'meeting', id: m.id, title: m.title, when: fmtTime(m.startedAt), sort: fmtTime(m.startedAt), meeting: m });
-    for (let i = 0; i < 14; i++) {
-      const iso = addDays(todayISO(), i);
-      const items = (byDay.get(iso) ?? []).sort((a, b) => a.sort.localeCompare(b.sort));
-      if (items.length) days.push({ date: new Date(`${iso}T12:00:00`), items });
-    }
-  }
+  /** ~8 s sample → my voice print; transcripts then name me automatically. */
+  const learnVoice = async () => {
+    try {
+      setVoiceRec('recording');
+      const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recd = new MediaRecorder(mic, { mimeType: 'audio/webm;codecs=opus' });
+      const chunks: Blob[] = [];
+      recd.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+      recd.start();
+      await new Promise((r) => setTimeout(r, 8000));
+      await new Promise<void>((r) => { recd.onstop = () => r(); recd.stop(); });
+      mic.getTracks().forEach((t) => t.stop());
+      setVoiceRec('saving');
+      const { voiceEmbedding } = await import('./transcribe');
+      const emb = await voiceEmbedding(new Blob(chunks, { type: 'audio/webm' }));
+      await saveVoicePrint(me, emb, cloud);
+      setVoiceRec('idle');
+    } catch (e) { setVoiceRec('idle'); p.onError(String((e as Error).message ?? e)); }
+  };
 
   const sel = meetings.find((m) => m.id === selected) ?? null;
-  const sharers = new Set(shares.map((s) => s.userId));
-  const calPeople = people.filter((x) => (x.id === me ? p.calendarReady : sharers.has(x.id)));
 
   return (
     <div className={`meet${drag ? ' dragging' : ''}`}
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDrag(true); } }}
       onDragLeave={(e) => { if (e.target === e.currentTarget) setDrag(false); }}
       onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files); }}>
-      <div className="meet-list">
-        <div className="meet-head">
-          {rec ? (
-            <div className="meet-recbar">
-              <span className="meet-reddot" />
-              <span className="meet-rectime">{fmtClock(Math.round((Date.now() - +rec.startedAt) / 1000))}</span>
-              <span className="meet-level"><span ref={levelRef} /></span>
-              {rec.systemAudio && <span className="meet-sys" title="Also capturing system audio">mic + system</span>}
-              <button className="pill toggle active" onClick={stop}>Stop</button>
-            </div>
-          ) : (
-            <button className="pill meet-rec" onClick={record} title="Record this meeting (microphone, plus system audio when available)">
+      <section className="panel meet-panel">
+        <div className="panel-head">
+          <div className="panel-title">Meetings</div>
+          <span className="panel-spacer" />
+          <button className="pill" onClick={learnVoice} disabled={voiceRec !== 'idle'}
+            title="Record ~8 seconds of your voice once — transcripts will then label your parts automatically">
+            {voiceRec === 'recording' ? 'Listening… speak normally' : voiceRec === 'saving' ? 'Saving voice…' : 'Learn my voice'}
+          </button>
+          <button className="pill" onClick={() => fileRef.current?.click()} title="Transcribe an existing recording">Import audio</button>
+          <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
+          {!rec && (
+            <button className="pill toggle active meet-rec" onClick={record} title="Record this meeting (microphone, plus system audio when available)">
               <span className="meet-reddot idle" /> Record
             </button>
           )}
-          <button className="pill" onClick={() => fileRef.current?.click()} title="Transcribe an existing recording">Import audio</button>
-          <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
-          <span className="panel-spacer" />
-          {calPeople.length > 0 && (
-            <span className="meet-cals" title="Whose calendars are shown">
-              {calPeople.map((x) => (
-                <button key={x.id} className={`meet-cal-avatar${hiddenCals.has(x.id) ? ' off' : ''}`}
-                  onClick={() => setHiddenCals((s) => { const n = new Set(s); if (n.has(x.id)) n.delete(x.id); else n.add(x.id); localStorage.setItem('exponential-meet-hidden', JSON.stringify([...n])); return n; })}>
-                  <Avatar person={x} size={22} />
-                </button>
-              ))}
-            </span>
-          )}
-          {cloud && p.calendarReady && (
-            <button className={`pill toggle${p.shareCal ? ' active' : ''}`} onClick={() => p.onShareCal(!p.shareCal)}
-              title="Publish your next two weeks (titles and times) to this team">
-              Share my calendar
-            </button>
-          )}
         </div>
-
+        {rec && <RecordBar rec={rec} onStop={stop} />}
         <div className="meet-scroll">
-          {days.length > 0 && (
-            <div className="meet-section">
-              <div className="meet-section-title">Next two weeks</div>
-              {days.map((d) => (
-                <div key={+d.date} className="meet-day">
-                  <div className="meet-day-label">{fmtDay(d.date)}</div>
-                  {d.items.map((it) => it.kind === 'event' ? (
-                    <div key={it.id} className="meet-event">
-                      <span className="meet-when">{it.when}</span>
-                      <span className="meet-title">{it.title}</span>
-                      {it.who && people.find((x) => x.id === it.who) && <Avatar person={people.find((x) => x.id === it.who)!} size={18} />}
-                    </div>
-                  ) : (
-                    <button key={it.id} className={`meet-event meeting${selected === it.id ? ' on' : ''}`} onClick={() => setSelected(it.id)}>
-                      <span className="meet-when">{it.when}</span>
-                      <MicGlyph />
-                      <span className="meet-title">{it.title}</span>
-                      <StatusChip m={it.meeting!} progress={progress[it.id]} />
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
+          {meetings.length === 0 && !rec && (
+            <div className="meet-empty">Nothing recorded yet. Hit Record in a meeting, or drop an audio file anywhere on this page.</div>
           )}
-
-          <div className="meet-section">
-            <div className="meet-section-title">Meetings</div>
-            {meetings.length === 0 && <div className="meet-empty">Nothing recorded yet. Hit Record in a meeting, or drop an audio file anywhere on this page.</div>}
-            {meetings.map((m) => (
-              <button key={m.id} className={`meet-row${selected === m.id ? ' on' : ''}`} onClick={() => setSelected(m.id)}>
-                <MicGlyph />
-                <span className="meet-row-main">
-                  <span className="meet-title">{m.title}</span>
-                  <span className="meet-sub">{fmtStamp(m.startedAt)}{m.durationSecs ? ` · ${fmtDur(m.durationSecs)}` : ''}</span>
-                </span>
-                <span className="panel-spacer" />
-                {!m.isOpen && <span title="Restricted"><LockTiny /></span>}
-                <StatusChip m={m} progress={progress[m.id]} />
-                {people.find((x) => x.id === m.owner) && <Avatar person={people.find((x) => x.id === m.owner)!} size={20} />}
-              </button>
-            ))}
-          </div>
+          {meetings.map((m) => (
+            <button key={m.id} className={`meet-row${selected === m.id ? ' on' : ''}`} onClick={() => setSelected(m.id === selected ? null : m.id)}>
+              <MicGlyph />
+              <span className="meet-row-main">
+                <span className="meet-title">{m.title}</span>
+                <span className="meet-sub">{fmtStamp(m.startedAt)}{m.durationSecs ? ` · ${fmtDur(m.durationSecs)}` : ''}</span>
+              </span>
+              <span className="panel-spacer" />
+              {!m.isOpen && <span title="Restricted"><LockTiny /></span>}
+              <StatusChip m={m} progress={progress[m.id]} />
+              {people.find((x) => x.id === m.owner) && <Avatar person={people.find((x) => x.id === m.owner)!} size={20} />}
+            </button>
+          ))}
         </div>
-      </div>
+      </section>
 
       {sel && (
         <MeetingDetail key={sel.id} meeting={sel} me={me} people={people} cloud={cloud}
@@ -291,6 +201,55 @@ export function MeetingsPage(p: Props) {
   );
 }
 
+/** Voice-Memos-style strip: scrolling waveform, elapsed (recording) time, pause/resume, stop. */
+function RecordBar({ rec, onStop }: { rec: RecordingSession; onStop: () => void }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const samples = useRef<number[]>([]);
+  const [, tick] = useState(0);
+  const [paused, setPaused] = useState(rec.state() === 'paused');
+
+  useEffect(() => {
+    const t = window.setInterval(() => tick((v) => v + 1), 500);
+    const s = window.setInterval(() => { if (rec.state() === 'recording') samples.current.push(rec.level()); }, 90);
+    let raf = 0;
+    const draw = () => {
+      const cv = canvasRef.current;
+      if (cv) {
+        const dpr = window.devicePixelRatio || 1;
+        const w = cv.clientWidth, h = cv.clientHeight;
+        if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+        const cx = cv.getContext('2d')!;
+        cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cx.clearRect(0, 0, w, h);
+        const bw = 2, gap = 1, n = Math.floor(w / (bw + gap));
+        const data = samples.current.slice(-n);
+        cx.fillStyle = '#e5484d';
+        data.forEach((v, i) => {
+          const x = w - (data.length - i) * (bw + gap);
+          const bh = Math.max(2, v * (h - 6));
+          cx.fillRect(x, (h - bh) / 2, bw, bh);
+        });
+      }
+      raf = requestAnimationFrame(draw);
+    };
+    raf = requestAnimationFrame(draw);
+    return () => { window.clearInterval(t); window.clearInterval(s); cancelAnimationFrame(raf); };
+  }, [rec]);
+
+  return (
+    <div className="meet-wavebar">
+      <span className={`meet-reddot${paused ? ' idle' : ''}`} />
+      <span className="meet-rectime">{fmtClock(Math.round(rec.activeSecs()))}</span>
+      <canvas ref={canvasRef} className="meet-wave" />
+      {rec.systemAudio && <span className="meet-sys" title="Also capturing system audio">mic + system</span>}
+      <button className="pill" onClick={() => { if (paused) { rec.resume(); setPaused(false); } else { rec.pause(); setPaused(true); } }}>
+        {paused ? 'Resume' : 'Pause'}
+      </button>
+      <button className="pill toggle active" onClick={onStop}>Stop</button>
+    </div>
+  );
+}
+
 function StatusChip({ m, progress }: { m: Meeting; progress?: Progress }) {
   if (progress) return <span className="meet-chip busy">{progress.label}{progress.pct !== undefined ? ` ${progress.pct}%` : '…'}</span>;
   if (m.status === 'transcribing') return <span className="meet-chip busy">Transcribing…</span>;
@@ -299,12 +258,48 @@ function StatusChip({ m, progress }: { m: Meeting; progress?: Progress }) {
   return null;
 }
 
+/** Who can open the meeting: one popup — Everyone (default) or hand-picked people. */
+function AccessPicker({ m, me, people, onPatch }: { m: Meeting; me: string; people: Person[]; onPatch: (p: Partial<Meeting>) => void }) {
+  const [menu, setMenu] = useState<DOMRect | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.meet-access-menu')) setMenu(null); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [menu]);
+  const label = m.isOpen ? 'Everyone' : m.access.length === 0 ? 'Only me' : people.filter((x) => m.access.includes(x.id)).map((x) => shortName(x.name)).join(', ') || 'Only me';
+  return (
+    <>
+      <button className="pill" onClick={(e) => setMenu((e.currentTarget as HTMLElement).getBoundingClientRect())} title="Who can open this meeting">
+        <EyeGlyph /> {label}
+      </button>
+      {menu && createPortal(
+        <div className="status-menu meet-access-menu" style={{ position: 'fixed', top: menu.bottom + 6, right: Math.max(12, window.innerWidth - menu.right) }}>
+          <button className={m.isOpen ? 'on' : ''} onClick={() => { onPatch({ isOpen: true, access: [] }); setMenu(null); }}>
+            Everyone on the team {m.isOpen ? '✓' : ''}
+          </button>
+          <div className="menu-sep" />
+          {people.filter((x) => x.id !== me && !x.id.startsWith('pending:')).map((x) => {
+            const has = !m.isOpen && m.access.includes(x.id);
+            return (
+              <button key={x.id} className={has ? 'on' : ''}
+                onClick={() => onPatch({ isOpen: false, access: has ? m.access.filter((a) => a !== x.id) : [...(m.isOpen ? [] : m.access), x.id] })}>
+                <Avatar person={x} size={18} /> {shortName(x.name)} {has ? '✓' : ''}
+              </button>
+            );
+          })}
+        </div>, document.body)}
+    </>
+  );
+}
+
 function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPatch, onRetranscribe, onDelete, onClose }: {
   meeting: Meeting; me: string; people: Person[]; cloud: boolean; canEdit: boolean; progress?: Progress;
   onPatch: (patch: Partial<Meeting>) => void; onRetranscribe: () => void; onDelete: () => void; onClose: () => void;
 }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [renaming, setRenaming] = useState<string | null>(null); // the speaker label being renamed
   useEffect(() => {
     let gone = false;
     meetingAudioUrl(m, cloud).then((u) => { if (!gone) setAudioUrl(u); });
@@ -312,61 +307,90 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
   }, [m.id, m.audioPath, cloud]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const owner = people.find((x) => x.id === m.owner);
+  const whoPerson = (who?: string) => (who && (UUID_RE.test(who) || people.some((x) => x.id === who)) ? people.find((x) => x.id === who) : undefined);
+  const whoName = (who?: string) => {
+    if (!who) return null;
+    const person = whoPerson(who);
+    if (person) return shortName(person.name);
+    if (UUID_RE.test(who)) return 'Former member';
+    return who;
+  };
+  const renameSpeaker = (from: string, to: string) => {
+    const v = to.trim();
+    if (!v || v === from) return;
+    onPatch({ transcript: (m.transcript ?? []).map((s) => (s.who === from ? { ...s, who: v } : s)) });
+  };
+
+  // consecutive segments by the same voice read as one turn
+  const blocks: { who?: string; segs: Segment[] }[] = [];
+  for (const s of m.transcript ?? []) {
+    const last = blocks[blocks.length - 1];
+    if (last && last.who === s.who) last.segs.push(s);
+    else blocks.push({ who: s.who, segs: [s] });
+  }
+
   return (
-    <aside className="meet-detail">
-      <div className="meet-detail-head">
+    <aside className="detail meet-detail">
+      <div className="detail-top">
+        <span className="detail-kind">Meeting</span>
+        <span className="panel-spacer" />
+        {canEdit && <button className="icon-btn" title="Delete" onClick={onDelete}><TrashGlyph /></button>}
+        <button className="icon-btn" title="Close" onClick={onClose}><CloseGlyph /></button>
+      </div>
+      <div className="detail-scroll">
         {canEdit ? (
-          <input key={m.title} className="meet-title-input" defaultValue={m.title} /* remounts when the auto-title lands */
+          <input key={m.title} className="detail-title" defaultValue={m.title}
             onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.title) onPatch({ title: v }); }}
             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
-        ) : <span className="meet-detail-title">{m.title}</span>}
-        <button className="icon-btn" title="Close" onClick={onClose}>×</button>
-      </div>
-      <div className="meet-detail-meta">
-        {owner && <Avatar person={owner} size={18} />}
-        <span>{fmtStamp(m.startedAt)}</span>
-        {m.durationSecs ? <span>· {fmtDur(m.durationSecs)}</span> : null}
-        <StatusChip m={m} progress={progress} />
-      </div>
-      {audioUrl && <audio ref={audioRef} className="meet-audio" controls src={audioUrl} />}
-
-      {canEdit && (
-        <div className="meet-access">
-          <button className={`pill toggle${m.isOpen ? ' active' : ''}`} onClick={() => onPatch({ isOpen: !m.isOpen })}
-            title="Open: everyone on the team can see this meeting">Whole team</button>
-          {!m.isOpen && people.filter((x) => x.id !== me).map((x) => (
-            <button key={x.id} className={`pill${m.access.includes(x.id) ? ' toggle active' : ''}`}
-              onClick={() => onPatch({ access: m.access.includes(x.id) ? m.access.filter((a) => a !== x.id) : [...m.access, x.id] })}>
-              {shortName(x.name)}
-            </button>
-          ))}
+        ) : <div className="detail-title as-text">{m.title}</div>}
+        <div className="meet-detail-meta">
+          {owner && <Avatar person={owner} size={18} />}
+          <span>{fmtStamp(m.startedAt)}</span>
+          {m.durationSecs ? <span>· {fmtDur(m.durationSecs)}</span> : null}
+          <StatusChip m={m} progress={progress} />
+          <span className="panel-spacer" />
+          {canEdit && <AccessPicker m={m} me={me} people={people} onPatch={onPatch} />}
         </div>
-      )}
+        {audioUrl && <audio ref={audioRef} className="meet-audio" controls src={audioUrl} />}
 
-      <div className="meet-transcript">
-        {(m.transcript ?? []).map((s, i) => (
-          <p key={i} className="meet-seg" onClick={() => { const a = audioRef.current; if (a && Number.isFinite(s.t0)) { a.currentTime = s.t0; a.play().catch(() => {}); } }}>
-            <span className="meet-ts">{fmtClock(s.t0)}</span>
-            {s.text}
-          </p>
-        ))}
-        {!m.transcript?.length && !progress && (
-          // status may say 'transcribing' from a run that died with the app — no live
-          // progress here means nobody is working on it, so offer the button again
-          <div className="meet-empty">
-            No transcript yet.
-            {(m.audioPath || !cloud) && <button className="pill" onClick={onRetranscribe}>Transcribe</button>}
-          </div>
+        <div className="meet-transcript">
+          {blocks.map((b, bi) => (
+            <div key={bi} className="meet-turn">
+              {b.who && (
+                <div className="meet-speaker">
+                  {whoPerson(b.who) ? <Avatar person={whoPerson(b.who)!} size={18} /> : <span className="meet-speaker-dot" />}
+                  {renaming === b.who && canEdit && !whoPerson(b.who) ? (
+                    <input autoFocus className="meet-speaker-input" defaultValue={whoName(b.who) ?? ''}
+                      onBlur={(e) => { renameSpeaker(b.who!, e.target.value); setRenaming(null); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setRenaming(null); }} />
+                  ) : (
+                    <button className="meet-speaker-name" disabled={!canEdit || !!whoPerson(b.who)}
+                      title={canEdit && !whoPerson(b.who) ? 'Rename this speaker' : undefined}
+                      onClick={() => setRenaming(b.who!)}>
+                      {whoName(b.who)}
+                    </button>
+                  )}
+                </div>
+              )}
+              {b.segs.map((s, i) => (
+                <p key={i} className="meet-seg" onClick={() => { const a = audioRef.current; if (a && Number.isFinite(s.t0)) { a.currentTime = s.t0; a.play().catch(() => {}); } }}>
+                  <span className="meet-ts">{fmtClock(s.t0)}</span>
+                  {s.text}
+                </p>
+              ))}
+            </div>
+          ))}
+          {!m.transcript?.length && !progress && (
+            <div className="meet-empty">
+              No transcript yet.
+              {(m.audioPath || !cloud) && <button className="pill" onClick={onRetranscribe}>Transcribe</button>}
+            </div>
+          )}
+        </div>
+        {canEdit && m.status === 'ready' && (m.audioPath || !cloud) && (
+          <div className="meet-detail-foot"><button className="pill" onClick={onRetranscribe}>Re-transcribe</button></div>
         )}
       </div>
-
-      {canEdit && (
-        <div className="meet-detail-foot">
-          {m.status === 'ready' && (m.audioPath || !cloud) && <button className="pill" onClick={onRetranscribe}>Re-transcribe</button>}
-          <span className="panel-spacer" />
-          <button className="pill danger" onClick={onDelete}>Delete</button>
-        </div>
-      )}
     </aside>
   );
 }
@@ -376,4 +400,13 @@ function MicGlyph() {
 }
 function LockTiny() {
   return <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><rect x="4" y="10" width="16" height="11" rx="2.5" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>;
+}
+function EyeGlyph() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>;
+}
+function TrashGlyph() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-.8 14a2 2 0 0 1-2 1.9H7.8a2 2 0 0 1-2-1.9L5 6" /></svg>;
+}
+function CloseGlyph() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
 }

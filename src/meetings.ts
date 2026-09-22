@@ -1,5 +1,4 @@
 import { supabase } from './cloud';
-import type { CalendarEvent } from './types';
 
 /**
  * Meetings: recordings, transcripts and shared calendars. Rows live in `meetings`
@@ -10,14 +9,13 @@ import type { CalendarEvent } from './types';
  * in localStorage and audio in IndexedDB, same API.
  */
 
-export interface Segment { t0: number; t1: number; text: string }
+export interface Segment { t0: number; t1: number; text: string; who?: string } // who: user id (enrolled voice) or 'Speaker N' / a hand-given name
 export interface Meeting {
   id: string; owner?: string; title: string; startedAt: string; durationSecs?: number;
   audioPath?: string; transcript?: Segment[]; summary?: string;
   status: 'recorded' | 'transcribing' | 'ready' | 'error';
   isOpen: boolean; access: string[];
 }
-export interface SharedCalendar { userId: string; events: CalendarEvent[]; updatedAt: string }
 
 /* ── local (preview) store ── */
 
@@ -141,36 +139,35 @@ export async function meetingAudioUrl(m: Meeting, cloud: boolean): Promise<strin
   return null;
 }
 
-/* ── shared calendars ── */
+/* ── voice prints ("Learn my voice"): one embedding per user, readable by anyone who
+   shares a team, so transcripts can name enrolled teammates automatically ── */
 
-export async function pushCalendarShare(teamId: string, me: string, events: SharedCalendar['events'], cloud: boolean) {
-  if (!cloud) return;
-  await supabase.from('calendar_shares').upsert(
-    { team_id: teamId, user_id: me, events, updated_at: new Date().toISOString() },
-    { onConflict: 'team_id,user_id' },
-  );
+export async function fetchVoicePrints(cloud: boolean): Promise<{ userId: string; embedding: number[] }[]> {
+  if (!cloud) {
+    try { return Object.entries(JSON.parse(localStorage.getItem('exponential-voice') ?? '{}')).map(([userId, embedding]) => ({ userId, embedding: embedding as number[] })); } catch { return []; }
+  }
+  const { data, error } = await supabase.from('voice_prints').select('user_id, embedding');
+  if (error) return []; // table may not exist yet (patch 008) — speakers just stay anonymous
+  return (data as { user_id: string; embedding: number[] }[]).map((r) => ({ userId: r.user_id, embedding: r.embedding }));
 }
 
-export async function removeCalendarShare(teamId: string, me: string, cloud: boolean) {
-  if (!cloud) return;
-  await supabase.from('calendar_shares').delete().eq('team_id', teamId).eq('user_id', me);
-}
-
-export async function fetchCalendarShares(teamId: string, cloud: boolean): Promise<SharedCalendar[]> {
-  if (!cloud) return [];
-  const { data, error } = await supabase.from('calendar_shares').select('*').eq('team_id', teamId);
+export async function saveVoicePrint(me: string, embedding: number[], cloud: boolean) {
+  if (!cloud) {
+    const cur = (() => { try { return JSON.parse(localStorage.getItem('exponential-voice') ?? '{}'); } catch { return {}; } })();
+    cur[me] = embedding;
+    localStorage.setItem('exponential-voice', JSON.stringify(cur));
+    return;
+  }
+  const { error } = await supabase.from('voice_prints').upsert({ user_id: me, embedding, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
   if (error) throw error;
-  return (data as { user_id: string; events: SharedCalendar['events']; updated_at: string }[])
-    .map((r) => ({ userId: r.user_id, events: r.events ?? [], updatedAt: r.updated_at }));
 }
 
 /* ── realtime (page-scoped) ── */
 
-export function subscribeMeetings(teamId: string, cloud: boolean, onChange: () => void): () => void {
+export function subscribeMeetings(teamId: string, cloud: boolean, onChange: (m?: Meeting, ev?: string) => void, name = 'meetings'): () => void {
   if (!cloud) return () => {};
-  const ch = supabase.channel(`meetings:${teamId}`);
-  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'meetings', filter: `team_id=eq.${teamId}` }, onChange);
-  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'calendar_shares', filter: `team_id=eq.${teamId}` }, onChange);
+  const ch = supabase.channel(`${name}:${teamId}`);
+  ch.on('postgres_changes', { event: '*', schema: 'public', table: 'meetings', filter: `team_id=eq.${teamId}` }, (p) => onChange(p.new && (p.new as { id?: string }).id ? toMeeting(p.new as MeetingRow) : undefined, p.eventType));
   ch.subscribe();
   return () => { supabase.removeChannel(ch); };
 }

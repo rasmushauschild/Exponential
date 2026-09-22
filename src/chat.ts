@@ -13,7 +13,8 @@ import { uid } from './store';
 export interface Attachment { path: string; name: string; size: number; type: string; w?: number; h?: number }
 export interface ChatMessage {
   id: string; channelId: string; author?: string; body: string;
-  attachments?: Attachment[]; editedAt?: string; deletedAt?: string; at: string; pending?: boolean;
+  attachments?: Attachment[]; reactions?: Record<string, string[]>; // emoji → user ids
+  editedAt?: string; deletedAt?: string; at: string; pending?: boolean;
 }
 export interface Channel {
   id: string; name: string; topic?: string; private: boolean; createdBy?: string;
@@ -41,8 +42,8 @@ const localSave = (s: LocalStore) => localStorage.setItem(LS_KEY, JSON.stringify
 
 /* ── row mapping ── */
 
-type MessageRow = { id: string; channel_id: string; team_id: string; author: string | null; body: string; attachments: Attachment[] | null; edited_at: string | null; deleted_at: string | null; created_at: string };
-const toMessage = (r: MessageRow): ChatMessage => ({ id: r.id, channelId: r.channel_id, author: r.author ?? undefined, body: r.body, attachments: r.attachments ?? undefined, editedAt: r.edited_at ?? undefined, deletedAt: r.deleted_at ?? undefined, at: r.created_at });
+type MessageRow = { id: string; channel_id: string; team_id: string; author: string | null; body: string; attachments: Attachment[] | null; reactions: Record<string, string[]> | null; edited_at: string | null; deleted_at: string | null; created_at: string };
+const toMessage = (r: MessageRow): ChatMessage => ({ id: r.id, channelId: r.channel_id, author: r.author ?? undefined, body: r.body, attachments: r.attachments ?? undefined, reactions: r.reactions ?? undefined, editedAt: r.edited_at ?? undefined, deletedAt: r.deleted_at ?? undefined, at: r.created_at });
 
 /* ── channels ── */
 
@@ -216,16 +217,17 @@ export async function sendMessage(teamId: string, channelId: string, me: string,
 }
 
 export async function editMessage(teamId: string, msg: ChatMessage, body: string, cloud: boolean) {
+  const next = { ...msg, body, editedAt: new Date().toISOString() };
   if (!cloud) {
     const s = localLoad();
-    const next = { ...msg, body, editedAt: new Date().toISOString() };
     s.messages[msg.channelId] = (s.messages[msg.channelId] ?? []).map((m) => (m.id === msg.id ? next : m));
     localSave(s);
     emit({ type: 'message-changed', teamId, message: next });
     return;
   }
-  const { error } = await supabase.from('messages').update({ body, edited_at: new Date().toISOString() }).eq('id', msg.id);
+  const { error } = await supabase.from('messages').update({ body, edited_at: next.editedAt }).eq('id', msg.id);
   if (error) throw error;
+  emit({ type: 'message-changed', teamId, message: next }); // realtime echoes the same patch later — idempotent
 }
 
 export async function deleteMessage(teamId: string, msg: ChatMessage, cloud: boolean) {
@@ -233,11 +235,40 @@ export async function deleteMessage(teamId: string, msg: ChatMessage, cloud: boo
     const s = localLoad();
     s.messages[msg.channelId] = (s.messages[msg.channelId] ?? []).filter((m) => m.id !== msg.id);
     localSave(s);
-    emit({ type: 'message-changed', teamId, message: { ...msg, body: '', at: '' } });
+    emit({ type: 'message-changed', teamId, message: { ...msg, deletedAt: new Date().toISOString() } });
     return;
   }
   const { error } = await supabase.from('messages').update({ deleted_at: new Date().toISOString() }).eq('id', msg.id);
   if (error) throw error;
+  emit({ type: 'message-changed', teamId, message: { ...msg, deletedAt: new Date().toISOString() } });
+}
+
+/** Toggle my reaction. Whole-column read-modify-write: simultaneous reactors are rare
+ *  enough that last-writer-wins on one message's jsonb is an acceptable trade. */
+export async function toggleReaction(teamId: string, msg: ChatMessage, emoji: string, me: string, cloud: boolean) {
+  const apply = (r: Record<string, string[]> | undefined): Record<string, string[]> | undefined => {
+    const next = { ...(r ?? {}) };
+    const cur = next[emoji] ?? [];
+    if (cur.includes(me)) {
+      const left = cur.filter((u) => u !== me);
+      if (left.length) next[emoji] = left; else delete next[emoji];
+    } else next[emoji] = [...cur, me];
+    return Object.keys(next).length ? next : undefined;
+  };
+  if (!cloud) {
+    const s = localLoad();
+    let out: ChatMessage | null = null;
+    s.messages[msg.channelId] = (s.messages[msg.channelId] ?? []).map((m) => (m.id === msg.id ? (out = { ...m, reactions: apply(m.reactions) }) : m));
+    localSave(s);
+    if (out) emit({ type: 'message-changed', teamId, message: out });
+    return;
+  }
+  const { data, error } = await supabase.from('messages').select('reactions').eq('id', msg.id).single();
+  if (error) throw error;
+  const reactions = apply((data as { reactions: Record<string, string[]> | null }).reactions ?? undefined) ?? null;
+  const { error: e } = await supabase.from('messages').update({ reactions }).eq('id', msg.id);
+  if (e) throw e;
+  emit({ type: 'message-changed', teamId, message: { ...msg, reactions: reactions ?? undefined } });
 }
 
 /* ── attachments ── */

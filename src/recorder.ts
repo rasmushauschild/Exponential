@@ -13,6 +13,11 @@ export interface RecordingSession {
   systemAudio: boolean;
   /** 0..1 level for the meter, read per frame. */
   level: () => number;
+  state: () => 'recording' | 'paused';
+  /** seconds actually recorded (pauses excluded) */
+  activeSecs: () => number;
+  pause: () => void;
+  resume: () => void;
   stop: () => Promise<{ blob: Blob; durationSecs: number }>;
 }
 
@@ -63,6 +68,9 @@ export async function startRecording(meetingId: string): Promise<RecordingSessio
   };
   rec.start(5000);
   const startedAt = new Date();
+  let paused = false;
+  let pausedTotal = 0;
+  let pausedAt = 0;
 
   const buf = new Uint8Array(analyser.fftSize);
   const level = () => {
@@ -77,6 +85,10 @@ export async function startRecording(meetingId: string): Promise<RecordingSessio
     startedAt,
     systemAudio: !!system,
     level,
+    state: () => (paused ? 'paused' : 'recording'),
+    activeSecs: () => Math.max(0, (Date.now() - +startedAt - pausedTotal - (paused ? Date.now() - pausedAt : 0)) / 1000),
+    pause: () => { if (!paused && rec.state === 'recording') { rec.pause(); paused = true; pausedAt = Date.now(); } },
+    resume: () => { if (paused) { rec.resume(); paused = false; pausedTotal += Date.now() - pausedAt; } },
     stop: () => new Promise((resolve, reject) => {
       rec.onstop = async () => {
         try {
@@ -92,7 +104,7 @@ export async function startRecording(meetingId: string): Promise<RecordingSessio
             blob = new Blob(chunks, { type: 'audio/webm' });
           }
           current = null;
-          resolve({ blob, durationSecs: Math.round((Date.now() - +startedAt) / 1000) });
+          resolve({ blob, durationSecs: Math.round(session.activeSecs()) });
         } catch (e) { current = null; reject(e); }
       };
       rec.stop(); // flushes the final chunk through ondataavailable first
