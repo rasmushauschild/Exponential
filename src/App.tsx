@@ -125,10 +125,8 @@ export default function App() {
     return () => mq.removeEventListener('change', h);
   }, []);
   const theme: 'light' | 'dark' = themePref || (sysDark ? 'dark' : 'light');
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setThemePref(next === (sysDark ? 'dark' : 'light') ? '' : next);
-  };
+  // Light → Dark → Auto (follow the system) → Light …
+  const cycleTheme = () => setThemePref((p) => (p === 'light' ? 'dark' : p === 'dark' ? '' : 'light'));
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const [calendarOn, setCalendarOn] = useState(() => prefs.calendar);
   const [allTeamsOn, setAllTeamsOn] = useState(() => prefs.allTeams);
@@ -706,9 +704,10 @@ export default function App() {
               <UpdateIcon /> <span className="nav-text">Updating… {updateInfo.percent ?? 0}%</span>
             </div>
           )}
-          <button className="nav-item theme-toggle" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
-            {theme === 'dark' ? <SunIcon /> : <MoonIcon />}
-            <span className="nav-text">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+          <button className="nav-item theme-toggle" onClick={cycleTheme}
+            title={themePref === 'light' ? 'Theme: Light — click for Dark' : themePref === 'dark' ? 'Theme: Dark — click for Auto' : 'Theme: Auto (follows the system) — click for Light'}>
+            {themePref === 'light' ? <SunIcon /> : themePref === 'dark' ? <MoonIcon /> : <AutoThemeIcon />}
+            <span className="nav-text">{themePref === 'light' ? 'Light' : themePref === 'dark' ? 'Dark' : 'Auto'}</span>
           </button>
           {googleUser ? (
             <button className="account has-avatar" onClick={() => setSheet('settings')} title={googleUser.email}>
@@ -1108,6 +1107,15 @@ function MoonIcon() {
     </svg>
   );
 }
+function AutoThemeIcon() {
+  return (
+    <svg {...ICON}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5a8.5 8.5 0 0 1 0 17Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 function SunIcon() {
   return (
     <svg {...ICON}>
