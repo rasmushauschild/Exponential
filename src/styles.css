@@ -1214,3 +1214,5 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .meet-ts { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-3); padding-top: 2px; min-width: 34px; }
 .meet-detail-foot { display: flex; gap: 8px; padding: 10px 16px 14px; border-top: 1px solid var(--line); }
 .pill.danger { color: #e5484d; }
+.chat-rail-head.dm { padding-top: 16px; }
+.chat-ch .avatar { flex: none; }

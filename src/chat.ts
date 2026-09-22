@@ -148,6 +148,44 @@ export async function markRead(teamId: string, channelId: string, me: string, cl
   await supabase.from('channel_members').upsert({ channel_id: channelId, user_id: me, last_read_at: new Date().toISOString() }, { onConflict: 'channel_id,user_id' });
 }
 
+/* ── direct messages: a DM is a private channel named dm:<a>|<b> (ids sorted), so two
+   people opening the same DM at once converge on the unique (team_id, name) index. ── */
+
+export const dmName = (a: string, b: string) => `dm:${[a, b].sort().join('|')}`;
+export const isDm = (c: Pick<Channel, 'name'>) => c.name.startsWith('dm:');
+export const dmOther = (c: Channel, me: string) => c.members?.find((id) => id !== me) ?? me;
+
+export async function openDm(teamId: string, me: string, other: string, cloud: boolean): Promise<string> {
+  const name = dmName(me, other);
+  if (!cloud) {
+    const s = localLoad();
+    const existing = (s.channels[teamId] ?? []).find((c) => c.name === name);
+    if (existing) return existing.id;
+    const id = uid();
+    s.channels[teamId] = [...(s.channels[teamId] ?? []), { id, name, private: true, createdBy: me, members: other === me ? [me] : [me, other], unread: 0 }];
+    localSave(s);
+    emit({ type: 'channels', teamId });
+    return id;
+  }
+  const id = uid();
+  const { error } = await supabase.from('channels').insert({ id, team_id: teamId, name, is_private: true, created_by: me });
+  if (!error) {
+    const rows = (other === me ? [me] : [me, other]).map((u) => ({ channel_id: id, user_id: u }));
+    const { error: e } = await supabase.from('channel_members').insert(rows);
+    if (e) throw e;
+    emit({ type: 'channels', teamId });
+    return id;
+  }
+  // Lost the race (other person, or another of my windows): theirs exists — wait out
+  // their membership insert, which is what makes it visible to me.
+  for (let i = 0; i < 5; i++) {
+    const { data } = await supabase.from('channels').select('id').eq('team_id', teamId).eq('name', name).maybeSingle();
+    if (data) { emit({ type: 'channels', teamId }); return (data as { id: string }).id; }
+    await new Promise((r) => setTimeout(r, 400));
+  }
+  throw error;
+}
+
 /* ── messages ── */
 
 export async function fetchMessages(teamId: string, channelId: string, cloud: boolean, before?: string, limit = 60): Promise<ChatMessage[]> {

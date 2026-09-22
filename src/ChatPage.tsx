@@ -5,9 +5,9 @@ import { shortName } from './types';
 import { Avatar } from './WeekPlan';
 import { decorate } from './richtext';
 import {
-  attachmentUrl, createChannel, deleteChannel, deleteMessage, editMessage, fetchMessages,
-  markRead, onChatEvent, sendMessage, setChannelMembers, updateChannel, uploadChatFile,
-  type Attachment, type Channel, type ChatMessage,
+  attachmentUrl, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
+  fetchMessages, isDm, markRead, onChatEvent, openDm, sendMessage, setChannelMembers,
+  updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
 
 const EMOJI = ['👍', '❤️', '😂', '🎉', '🙌', '🔥', '👀', '✅', '💯', '😅', '😍', '🤔', '😢', '😮', '🙏', '👏', '🚀', '⭐', '☕', '🍿', '💪', '🫡', '🤝', '🥳', '😴', '🤯', '🧠', '⚡', '🌱', '🍾', '🎯', '🛠️'];
@@ -120,6 +120,10 @@ export function ChatPage(p: Props) {
     return { msg: m, head, day };
   });
 
+  const regular = channels.filter((c) => !isDm(c));
+  const dms = channels.filter(isDm);
+  const teammates = people.filter((x) => !x.id.startsWith('pending:'));
+
   return (
     <div className="chat">
       <aside className="chat-rail">
@@ -128,7 +132,7 @@ export function ChatPage(p: Props) {
           <span className="panel-spacer" />
           <button className="icon-btn" title="New channel" onClick={() => setNewChannel(true)}>+</button>
         </div>
-        {channels.map((c) => (
+        {regular.map((c) => (
           <button key={c.id} className={`chat-ch${c.id === activeId ? ' active' : ''}${c.unread ? ' unread' : ''}`} onClick={() => onActive(c.id)}>
             <span className="chat-hash">{c.private ? <LockGlyph /> : '#'}</span>
             <span className="chat-ch-name">{c.name}</span>
@@ -142,16 +146,40 @@ export function ChatPage(p: Props) {
               catch (e) { p.onError(String((e as Error).message ?? e)); }
             }} />
         )}
+        <div className="chat-rail-head dm">
+          <span className="chat-rail-title">Direct messages</span>
+        </div>
+        {teammates.map((x) => {
+          const ch = dms.find((d) => d.name === dmName(me, x.id));
+          return (
+            <button key={x.id} className={`chat-ch${ch && ch.id === activeId ? ' active' : ''}${ch?.unread ? ' unread' : ''}`}
+              onClick={async () => {
+                if (ch) { onActive(ch.id); return; }
+                try { const id = await openDm(teamId, me, x.id, cloud); p.onRefreshChannels(); onActive(id); }
+                catch (e) { p.onError(String((e as Error).message ?? e)); }
+              }}>
+              <Avatar person={x} size={18} />
+              <span className="chat-ch-name">{shortName(x.name)}{x.id === me ? ' (you)' : ''}</span>
+              {ch && ch.unread > 0 && <span className="badge">{ch.unread}</span>}
+            </button>
+          );
+        })}
       </aside>
 
       {active ? (
         <div className="chat-main">
-          <ChannelHead key={active.id} channel={active} me={me} people={people} canModerate={p.canModerate}
+          {isDm(active) ? (
+            <div className="chat-head">
+              {(() => { const other = people.find((x) => x.id === dmOther(active, me)); return other ? <><Avatar person={other} size={24} /><span className="chat-head-name">{shortName(other.name)}{other.id === me ? ' (you)' : ''}</span></> : <span className="chat-head-name">Direct message</span>; })()}
+            </div>
+          ) : (
+          <ChannelHead key={`head-${active.id}`} channel={active} me={me} people={people} canModerate={p.canModerate} /* key must differ from the sibling Composer's — same-key siblings made React orphan the old head in the DOM */
             onRename={(name) => updateChannel(teamId, active.id, { name }, cloud).catch((e) => p.onError(String(e.message ?? e)))}
             onTopic={(topic) => updateChannel(teamId, active.id, { topic }, cloud).catch((e) => p.onError(String(e.message ?? e)))}
             onMembers={(m) => setChannelMembers(teamId, active.id, m, cloud).then(p.onRefreshChannels).catch((e) => p.onError(String(e.message ?? e)))}
             onDelete={() => deleteChannel(teamId, active.id, cloud).then(() => { onActive(channels.find((c) => c.id !== active.id)?.id ?? null); p.onRefreshChannels(); }).catch((e) => p.onError(String(e.message ?? e)))}
           />
+          )}
           <div className="chat-list" ref={listRef} onScroll={onScroll}>
             {!olderDone && msgs.length >= 60 && <button className="pill chat-older" onClick={loadOlder}>Load earlier messages</button>}
             {grouped.map(({ msg, head, day }) => (
@@ -165,7 +193,8 @@ export function ChatPage(p: Props) {
             ))}
             {msgs.length === 0 && <div className="chat-empty">No messages yet — say hi 👋</div>}
           </div>
-          <Composer key={active.id} channel={active} teamId={teamId} cloud={cloud} onError={p.onError}
+          <Composer key={`comp-${active.id}`} channel={active} teamId={teamId} cloud={cloud} onError={p.onError}
+            label={isDm(active) ? `Message ${shortName(people.find((x) => x.id === dmOther(active, me))?.name ?? '')}` : `Message #${active.name}`}
             onSend={async (body, atts) => {
               const m = await sendMessage(teamId, active.id, me, body, atts, cloud);
               if (cloud) { // realtime echoes it back, but append now so sending feels instant
@@ -198,7 +227,7 @@ function NewChannelForm({ people, me, onCreate, onClose }: { people: Person[]; m
   return (
     <div className="chat-new">
       <input autoFocus placeholder="channel-name" value={name}
-        onChange={(e) => setName(e.target.value.toLowerCase().replace(/\s+/g, '-'))}
+        onChange={(e) => setName(e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/^dm:+/, ''))}
         onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) onCreate(name.trim(), priv, [...members]); if (e.key === 'Escape') onClose(); }} />
       <label className="chat-priv"><input type="checkbox" checked={priv} onChange={(e) => setPriv(e.target.checked)} /> Private</label>
       {priv && (
@@ -370,8 +399,8 @@ function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boole
   );
 }
 
-function Composer({ channel, teamId, cloud, onSend, onError }: {
-  channel: Channel; teamId: string; cloud: boolean;
+function Composer({ channel, label, teamId, cloud, onSend, onError }: {
+  channel: Channel; label: string; teamId: string; cloud: boolean;
   onSend: (body: string, atts: Attachment[] | undefined) => Promise<void>; onError: (m: string) => void;
 }) {
   const [text, setText] = useState('');
@@ -445,7 +474,7 @@ function Composer({ channel, teamId, cloud, onSend, onError }: {
         <textarea
           ref={taRef}
           rows={1}
-          placeholder={`Message #${channel.name}`}
+          placeholder={label}
           value={text}
           onChange={(e) => { setText(e.target.value); grow(); }}
           onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}

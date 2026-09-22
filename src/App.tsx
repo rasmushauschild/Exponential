@@ -276,7 +276,8 @@ export default function App() {
       const who = shortName(data.people.find((x) => x.id === e.message.author)?.name ?? 'Someone');
       const ch = chat.find((c) => c.id === e.message.channelId);
       const body = e.message.body || (e.message.attachments?.length ? (e.message.attachments[0].type.startsWith('image/') ? '📷 Image' : e.message.attachments[0].name) : '');
-      window.exponential?.notify?.({ id: e.message.id, title: `#${ch?.name ?? 'chat'} · ${who}`, body, ref: { kind: 'chat', id: e.message.channelId } });
+      const title = ch && ch.name.startsWith('dm:') ? who : `#${ch?.name ?? 'chat'} · ${who}`;
+      window.exponential?.notify?.({ id: e.message.id, title, body, ref: { kind: 'chat', id: e.message.channelId } });
     }
   }), [chatTeam, data, chat, refreshChat]);
 
