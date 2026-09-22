@@ -5,7 +5,7 @@ import { shortName } from './types';
 import { Avatar } from './WeekPlan';
 import { decorate } from './richtext';
 import {
-  attachLinkPreview, attachmentUrl, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
+  attachLinkPreview, attachmentUrl, backfillLinkPreviews, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
   fetchMessages, fetchPreviews, isDm, markRead, messageCache, onChatEvent, openDm, sendMessage, setChannelMembers,
   toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
@@ -74,6 +74,7 @@ export function ChatPage(p: Props) {
       setMsgs(m);
       setOlderDone(m.length < 60);
       markRead(teamId, active.id, me, cloud).then(p.onRefreshChannels);
+      backfillLinkPreviews(teamId, m, me, cloud); // my recent bare links grow their cards
     }).catch((e) => p.onError(String((e as Error).message ?? e)));
     stickBottom.current = true;
     return () => { gone = true; };

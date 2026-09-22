@@ -366,6 +366,21 @@ export async function attachLinkPreview(teamId: string, msg: ChatMessage, cloud:
   if (!error) emit({ type: 'message-changed', teamId, message: next });
 }
 
+/** Older messages of MINE that have a bare link but no card yet (e.g. sent before the
+ *  unfurler existed, or the site failed then): try once per message per session. */
+const previewTried = new Set<string>();
+export function backfillLinkPreviews(teamId: string, msgs: ChatMessage[], me: string, cloud: boolean) {
+  if (!window.exponential?.linkPreview) return;
+  const cutoff = Date.now() - 7 * 86_400_000;
+  for (const m of msgs) {
+    if (m.author !== me || previewTried.has(m.id)) continue;
+    if (m.attachments?.some((a) => a.type === 'link/preview')) continue;
+    if (+new Date(m.at) < cutoff || !URL_RE.test(m.body)) continue;
+    previewTried.add(m.id);
+    attachLinkPreview(teamId, m, cloud).catch(() => {});
+  }
+}
+
 /* ── attachments ── */
 
 const MAX_FILE = 25 * 1024 * 1024;

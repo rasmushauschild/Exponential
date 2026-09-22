@@ -449,12 +449,34 @@ ipcMain.handle('link:preview', async (_e, url) => {
     if (!/^https?:$/.test(u.protocol)) return null;
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 8000);
+    // YouTube/Vimeo hide their OG tags behind consent walls in the EU — their oEmbed
+    // endpoints answer plainly with title + thumbnail.
+    const host = u.hostname.replace(/^(www|m)\./, '');
+    if (host === 'youtube.com' || host === 'youtu.be' || host === 'vimeo.com') {
+      try {
+        const oembed = host === 'vimeo.com'
+          ? `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(u.href)}`
+          : `https://www.youtube.com/oembed?url=${encodeURIComponent(u.href)}&format=json`;
+        const or = await fetch(oembed, { signal: ctrl.signal });
+        if (or.ok) {
+          const j = await or.json();
+          clearTimeout(timer);
+          return {
+            url: u.href,
+            title: String(j.title ?? '').slice(0, 200) || u.href,
+            desc: j.author_name ? `by ${j.author_name}` : null,
+            image: j.thumbnail_url ?? null,
+            site: host === 'vimeo.com' ? 'Vimeo' : 'YouTube',
+          };
+        }
+      } catch { /* fall through to the generic path */ }
+    }
     const res = await fetch(u, { signal: ctrl.signal, redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (Macintosh) ExponentialLinkPreview/1.0', accept: 'text/html,*/*' } });
     clearTimeout(timer);
     if (!res.ok || !(res.headers.get('content-type') ?? '').includes('html')) return null;
     const reader = res.body.getReader();
     let html = '';
-    while (html.length < 512 * 1024) {
+    while (html.length < 1024 * 1024) {
       const { done, value } = await reader.read();
       if (done) break;
       html += Buffer.from(value).toString('utf8');
