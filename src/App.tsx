@@ -236,18 +236,29 @@ export default function App() {
   }, []);
 
   // Once signed in: open the Supabase session and load the team; keep the profile's name/photo fresh.
+  // Retries every 10s on failure — a brief backend outage (Supabase restarts instances during
+  // incidents) used to strand the splash on an error until the app was relaunched.
+  const [connectTick, setConnectTick] = useState(0);
   useEffect(() => {
     if (!googleUser || !window.exponential) return;
     let cancelled = false;
+    let timer: number | undefined;
     connectCloud()
       .then(async (ok) => {
         if (cancelled || !ok) return;
+        setCloudError(null);
         const { data: u } = await supabase.auth.getUser();
         if (u.user) await supabase.from('profiles').update({ name: googleUser.name, photo: googleUser.picture ?? null }).eq('id', u.user.id);
       })
-      .catch((err: Error) => { if (!cancelled) setCloudError(err.message); });
-    return () => { cancelled = true; };
-  }, [googleUser, connectCloud]);
+      .catch((err: Error) => {
+        if (cancelled) return;
+        // A raw response body (e.g. a Cloudflare 522 page) is not an error message.
+        const msg = err.message && err.message.length < 200 && !err.message.includes('<') ? err.message : 'Can’t reach the server — it may be briefly down.';
+        setCloudError(`${msg} Retrying…`);
+        timer = window.setTimeout(() => setConnectTick((t) => t + 1), 10_000);
+      });
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [googleUser, connectCloud, connectTick]);
 
   const person = selectedPerson ?? data?.me ?? '';
 
