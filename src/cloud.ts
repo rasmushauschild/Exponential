@@ -5,8 +5,66 @@ import { PROJECT_COLORS } from './types';
 export const SUPABASE_URL = 'https://mojqfsnnawdxndqaciuv.supabase.co';
 export const SUPABASE_KEY = 'sb_publishable_SwEXVchPqA2ohG3jUzUMKA_Ijo88XVJ';
 
+/* ── egress metering: every byte through the Supabase client is counted, and each
+   device upserts one usage_log row per day (patch 009). Signed-URL media that bypasses
+   this fetch (chat images, meeting audio) is added via addEgress() where the URL is
+   issued. All best-effort: metering must never break a real request. ── */
+let meterDown = 0;
+let meterUp = 0;
+let meterDay = new Date().toISOString().slice(0, 10);
+let meterDirty = 0;
+let meUid: string | null = null;
+const deviceId = (() => {
+  try {
+    let d = localStorage.getItem('exponential-device');
+    if (!d) { d = crypto.randomUUID(); localStorage.setItem('exponential-device', d); }
+    return d;
+  } catch { return crypto.randomUUID(); }
+})();
+
+export function addEgress(bytes: number) {
+  if (Number.isFinite(bytes) && bytes > 0) { meterDown += bytes; meterDirty += bytes; }
+}
+
+const meteredFetch: typeof fetch = async (input, init) => {
+  try {
+    const body = init?.body;
+    if (typeof body === 'string') meterUp += body.length;
+    else if (body instanceof Blob) meterUp += body.size;
+    else if (body instanceof ArrayBuffer) meterUp += body.byteLength;
+    else if (ArrayBuffer.isView(body)) meterUp += body.byteLength;
+  } catch { /* count what we can */ }
+  const res = await fetch(input as RequestInfo, init);
+  const len = Number(res.headers.get('content-length'));
+  if (Number.isFinite(len) && len > 0) { meterDown += len; meterDirty += len; }
+  return res;
+};
+
+async function flushUsage() {
+  if (!meUid || meterDirty < 512 * 1024) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (today !== meterDay) { meterDay = today; meterDown = 0; meterUp = 0; }
+  meterDirty = 0;
+  await supabase.from('usage_log').upsert(
+    { device_id: deviceId, day: meterDay, user_id: meUid, bytes_down: Math.round(meterDown), bytes_up: Math.round(meterUp), updated_at: new Date().toISOString() },
+    { onConflict: 'device_id,day' },
+  ).then(() => {}, () => {}); // table may not exist yet — metering stays silent
+}
+if (typeof window !== 'undefined') {
+  window.setInterval(flushUsage, 5 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushUsage(); });
+}
+
+/** This month's total metered bytes across the whole team (null while unknown). */
+export async function usageMonthTotal(): Promise<number | null> {
+  const { data, error } = await supabase.rpc('usage_month_total');
+  if (error) return null;
+  return Number(data) || 0;
+}
+
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+  global: { fetch: meteredFetch },
 });
 
 /** Pending invitees (haven't signed in yet) get a synthetic person id so they show on the roster. */
@@ -18,7 +76,7 @@ export const isPending = (id: string) => id.startsWith('pending:');
 /** Make sure there's a Supabase session for the signed-in Google account. */
 export async function ensureSession(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
-  if (data.session) return data.session.user.id;
+  if (data.session) { meUid = data.session.user.id; return data.session.user.id; }
   const token = await window.exponential?.google.idToken();
   if (!token) return null;
   let res = await supabase.auth.signInWithIdToken({ provider: 'google', token });
@@ -29,6 +87,7 @@ export async function ensureSession(): Promise<string | null> {
     res = await supabase.auth.signInWithIdToken({ provider: 'google', token: fresh });
     if (res.error) throw res.error;
   }
+  meUid = res.data.user?.id ?? meUid;
   return res.data.user?.id ?? null;
 }
 

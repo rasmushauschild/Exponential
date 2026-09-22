@@ -10,7 +10,7 @@ import { useData, useSystemNotifications, uid, type GoogleConfig } from './store
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, purgeTrash, renameTask, reorderTask, softDelete, unclaimTask } from './taskOps';
-import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase } from './cloud';
+import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase, usageMonthTotal } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 import { ChatPage } from './ChatPage';
 import { fetchChat, onChatEvent, subscribeChat, type Channel } from './chat';
@@ -317,6 +317,27 @@ export default function App() {
       window.exponential?.notify?.({ id: e.message.id, title, body, ref: { kind: 'chat', id: e.message.channelId } });
     }
   }), [chatTeam, data, chat, refreshChat]);
+
+  // Egress early-warning: the team's own metered usage (usage_log, patch 009) summed
+  // for the month — moderators see a banner at 70% of the Pro quota, red at 90%,
+  // long before Supabase itself would restrict anything.
+  const QUOTA_GB = 250;
+  const [usageWarn, setUsageWarn] = useState<{ gb: number; pct: number } | null>(null);
+  const [usageDismissed, setUsageDismissed] = useState(false);
+  useEffect(() => {
+    if (!cloudMode) return;
+    let stop = false;
+    const check = async () => {
+      const bytes = await usageMonthTotal();
+      if (stop || bytes === null) return;
+      const gb = bytes / 1e9;
+      const pct = Math.round((gb / QUOTA_GB) * 100);
+      setUsageWarn(pct >= 70 ? { gb: Math.round(gb), pct } : null);
+    };
+    check();
+    const t = window.setInterval(check, 6 * 60 * 60 * 1000);
+    return () => { stop = true; window.clearInterval(t); };
+  }, [cloudMode]);
 
   // Meetings shared with me: a red dot on the sidebar + a system notification, from an
   // app-level realtime subscription (the page has its own for its list).
@@ -1021,6 +1042,13 @@ export default function App() {
       </div>
 
       {saveError && <div className="toast error-toast">{saveError}</div>}
+      {usageWarn && !usageDismissed && !saveError && data.moderators.includes(data.me) && (
+        <div className={`toast usage-toast${usageWarn.pct >= 90 ? ' hot' : ''}`}>
+          Supabase egress ≈ {usageWarn.gb} GB of {QUOTA_GB} GB this month ({usageWarn.pct}%).
+          {usageWarn.pct >= 90 ? ' The backend may be restricted at 100% — check the spend cap in Supabase billing.' : ' Worth a look at Supabase billing before it climbs.'}
+          <button className="usage-x" onClick={() => setUsageDismissed(true)}>×</button>
+        </div>
+      )}
       {notifyBlocked && !saveError && (
         <div className="toast">
           Notifications are turned off for Exponential

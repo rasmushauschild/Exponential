@@ -1,4 +1,4 @@
-import { supabase } from './cloud';
+import { addEgress, supabase } from './cloud';
 
 /**
  * Meetings: recordings, transcripts and shared calendars. Rows live in `meetings`
@@ -145,6 +145,7 @@ export async function meetingAudioUrl(m: Meeting, cloud: boolean): Promise<strin
   if (cloud && m.audioPath) {
     const { data, error } = await supabase.storage.from('meetings').createSignedUrl(m.audioPath, 3600);
     if (error) return null;
+    addEgress((m.durationSecs ?? 600) * 6000); // ~48kbps opus; the audio tag streams outside the metered client
     return data.signedUrl;
   }
   return null;

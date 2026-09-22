@@ -1288,6 +1288,10 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .icon-btn.danger { color: var(--text-3); }
 .icon-btn.danger:hover { color: #e5484d; background: color-mix(in srgb, #e5484d 10%, transparent); }
 .pill.danger { color: #e5484d; }
+.usage-toast { background: color-mix(in srgb, #f5a524 14%, var(--frost-deep)); box-shadow: 0 0 0 1px color-mix(in srgb, #f5a524 45%, var(--line)), var(--menu-shadow, 0 8px 24px rgba(0,0,0,0.15)); display: flex; align-items: center; gap: 10px; }
+.usage-toast.hot { background: color-mix(in srgb, #e5484d 14%, var(--frost-deep)); box-shadow: 0 0 0 1px color-mix(in srgb, #e5484d 50%, var(--line)), var(--menu-shadow, 0 8px 24px rgba(0,0,0,0.15)); }
+.usage-x { font-size: 15px; color: var(--text-2); padding: 0 2px; }
+.usage-x:hover { color: var(--text); }
 .meet-people { display: inline-flex; align-items: center; flex: none; }
 .meet-people .avatar { margin-left: -6px; }
 .meet-people .avatar:first-child { margin-left: 0; }

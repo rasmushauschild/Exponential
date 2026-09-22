@@ -1,4 +1,4 @@
-import { supabase } from './cloud';
+import { addEgress, supabase } from './cloud';
 import { uid } from './store';
 
 /**
@@ -430,6 +430,7 @@ export async function attachmentUrl(att: Attachment, cloud: boolean): Promise<st
   const { data, error } = await supabase.storage.from('chat').createSignedUrl(att.path, 3600);
   if (error) throw error;
   urlCache.set(att.path, { url: data.signedUrl, until: Date.now() + 3300 * 1000 });
+  addEgress(att.size); // the browser fetches the signed URL outside the metered client
   return data.signedUrl;
 }
 
