@@ -849,7 +849,7 @@ export function renderMarkdown(md: string, editable = false): string {
   return out.join('') || (editable ? '<p><br></p>' : '');
 }
 
-function SendToAgent({ doc }: { doc: () => string }) {
+export function SendToAgent({ doc }: { doc: () => string }) {
   const [state, setState] = useState<'idle' | 'app' | 'app-paste' | 'web' | 'copied'>('idle');
   const send = async () => {
     const md = doc();

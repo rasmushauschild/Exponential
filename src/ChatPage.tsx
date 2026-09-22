@@ -177,23 +177,28 @@ export function ChatPage(p: Props) {
       {screen === 'list' && (
         <>
           <div className="side-head">
-            <span className="side-title">Chat</span>
+            <span className="side-title">Messages</span>
             <span className="panel-spacer" />
-            <button className="icon-btn" title="New channel" onClick={() => setNewChannel(true)}>+</button>
             <button className="icon-btn" title="Close" onClick={p.onClose}><XGlyph /></button>
           </div>
           <div className="chat-convos">
-            {newChannel && (
+            {regular.map((ch) => convoRow(ch,
+              <span className="convo-hash">{ch.private ? <LockGlyph /> : '#'}</span>,
+              ch.name,
+              () => { onActive(ch.id); setScreen('thread'); }))}
+            {newChannel ? (
               <NewChannelForm people={people} me={me} onClose={() => setNewChannel(false)}
                 onCreate={async (name, priv, members) => {
                   try { await createChannel(teamId, me, name, priv, members, cloud); setNewChannel(false); p.onRefreshChannels(); }
                   catch (e) { p.onError(String((e as Error).message ?? e)); }
                 }} />
+            ) : (
+              <button className="convo ghost" onClick={() => setNewChannel(true)}>
+                <span className="convo-dot" />
+                <span className="convo-icon"><span className="convo-hash">+</span></span>
+                <span className="convo-main"><span className="convo-name">New channel</span></span>
+              </button>
             )}
-            {regular.map((ch) => convoRow(ch,
-              <span className="convo-hash">{ch.private ? <LockGlyph /> : '#'}</span>,
-              ch.name,
-              () => { onActive(ch.id); setScreen('thread'); }))}
             {teammates.map((x) => {
               const ch = dms.find((d) => d.name === dmName(me, x.id));
               const stub: Channel = ch ?? { id: `stub-${x.id}`, name: dmName(me, x.id), private: true, unread: 0 };
@@ -218,7 +223,7 @@ export function ChatPage(p: Props) {
       {screen === 'inbox' && (
         <>
           <div className="side-head">
-            <button className="meet-back chat-back" onClick={() => setScreen('list')}><BackGlyph /> Chat</button>
+            <button className="meet-back chat-back" onClick={() => setScreen('list')}><BackGlyph /> Messages</button>
             <span className="side-subtitle">Notifications</span>
             <span className="panel-spacer" />
             <button className="icon-btn" title="Close" onClick={p.onClose}><XGlyph /></button>
@@ -235,7 +240,6 @@ export function ChatPage(p: Props) {
             onBack={() => setScreen('list')}
             onCloseAll={p.onClose}
             onRename={(name) => updateChannel(teamId, active.id, { name }, cloud).catch((e) => p.onError(String(e.message ?? e)))}
-            onTopic={(topic) => updateChannel(teamId, active.id, { topic }, cloud).catch((e) => p.onError(String(e.message ?? e)))}
             onMembers={(m) => setChannelMembers(teamId, active.id, m, cloud).then(p.onRefreshChannels).catch((e) => p.onError(String(e.message ?? e)))}
             onDelete={() => deleteChannel(teamId, active.id, cloud).then(() => { setScreen('list'); onActive(channels.find((ch) => ch.id !== active.id)?.id ?? null); p.onRefreshChannels(); }).catch((e) => p.onError(String(e.message ?? e)))}
           />
@@ -307,14 +311,13 @@ function NewChannelForm({ people, me, onCreate, onClose }: { people: Person[]; m
   );
 }
 
-function ThreadHead({ channel, me, people, canModerate, onBack, onCloseAll, onRename, onTopic, onMembers, onDelete }: {
+function ThreadHead({ channel, me, people, canModerate, onBack, onCloseAll, onRename, onMembers, onDelete }: {
   channel: Channel; me: string; people: Person[]; canModerate: boolean;
   onBack: () => void; onCloseAll: () => void;
-  onRename: (v: string) => void; onTopic: (v: string) => void; onMembers: (m: string[]) => void; onDelete: () => void;
+  onRename: (v: string) => void; onMembers: (m: string[]) => void; onDelete: () => void;
 }) {
   const dm = isDm(channel);
   const canManage = !dm && (canModerate || channel.createdBy === me || !channel.createdBy);
-  const [editTopic, setEditTopic] = useState(false);
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
   const [renaming, setRenaming] = useState(false);
@@ -327,7 +330,7 @@ function ThreadHead({ channel, me, people, canModerate, onBack, onCloseAll, onRe
   const other = dm ? people.find((x) => x.id === dmOther(channel, me)) : undefined;
   return (
     <div className="side-head">
-      <button className="meet-back chat-back" onClick={onBack}><BackGlyph /> Chat</button>
+      <button className="meet-back chat-back" onClick={onBack}><BackGlyph /> Messages</button>
       {renaming ? (
         <input className="chat-rename" autoFocus defaultValue={channel.name}
           onBlur={(e) => { const v = e.target.value.trim().toLowerCase().replace(/\s+/g, '-'); if (v && v !== channel.name) onRename(v); setRenaming(false); }}
@@ -339,13 +342,6 @@ function ThreadHead({ channel, me, people, canModerate, onBack, onCloseAll, onRe
             : <><span className="chat-hash-big">{channel.private ? <LockGlyph /> : '#'}</span>{channel.name}</>}
         </span>
       )}
-      {!dm && !renaming && (editTopic ? (
-        <input className="chat-topic-input" autoFocus defaultValue={channel.topic ?? ''} placeholder="Add a topic"
-          onBlur={(e) => { onTopic(e.target.value.trim()); setEditTopic(false); }}
-          onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditTopic(false); }} />
-      ) : (
-        <button className="chat-topic" onClick={() => canManage && setEditTopic(true)}>{channel.topic || (canManage ? 'Add a topic' : '')}</button>
-      ))}
       <span className="panel-spacer" />
       {channel.private && !dm && (
         <span className="chat-members" title="Members">

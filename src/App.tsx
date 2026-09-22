@@ -677,7 +677,7 @@ export default function App() {
         <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><PlanIcon /> <span className="nav-text">Plan</span></button>
         <button className={`nav-item${leftPanel === 'chat' ? ' active' : ''}`} onClick={() => setLeftPanel(leftPanel === 'chat' ? null : 'chat')}>
           <span className="nav-ico"><ChatIcon />{(chatUnread > 0 || unread > 0) && <span className="nav-dot" />}</span>
-          <span className="nav-text">Chat</span>
+          <span className="nav-text">Messages</span>
         </button>
         <button className={`nav-item${leftPanel === 'meetings' ? ' active' : ''}`} onClick={() => setLeftPanel(leftPanel === 'meetings' ? null : 'meetings')}>
           <span className="nav-ico"><MeetIcon />{meetDot && <span className="nav-dot" />}</span>

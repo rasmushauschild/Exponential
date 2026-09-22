@@ -9,6 +9,7 @@ import {
   createMeeting, deleteMeeting, fetchMeetings, fetchVoicePrints, meetingAudioUrl, saveVoicePrint,
   subscribeMeetings, updateMeeting, uploadMeetingAudio, type Meeting, type Segment,
 } from './meetings';
+import { SendToAgent } from './DetailPanel';
 
 /**
  * Meetings: one chronological list of recordings — yours and the ones shared with you.
@@ -287,12 +288,11 @@ function RecordBar({ rec, onStop }: { rec: RecordingSession; onStop: () => void 
     <div className="meet-wavebar">
       <span className={`meet-reddot${paused ? ' idle' : ''}`} />
       <span className="meet-rectime">{fmtClock(Math.round(rec.activeSecs()))}</span>
-      <canvas ref={canvasRef} className="meet-wave" />
-      {rec.systemAudio && <span className="meet-sys" title="Also capturing system audio">mic + system</span>}
+      <canvas ref={canvasRef} className="meet-wave" title={rec.systemAudio ? 'Recording microphone + system audio' : 'Recording microphone'} />
       <button className="pill" onClick={() => { if (paused) { rec.resume(); setPaused(false); } else { rec.pause(); setPaused(true); } }}>
         {paused ? 'Resume' : 'Pause'}
       </button>
-      <button className="pill toggle active" onClick={onStop}>Stop</button>
+      <button className="pill stop" onClick={onStop}>Stop</button>
     </div>
   );
 }
@@ -384,6 +384,30 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
     else blocks.push({ who: s.who, segs: [s] });
   }
 
+  const transcriptText = () => {
+    const lines: string[] = [`${m.title} — ${fmtStamp(m.startedAt)}${m.durationSecs ? ` · ${fmtDur(m.durationSecs)}` : ''}`, ''];
+    for (const b of blocks) {
+      if (b.who) lines.push(`${whoName(b.who)}:`);
+      for (const s of b.segs) lines.push(`[${fmtClock(s.t0)}] ${s.text}`);
+      lines.push('');
+    }
+    return lines.join('\n').trim();
+  };
+  const agentDoc = () => {
+    const parts = [...new Set(blocks.map((b) => b.who && whoName(b.who)).filter(Boolean))];
+    return [
+      `# ${m.title}`,
+      '',
+      `- Type: Meeting transcript`,
+      `- Recorded: ${fmtStamp(m.startedAt)}${m.durationSecs ? ` (${fmtDur(m.durationSecs)})` : ''}`,
+      parts.length ? `- Participants: ${parts.join(', ')}` : '',
+      '',
+      '## Transcript',
+      '',
+      transcriptText(),
+    ].filter((x) => x !== '').join('\n');
+  };
+
   return (
     <div className="meet-detail-embed">
       <div className="side-head">
@@ -409,6 +433,30 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
           {canEdit && <AccessPicker m={m} me={me} people={people} onPatch={onPatch} />}
         </div>
         {audioUrl && <audio ref={audioRef} className="meet-audio" controls src={audioUrl} />}
+
+        <div className="meet-actions">
+          {audioUrl && (
+            <button className="icon-btn" title="Download audio" onClick={async () => {
+              try {
+                const blob = await fetch(audioUrl).then((r) => r.blob());
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `${m.title.replace(/[^\w\- ]+/g, '') || 'meeting'}.webm`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+              } catch { /* audio not reachable right now */ }
+            }}><DownloadGlyph /></button>
+          )}
+          {(m.transcript?.length ?? 0) > 0 && (
+            <button className="icon-btn" title={copied ? 'Copied!' : 'Copy transcript'} onClick={() => {
+              navigator.clipboard.writeText(transcriptText());
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1600);
+            }}>{copied ? <CheckGlyph /> : <CopyGlyph />}</button>
+          )}
+          <span className="panel-spacer" />
+          {canEdit && <button className="icon-btn danger" title="Delete meeting" onClick={onDelete}><TrashTiny /></button>}
+        </div>
 
         <div className="meet-transcript">
           {blocks.map((b, bi) => (
@@ -444,37 +492,8 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
             </div>
           )}
         </div>
-        <div className="meet-detail-foot">
-          {audioUrl && (
-            <button className="icon-btn" title="Download audio" onClick={async () => {
-              try {
-                const blob = await fetch(audioUrl).then((r) => r.blob());
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = `${m.title.replace(/[^\w\- ]+/g, '') || 'meeting'}.webm`;
-                a.click();
-                setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
-              } catch { /* audio not reachable right now */ }
-            }}><DownloadGlyph /></button>
-          )}
-          {(m.transcript?.length ?? 0) > 0 && (
-            <button className="icon-btn" title={copied ? 'Copied!' : 'Copy transcript'} onClick={() => {
-              const lines: string[] = [`${m.title} — ${fmtStamp(m.startedAt)}${m.durationSecs ? ` · ${fmtDur(m.durationSecs)}` : ''}`, ''];
-              for (const b of blocks) {
-                if (b.who) lines.push(`${whoName(b.who)}:`);
-                for (const s of b.segs) lines.push(`[${fmtClock(s.t0)}] ${s.text}`);
-                lines.push('');
-              }
-              navigator.clipboard.writeText(lines.join('\n').trim());
-              setCopied(true);
-              window.setTimeout(() => setCopied(false), 1600);
-            }}>{copied ? <CheckGlyph /> : <CopyGlyph />}</button>
-          )}
-          <span className="panel-spacer" />
-          {canEdit && m.status === 'ready' && (m.audioPath || !cloud) && <button className="pill" onClick={onRetranscribe}>Re-transcribe</button>}
-          {canEdit && <button className="pill danger" onClick={onDelete}>Delete</button>}
-        </div>
       </div>
+      <SendToAgent doc={agentDoc} />
       {speakerMenu && createPortal(
         <div className="status-menu meet-speaker-menu" style={{ position: 'fixed', top: Math.min(speakerMenu.rect.bottom + 6, window.innerHeight - 260), left: speakerMenu.rect.left }}>
           {people.filter((x) => !x.id.startsWith('pending:')).map((x) => (
@@ -498,6 +517,9 @@ function DownloadGlyph() {
 }
 function CopyGlyph() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;
+}
+function TrashTiny() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-.8 14a2 2 0 0 1-2 1.9H7.8a2 2 0 0 1-2-1.9L5 6" /></svg>;
 }
 function CheckGlyph() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>;
