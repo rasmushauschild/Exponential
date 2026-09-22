@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, ipcMain, Menu, Notification, Tray, nativeImage, powerMonitor, screen, shell } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, Notification, Tray, nativeImage, powerMonitor, screen, session, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
@@ -433,9 +433,30 @@ ipcMain.on('update:install', () => { if (app.isPackaged) { reallyQuit = true; au
 ipcMain.on('update:check', () => { if (app.isPackaged) autoUpdater.checkForUpdates().catch(() => {}); });
 ipcMain.handle('app:version', () => app.getVersion());
 
+/* ── Meetings: recording chunks stream here so long meetings never sit in renderer
+   memory; ids are uuids only (no path text ever crosses the bridge). System-audio
+   loopback rides the display-media handler where the platform supports it. ── */
+const meetingsDir = () => { const d = path.join(app.getPath('userData'), 'meetings'); fs.mkdirSync(d, { recursive: true }); return d; };
+const meetingFile = (id) => {
+  if (!/^[0-9a-f-]{36}$/i.test(String(id))) throw new Error('bad meeting id');
+  return path.join(meetingsDir(), `${id}.webm`);
+};
+ipcMain.handle('meeting:append', (_e, id, buf) => { fs.appendFileSync(meetingFile(id), Buffer.from(buf)); });
+ipcMain.handle('meeting:read', (_e, id) => fs.readFileSync(meetingFile(id)));
+ipcMain.handle('meeting:delete', (_e, id) => { try { fs.rmSync(meetingFile(id), { force: true }); } catch { /* gone is gone */ } });
+
 app.whenReady().then(() => {
   buildMenu();
   setupUpdates();
+  try {
+    // getDisplayMedia({audio:true}) → system loopback audio where the OS allows it
+    // (the recorder stops the mandatory video track immediately and mixes the audio).
+    session.defaultSession.setDisplayMediaRequestHandler((_req, callback) => {
+      desktopCapturer.getSources({ types: ['screen'] }).then((sources) => {
+        callback(sources.length ? { video: sources[0], audio: 'loopback' } : {});
+      }).catch(() => callback({}));
+    });
+  } catch { /* older platform: recording falls back to microphone only */ }
   screen.on('display-metrics-changed', applyZoom); // e.g. the user changes macOS display scaling
   // In development the dock shows Electron's own icon unless we set ours.
   if (process.platform === 'darwin' && app.dock) app.dock.setIcon(iconPath);

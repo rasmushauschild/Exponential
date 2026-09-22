@@ -28,6 +28,9 @@ declare global {
       notify?: (p: { id: string; title: string; body: string; ref?: { kind: string; id: string } }) => void;
       onNotifyBlocked?: (cb: () => void) => () => void;
       onEditCommand?: (cb: (kind: 'undo' | 'redo') => void) => () => void;
+      meetingAppend?: (id: string, buf: ArrayBuffer) => Promise<void>;
+      meetingRead?: (id: string) => Promise<ArrayBuffer>;
+      meetingDelete?: (id: string) => Promise<void>;
       openNotificationSettings?: () => void;
       setSharedState?: (p: { teamId: string | null; teamName: string | null; planUnlocked: boolean }) => void;
       connectClaude?: () => Promise<{ ok: boolean; messages: string[] }>;

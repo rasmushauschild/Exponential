@@ -14,10 +14,12 @@ import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscri
 import { addDays, todayISO, weekStart } from './dates';
 import { ChatPage } from './ChatPage';
 import { fetchChat, onChatEvent, subscribeChat, type Channel } from './chat';
+import { MeetingsPage } from './MeetingsPage';
+import { pushCalendarShare, removeCalendarShare } from './meetings';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
-const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true, allTeams: false };
+const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true, allTeams: false, shareCal: false };
 const prefs: typeof DEFAULT_PREFS = (() => {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
 })();
@@ -108,7 +110,8 @@ export default function App() {
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const [calendarOn, setCalendarOn] = useState(() => prefs.calendar);
   const [allTeamsOn, setAllTeamsOn] = useState(() => prefs.allTeams);
-  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn]);
+  const [shareCal, setShareCal] = useState(() => prefs.shareCal);
+  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn, shareCal }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn, shareCal]);
   const [vResizing, setVResizing] = useState(false);
 
   const onVResizeDown = (e: React.PointerEvent) => {
@@ -276,6 +279,24 @@ export default function App() {
       window.exponential?.notify?.({ id: e.message.id, title: `#${ch?.name ?? 'chat'} · ${who}`, body, ref: { kind: 'chat', id: e.message.channelId } });
     }
   }), [chatTeam, data, chat, refreshChat]);
+
+  // Opted-in calendar sharing: publish my next two weeks (titles + times only) to the
+  // team so the Meetings page can show everyone side by side. Re-pushed per team on
+  // launch and every 6 h; turning it off removes the row.
+  const shareTeam = data?.id;
+  useEffect(() => {
+    if (!cloudMode || !shareTeam || !data?.me) return;
+    if (!shareCal) { removeCalendarShare(shareTeam, data.me, cloudMode).catch(() => {}); return; }
+    let stop = false;
+    const push = () => {
+      window.exponential?.google.events('primary', todayISO(), addDays(todayISO(), 14))
+        .then((evs) => { if (!stop) return pushCalendarShare(shareTeam, data.me, evs.map((e) => ({ id: e.id, title: e.title, date: e.date, start: e.start, end: e.end, allDay: e.allDay })), cloudMode); })
+        .catch(() => {});
+    };
+    push();
+    const t = window.setInterval(push, 6 * 60 * 60 * 1000);
+    return () => { stop = true; window.clearInterval(t); };
+  }, [shareCal, shareTeam, cloudMode, data?.me]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The menu-bar widget can ask the main window to open a specific item.
   useEffect(() => window.exponential?.onOpen((t) => {
@@ -613,6 +634,9 @@ export default function App() {
           <ChatIcon /> <span className="nav-text">Chat</span>
           {chatUnread > 0 && <span className="badge">{chatUnread}</span>}
         </button>
+        <button className={`nav-item${view === 'meetings' ? ' active' : ''}`} onClick={() => setView('meetings')}>
+          <MeetIcon /> <span className="nav-text">Meetings</span>
+        </button>
         <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
           <InboxIcon /> <span className="nav-text">Inbox</span>
           {unread > 0 && <span className="badge">{unread}</span>}
@@ -669,6 +693,19 @@ export default function App() {
             canDelete={cloudMode || teams.length > 1}
             onUpdate={(fn, coalesce) => update(fn, coalesce)}
             onDelete={() => { setView('plan'); setSelection(null); setSelectedPerson(null); deleteTeam(data.id); }}
+          />
+        )}
+        {view === 'meetings' && (
+          <MeetingsPage
+            teamId={data.id}
+            me={data.me}
+            people={data.people}
+            canModerate={data.moderators.includes(data.me)}
+            cloud={cloudMode}
+            calendarReady={!!googleUser}
+            shareCal={shareCal}
+            onShareCal={setShareCal}
+            onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
           />
         )}
         {view === 'chat' && (
@@ -976,6 +1013,15 @@ export function TeamMark({ team, size = 30 }: { team: { name: string; icon?: str
 }
 
 const ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+function MeetIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="2.5" width="6" height="11" rx="3" />
+      <path d="M5.5 10.5a6.5 6.5 0 0 0 13 0M12 17v4.5" />
+    </svg>
+  );
+}
 
 function ChatIcon() {
   return (
