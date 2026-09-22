@@ -71,9 +71,10 @@ interface Props {
   people: Person[];
   me: string;
   claimable: boolean; // projects: yes; subtasks: no
-  createTask: (title: string) => string; // returns the new id
+  createTask: (title: string, coalesce?: string) => string; // returns the new id
   onUpdateTask: (id: string, patch: Partial<Task>, coalesce?: string) => void;
-  onDeleteTask: (id: string) => void;
+  onDeleteTask: (id: string, coalesce?: string) => void;
+  undoKey?: string; // the notes coalesce key: structural task writes share it (see below)
   onClaim: (id: string, personId?: string) => void;
   onUnclaim: (id: string) => void;
   onOpenTask: (id: string) => void;
@@ -83,7 +84,7 @@ type Caret = 'start' | 'end' | number;
 type Focus = { index: number; caret: Caret } | null;
 type Sel = { a: number; b: number } | null;
 
-export function BlockEditor({ value, onChange, tasks, people, me, claimable, createTask, onUpdateTask, onDeleteTask, onClaim, onUnclaim, onOpenTask }: Props) {
+export function BlockEditor({ value, onChange, tasks, people, me, claimable, createTask: createTaskRaw, onUpdateTask, onDeleteTask: onDeleteTaskRaw, onClaim, onUnclaim, onOpenTask, undoKey }: Props) {
   const [blocks, setBlocks] = useState<Block[]>(() => withOrphans(parseBlocks(value), tasks));
   const [focus, setFocus] = useState<Focus>(null);
   const [sel, setSel] = useState<Sel>(null);
@@ -117,6 +118,13 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(flush, 350);
   };
+  // Structural edits pair a task write with a notes write (which trails 350ms behind).
+  // Both carry the same coalesce key and the pending notes flush on the next microtask
+  // (after the paired commit() has run), so ONE undo step holds the whole conversion —
+  // otherwise ⌘Z reverted only the notes and the surviving task row reappeared as an
+  // orphan block next to the restored original.
+  const createTask = (title: string) => { queueMicrotask(flush); return createTaskRaw(title, undoKey); };
+  const onDeleteTask = (id: string) => { queueMicrotask(flush); onDeleteTaskRaw(id, undoKey); };
   const setBlock = (i: number, patch: Partial<Block>) => commit(blocks.map((b, j) => (j === i ? ({ ...b, ...patch } as Block) : b)));
   const insertAt = (i: number, b: Block, caret: Caret = 'start') => { commit([...blocks.slice(0, i), b, ...blocks.slice(i)]); setFocus({ index: i, caret }); };
   /** Remove block i; a deleted TOGGLE releases its children (they outdent back to its level). */
@@ -342,7 +350,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         const head = title.slice(0, mdOffsetOf(title, start));
         const tail = title.slice(mdOffsetOf(title, end));
         setLocalTitle(head);
-        onUpdateTask(b.taskId, { title: head });
+        onUpdateTask(b.taskId, { title: head }, undoKey);
         const id = createTask(tail);
         insertAt(i + 1, { key: newKey(), kind: 'task', taskId: id, indent: blocks[i].indent });
       } else {
@@ -360,7 +368,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
           e.preventDefault();
           const pt = tasksRef.current.find((x) => x.id === prev.taskId);
           const joined = (pt?.title ?? '') + title;
-          onUpdateTask(prev.taskId, { title: joined });
+          onUpdateTask(prev.taskId, { title: joined }, undoKey);
           commit(withoutBlock(blocks, i));
           onDeleteTask(b.taskId);
           setFocus({ index: i - 1, caret: (pt?.title ?? '').length });

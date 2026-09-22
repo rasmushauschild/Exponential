@@ -53,6 +53,9 @@ export function reorderTask(d: Data, id: string, afterId: string | null): Data {
 export function patchTask(d: Data, id: string, patch: Partial<Task>): Data {
   const before = d.tasks.find((t) => t.id === id);
   if (!before) return d;
+  // A value-identical patch must be a true no-op: a fresh Data would record a phantom
+  // undo step (⌘Z "does nothing") and wipe the redo stack.
+  if (Object.entries(patch).every(([k, v]) => Object.is(before[k as keyof Task], v))) return d;
   const after = { ...before, ...patch };
   let next: Data = { ...d, tasks: d.tasks.map((t) => (t.id === id ? after : t)) };
   if (patch.personId && patch.personId !== before.personId) {

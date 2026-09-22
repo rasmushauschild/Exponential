@@ -230,6 +230,7 @@ export default function App() {
     update((d) => {
       const before = d.projects.find((p) => p.id === id);
       if (!before) return d;
+      if (Object.entries(patch).every(([k, v]) => Object.is(before[k as keyof Project], v))) return d; // no-op: no phantom undo step
       const after = { ...before, ...patch };
       let next: Data = { ...d, projects: d.projects.map((p) => (p.id === id ? after : p)) };
       const what = patch.name !== undefined && patch.name !== before.name ? 'renamed' : patch.start || patch.end ? 'moved' : patch.notes !== undefined ? 'updated the notes of' : patch.assignees ? null : 'changed';
@@ -836,12 +837,12 @@ export default function App() {
             onClose={() => setSelection(null)}
             onOpen={setSelection}
             tasks={live.tasks}
-            onCreateLinked={(link, title) => {
+            onCreateLinked={(link, title, coalesce) => {
               let id = '';
-              update((d) => { const r = addTask(d, undefined, undefined, 'end', link); id = r.id; return { ...r.data, tasks: r.data.tasks.map((t) => (t.id === r.id ? { ...t, title } : t)) }; });
+              update((d) => { const r = addTask(d, undefined, undefined, 'end', link); id = r.id; return { ...r.data, tasks: r.data.tasks.map((t) => (t.id === r.id ? { ...t, title } : t)) }; }, coalesce);
               return id;
             }}
-            onDeleteTask={(id) => update((d) => softDelete(d, [id]))}
+            onDeleteTask={(id, coalesce) => update((d) => softDelete(d, [id]), coalesce)}
             onClaimTask={(id, personId) => update((d) => claimTask(d, id, personId))}
             onUnclaimTask={(id) => update((d) => unclaimTask(d, id))}
             onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
@@ -853,7 +854,11 @@ export default function App() {
               updateProject(pid, { assignees: cur.includes(who) ? cur.filter((i) => i !== who) : [...cur, who] });
             }}
             onUpdateTask={updateTask}
-            onUpdateDeadline={(id, patch, key) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, ...patch } : x)) }), key)}
+            onUpdateDeadline={(id, patch, key) => update((d) => {
+              const before = d.deadlines.find((x) => x.id === id);
+              if (!before || Object.entries(patch).every(([k, v]) => Object.is(before[k as keyof Deadline], v))) return d; // no-op: no phantom undo step
+              return { ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, ...patch } : x)) };
+            }, key)}
             onUpdateRetro={(wk, patch, key) => update((d) => {
               const cur: Retro = d.retros?.[wk] ?? { week: wk, answers: {} };
               return { ...d, retros: { ...d.retros, [wk]: { ...cur, ...patch, answers: { ...cur.answers, ...(patch.answers ?? {}) } } } };

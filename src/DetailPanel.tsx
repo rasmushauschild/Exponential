@@ -44,8 +44,8 @@ interface Props {
   onMarkRead: (ids: string[]) => void;
   onDelete: () => void;
   tasks: Task[]; // all tasks of the team
-  onCreateLinked: (link: { projectId?: string; parentId?: string }, title: string) => string;
-  onDeleteTask: (id: string) => void;
+  onCreateLinked: (link: { projectId?: string; parentId?: string }, title: string, coalesce?: string) => string;
+  onDeleteTask: (id: string, coalesce?: string) => void;
   onClaimTask: (id: string, personId?: string) => void;
   onUnclaimTask: (id: string) => void;
 }
@@ -186,9 +186,10 @@ export function DetailPanel(p: Props) {
             people={people}
             me={me}
             claimable={!!project}
-            createTask={(title) => p.onCreateLinked(project ? { projectId: project.id } : { parentId: task!.id }, title)}
+            createTask={(title, coalesce) => p.onCreateLinked(project ? { projectId: project.id } : { parentId: task!.id }, title, coalesce)}
             onUpdateTask={(id, patch, coalesce) => p.onUpdateTask(id, patch, coalesce)}
             onDeleteTask={p.onDeleteTask}
+            undoKey={`notes:${item.id}`}
             onClaim={p.onClaimTask}
             onUnclaim={p.onUnclaimTask}
             onOpenTask={(id) => p.onOpen({ kind: 'task', id })}
