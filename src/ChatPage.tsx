@@ -6,9 +6,12 @@ import { Avatar } from './WeekPlan';
 import { decorate } from './richtext';
 import {
   attachmentUrl, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
-  fetchMessages, isDm, markRead, onChatEvent, openDm, sendMessage, setChannelMembers,
+  fetchMessages, fetchPreviews, isDm, markRead, onChatEvent, openDm, sendMessage, setChannelMembers,
   toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
+import { InboxList } from './DetailPanel';
+import type { Notification } from './types';
+import type { Selection } from './DetailPanel';
 
 const EMOJI = ['👍', '❤️', '😂', '🎉', '🙌', '🔥', '👀', '✅', '💯', '😅', '😍', '🤔', '😢', '😮', '🙏', '👏', '🚀', '⭐', '☕', '🍿', '💪', '🫡', '🤝', '🥳', '😴', '🤯', '🧠', '⚡', '🌱', '🍾', '🎯', '🛠️'];
 
@@ -22,7 +25,11 @@ interface Props {
   activeId: string | null;
   onActive: (id: string | null) => void;
   onRefreshChannels: () => void;
-  full: boolean; // fullscreen side panel: room for the channel rail; compact shows a dropdown
+  notifications: Notification[];
+  notifUnread: number;
+  onOpenItem: (sel: Selection) => void;
+  onMarkRead: (ids: string[]) => void;
+  onClose: () => void;
   onError: (msg: string) => void;
 }
 
@@ -39,7 +46,7 @@ const fmtDay = (iso: string) => {
 const fmtSize = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
 export function ChatPage(p: Props) {
-  const { teamId, me, people, cloud, channels, activeId, onActive, full } = p;
+  const { teamId, me, people, cloud, channels, activeId, onActive } = p;
   const active = channels.find((c) => c.id === activeId) ?? null;
   const [msgs, setMsgs] = useState<ChatMessage[]>([]);
   const [olderDone, setOlderDone] = useState(false);
@@ -48,8 +55,10 @@ export function ChatPage(p: Props) {
   const stickBottom = useRef(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [newChannel, setNewChannel] = useState(false);
-  // compact panel: a conversations screen first, then the thread with a back row
-  const [listMode, setListMode] = useState(true);
+  // iMessage-style: a conversations screen first; threads and notifications drill in
+  const [screen, setScreen] = useState<'list' | 'thread' | 'inbox'>('list');
+  const [previews, setPreviews] = useState<Record<string, { body: string; author?: string; at: string }>>({});
+  useEffect(() => { fetchPreviews(teamId, cloud).then(setPreviews).catch(() => {}); }, [teamId, cloud]);
 
   // Load (or restore) the open channel's messages; mark it read.
   useEffect(() => {
@@ -73,6 +82,8 @@ export function ChatPage(p: Props) {
   useEffect(() => onChatEvent((e) => {
     if (e.teamId !== teamId) return;
     if (e.type === 'message') {
+      const d = e.message.body || (e.message.attachments?.length ? (e.message.attachments[0].type.startsWith('image/') ? '📷 Image' : e.message.attachments[0].name) : '');
+      setPreviews((pv) => ({ ...pv, [e.message.channelId]: { body: d, author: e.message.author, at: e.message.at } }));
       const cur = cache.current.get(e.message.channelId);
       if (cur && !cur.some((m) => m.id === e.message.id)) cache.current.set(e.message.channelId, [...cur, e.message]);
       if (e.message.channelId === activeId) {
@@ -129,68 +140,49 @@ export function ChatPage(p: Props) {
 
   const openDmWith = async (personId: string) => {
     const ch = dms.find((d) => d.name === dmName(me, personId));
-    if (ch) { onActive(ch.id); return; }
-    try { const id = await openDm(teamId, me, personId, cloud); p.onRefreshChannels(); onActive(id); }
+    if (ch) { onActive(ch.id); setScreen('thread'); return; }
+    try { const id = await openDm(teamId, me, personId, cloud); p.onRefreshChannels(); onActive(id); setScreen('thread'); }
     catch (e) { p.onError(String((e as Error).message ?? e)); }
   };
 
-  return (
-    <div className={`chat${full ? ' full' : ''}`}>
-      {full && (
-      <aside className="chat-rail">
-        <div className="side-title">Chat</div>
-        <div className="chat-rail-head">
-          <span className="chat-rail-title">Channels</span>
-          <span className="panel-spacer" />
-          <button className="icon-btn small" title="New channel" onClick={() => setNewChannel(true)}>+</button>
-        </div>
-        {regular.map((c) => (
-          <button key={c.id} className={`chat-ch${c.id === activeId ? ' active' : ''}${c.unread ? ' unread' : ''}`} onClick={() => onActive(c.id)}>
-            <span className="chat-hash">{c.private ? <LockGlyph /> : '#'}</span>
-            <span className="chat-ch-name">{c.name}</span>
-            {c.unread > 0 && <span className="badge">{c.unread}</span>}
-          </button>
-        ))}
-        {newChannel && (
-          <NewChannelForm people={people} me={me} onClose={() => setNewChannel(false)}
-            onCreate={async (name, priv, members) => {
-              try { await createChannel(teamId, me, name, priv, members, cloud); setNewChannel(false); p.onRefreshChannels(); }
-              catch (e) { p.onError(String((e as Error).message ?? e)); }
-            }} />
-        )}
-        <div className="chat-rail-head dm">
-          <span className="chat-rail-title">Direct messages</span>
-        </div>
-        {teammates.map((x) => {
-          const ch = dms.find((d) => d.name === dmName(me, x.id));
-          return (
-            <button key={x.id} className={`chat-ch${ch && ch.id === activeId ? ' active' : ''}${ch?.unread ? ' unread' : ''}`}
-              onClick={() => openDmWith(x.id)}>
-              <Avatar person={x} size={18} />
-              <span className="chat-ch-name">{shortName(x.name)}{x.id === me ? ' (you)' : ''}</span>
-              {ch && ch.unread > 0 && <span className="badge">{ch.unread}</span>}
-            </button>
-          );
-        })}
-      </aside>
-      )}
+  const fmtWhen = (at?: string) => {
+    if (!at) return '';
+    const d = new Date(at);
+    if (d.toDateString() === new Date().toDateString()) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (Date.now() - +d < 6 * 86_400_000) return d.toLocaleDateString([], { weekday: 'short' });
+    return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  };
+  const previewLine = (ch: Channel) => {
+    const pv = previews[ch.id];
+    if (!pv) return 'No messages yet';
+    const who = pv.author === me ? 'You: ' : isDm(ch) ? '' : `${shortName(people.find((x) => x.id === pv.author)?.name ?? '')}: `;
+    return who + pv.body;
+  };
+  const lastNotif = p.notifications.filter((n) => n.to === me).sort((a, b) => b.at.localeCompare(a.at))[0];
 
-      {!full && (listMode || !active) ? (
-        <div className="chat-main chat-list-view">
-          <div className="side-title">Chat</div>
+  const convoRow = (ch: Channel, icon: React.ReactNode, name: React.ReactNode, onClick: () => void) => (
+    <button key={ch.id} className={`convo${ch.unread ? ' unread' : ''}`} onClick={onClick}>
+      <span className="convo-dot">{ch.unread > 0 && <span />}</span>
+      <span className="convo-icon">{icon}</span>
+      <span className="convo-main">
+        <span className="convo-name">{name}</span>
+        <span className="convo-preview">{previewLine(ch)}</span>
+      </span>
+      <span className="convo-when">{fmtWhen(previews[ch.id]?.at ?? ch.lastAt)}</span>
+    </button>
+  );
+
+  return (
+    <div className="chat">
+      {screen === 'list' && (
+        <>
+          <div className="side-head">
+            <span className="side-title">Chat</span>
+            <span className="panel-spacer" />
+            <button className="icon-btn" title="New channel" onClick={() => setNewChannel(true)}>+</button>
+            <button className="icon-btn" title="Close" onClick={p.onClose}><XGlyph /></button>
+          </div>
           <div className="chat-convos">
-            <div className="chat-rail-head">
-              <span className="chat-rail-title">Channels</span>
-              <span className="panel-spacer" />
-              <button className="icon-btn small" title="New channel" onClick={() => setNewChannel(true)}>+</button>
-            </div>
-            {regular.map((ch) => (
-              <button key={ch.id} className={`chat-ch${ch.unread ? ' unread' : ''}`} onClick={() => { onActive(ch.id); setListMode(false); }}>
-                <span className="chat-hash">{ch.private ? <LockGlyph /> : '#'}</span>
-                <span className="chat-ch-name">{ch.name}</span>
-                {ch.unread > 0 && <span className="badge">{ch.unread}</span>}
-              </button>
-            ))}
             {newChannel && (
               <NewChannelForm people={people} me={me} onClose={() => setNewChannel(false)}
                 onCreate={async (name, priv, members) => {
@@ -198,49 +190,55 @@ export function ChatPage(p: Props) {
                   catch (e) { p.onError(String((e as Error).message ?? e)); }
                 }} />
             )}
-            <div className="chat-rail-head dm">
-              <span className="chat-rail-title">Direct messages</span>
-            </div>
+            {regular.map((ch) => convoRow(ch,
+              <span className="convo-hash">{ch.private ? <LockGlyph /> : '#'}</span>,
+              ch.name,
+              () => { onActive(ch.id); setScreen('thread'); }))}
             {teammates.map((x) => {
               const ch = dms.find((d) => d.name === dmName(me, x.id));
-              return (
-                <button key={x.id} className={`chat-ch${ch?.unread ? ' unread' : ''}`}
-                  onClick={async () => { await openDmWith(x.id); setListMode(false); }}>
-                  <Avatar person={x} size={20} />
-                  <span className="chat-ch-name">{shortName(x.name)}{x.id === me ? ' (you)' : ''}</span>
-                  {ch && ch.unread > 0 && <span className="badge">{ch.unread}</span>}
-                </button>
-              );
+              const stub: Channel = ch ?? { id: `stub-${x.id}`, name: dmName(me, x.id), private: true, unread: 0 };
+              return convoRow(stub,
+                <Avatar person={x} size={34} />,
+                <>{shortName(x.name)}{x.id === me ? ' (you)' : ''}</>,
+                () => openDmWith(x.id));
             })}
-          </div>
-        </div>
-      ) : active ? (
-        <div className="chat-main">
-          {!full && (
-            <div className="chat-thread-head">
-              <button className="meet-back chat-back" onClick={() => setListMode(true)}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
-                Chat
-              </button>
-              <span className="chat-thread-name">
-                {isDm(active)
-                  ? (() => { const other = people.find((x) => x.id === dmOther(active, me)); return <>{other && <Avatar person={other} size={22} />}{other ? shortName(other.name) : 'Direct message'}{dmOther(active, me) === me ? ' (you)' : ''}</>; })()
-                  : <><span className="chat-hash-big">{active.private ? <LockGlyph /> : '#'}</span>{active.name}</>}
+            <button className={`convo notifs${p.notifUnread ? ' unread' : ''}`} onClick={() => setScreen('inbox')}>
+              <span className="convo-dot">{p.notifUnread > 0 && <span />}</span>
+              <span className="convo-icon"><span className="convo-hash"><BellGlyph /></span></span>
+              <span className="convo-main">
+                <span className="convo-name">Notifications</span>
+                <span className="convo-preview">{lastNotif ? lastNotif.text : 'Task and project updates land here'}</span>
               </span>
-            </div>
-          )}
-          {full && (isDm(active) ? (
-            <div className="panel-head chat-head">
-              {(() => { const other = people.find((x) => x.id === dmOther(active, me)); return other ? <><Avatar person={other} size={30} /><span className="panel-title">{shortName(other.name)}{other.id === me ? ' (you)' : ''}</span></> : <span className="panel-title">Direct message</span>; })()}
-            </div>
-          ) : (
-          <ChannelHead key={`head-${active.id}`} channel={active} me={me} people={people} canModerate={p.canModerate} /* key must differ from the sibling Composer's — same-key siblings made React orphan the old head in the DOM */
+              <span className="convo-when">{fmtWhen(lastNotif?.at)}</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {screen === 'inbox' && (
+        <>
+          <div className="side-head">
+            <button className="meet-back chat-back" onClick={() => setScreen('list')}><BackGlyph /> Chat</button>
+            <span className="side-subtitle">Notifications</span>
+            <span className="panel-spacer" />
+            <button className="icon-btn" title="Close" onClick={p.onClose}><XGlyph /></button>
+          </div>
+          <div className="chat-inbox-scroll">
+            <InboxList notifications={p.notifications} people={people} me={me} onOpen={p.onOpenItem} onMarkRead={p.onMarkRead} />
+          </div>
+        </>
+      )}
+
+      {screen === 'thread' && active && (
+        <div className="chat-main">
+          <ThreadHead channel={active} me={me} people={people} canModerate={p.canModerate}
+            onBack={() => setScreen('list')}
+            onCloseAll={p.onClose}
             onRename={(name) => updateChannel(teamId, active.id, { name }, cloud).catch((e) => p.onError(String(e.message ?? e)))}
             onTopic={(topic) => updateChannel(teamId, active.id, { topic }, cloud).catch((e) => p.onError(String(e.message ?? e)))}
             onMembers={(m) => setChannelMembers(teamId, active.id, m, cloud).then(p.onRefreshChannels).catch((e) => p.onError(String(e.message ?? e)))}
-            onDelete={() => deleteChannel(teamId, active.id, cloud).then(() => { onActive(channels.find((c) => c.id !== active.id)?.id ?? null); p.onRefreshChannels(); }).catch((e) => p.onError(String(e.message ?? e)))}
+            onDelete={() => deleteChannel(teamId, active.id, cloud).then(() => { setScreen('list'); onActive(channels.find((ch) => ch.id !== active.id)?.id ?? null); p.onRefreshChannels(); }).catch((e) => p.onError(String(e.message ?? e)))}
           />
-          ))}
           <div className="chat-list" ref={listRef} onScroll={onScroll}>
             {!olderDone && msgs.length >= 60 && <button className="pill chat-older" onClick={loadOlder}>Load earlier messages</button>}
             {grouped.map(({ msg, head, day }) => (
@@ -255,19 +253,18 @@ export function ChatPage(p: Props) {
             ))}
             {msgs.length === 0 && <div className="chat-empty">No messages yet — say hi 👋</div>}
           </div>
-          <Composer key={`comp-${active.id}`} channel={active} teamId={teamId} cloud={cloud} onError={p.onError}
+          <Composer key={active.id} channel={active} teamId={teamId} cloud={cloud} onError={p.onError}
             label={isDm(active) ? `Message ${shortName(people.find((x) => x.id === dmOther(active, me))?.name ?? '')}` : `Message #${active.name}`}
             onSend={async (body, atts) => {
               const m = await sendMessage(teamId, active.id, me, body, atts, cloud);
-              if (cloud) { // realtime echoes it back, but append now so sending feels instant
+              if (cloud) {
                 cache.current.set(active.id, [...(cache.current.get(active.id) ?? []), m]);
                 setMsgs((ms) => (ms.some((x) => x.id === m.id) ? ms : [...ms, m]));
+                setPreviews((pv) => ({ ...pv, [active.id]: { body: body || 'Attachment', author: me, at: m.at } }));
               }
               stickBottom.current = true;
             }} />
         </div>
-      ) : (
-        <div className="chat-main"><div className="chat-empty">Pick a channel</div></div>
       )}
 
       {lightbox && createPortal(
@@ -310,11 +307,13 @@ function NewChannelForm({ people, me, onCreate, onClose }: { people: Person[]; m
   );
 }
 
-function ChannelHead({ channel, me, people, canModerate, onRename, onTopic, onMembers, onDelete }: {
+function ThreadHead({ channel, me, people, canModerate, onBack, onCloseAll, onRename, onTopic, onMembers, onDelete }: {
   channel: Channel; me: string; people: Person[]; canModerate: boolean;
+  onBack: () => void; onCloseAll: () => void;
   onRename: (v: string) => void; onTopic: (v: string) => void; onMembers: (m: string[]) => void; onDelete: () => void;
 }) {
-  const canManage = canModerate || channel.createdBy === me || !channel.createdBy;
+  const dm = isDm(channel);
+  const canManage = !dm && (canModerate || channel.createdBy === me || !channel.createdBy);
   const [editTopic, setEditTopic] = useState(false);
   const [menu, setMenu] = useState<DOMRect | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
@@ -325,36 +324,43 @@ function ChannelHead({ channel, me, people, canModerate, onRename, onTopic, onMe
     window.addEventListener('pointerdown', close);
     return () => window.removeEventListener('pointerdown', close);
   }, [menu]);
+  const other = dm ? people.find((x) => x.id === dmOther(channel, me)) : undefined;
   return (
-    <div className="panel-head chat-head">
+    <div className="side-head">
+      <button className="meet-back chat-back" onClick={onBack}><BackGlyph /> Chat</button>
       {renaming ? (
         <input className="chat-rename" autoFocus defaultValue={channel.name}
           onBlur={(e) => { const v = e.target.value.trim().toLowerCase().replace(/\s+/g, '-'); if (v && v !== channel.name) onRename(v); setRenaming(false); }}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setRenaming(false); }} />
       ) : (
-        <span className="panel-title"><span className="chat-hash-big">{channel.private ? <LockGlyph /> : '#'}</span>{channel.name}</span>
+        <span className="side-subtitle">
+          {dm
+            ? <>{other && <Avatar person={other} size={22} />}{other ? shortName(other.name) : 'Direct message'}{other?.id === me ? ' (you)' : ''}</>
+            : <><span className="chat-hash-big">{channel.private ? <LockGlyph /> : '#'}</span>{channel.name}</>}
+        </span>
       )}
-      {editTopic ? (
+      {!dm && !renaming && (editTopic ? (
         <input className="chat-topic-input" autoFocus defaultValue={channel.topic ?? ''} placeholder="Add a topic"
           onBlur={(e) => { onTopic(e.target.value.trim()); setEditTopic(false); }}
           onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditTopic(false); }} />
       ) : (
         <button className="chat-topic" onClick={() => canManage && setEditTopic(true)}>{channel.topic || (canManage ? 'Add a topic' : '')}</button>
-      )}
+      ))}
       <span className="panel-spacer" />
-      {channel.private && (
+      {channel.private && !dm && (
         <span className="chat-members" title="Members">
-          {(channel.members ?? []).map((id) => people.find((x) => x.id === id)).filter(Boolean).slice(0, 6).map((x) => <Avatar key={x!.id} person={x!} size={20} />)}
+          {(channel.members ?? []).map((id) => people.find((x) => x.id === id)).filter(Boolean).slice(0, 5).map((x) => <Avatar key={x!.id} person={x!} size={20} />)}
         </span>
       )}
-      {(canManage || channel.private) && (
+      {canManage && (
         <button className="icon-btn" title="Channel options" onClick={(e) => setMenu((e.currentTarget as HTMLElement).getBoundingClientRect())}>⋯</button>
       )}
+      <button className="icon-btn" title="Close" onClick={onCloseAll}><XGlyph /></button>
       {menu && createPortal(
         <div className="status-menu chat-menu" style={{ position: 'fixed', top: menu.bottom + 6, right: window.innerWidth - menu.right }}>
-          {canManage && <button onClick={() => { setRenaming(true); setMenu(null); }}>Rename</button>}
-          {channel.private && canManage && <button onClick={() => { setMembersOpen(true); setMenu(null); }}>Members…</button>}
-          {canManage && channel.name !== 'general' && <button className="danger" onClick={() => { if (confirm(`Delete #${channel.name}? Its messages are removed for everyone.`)) onDelete(); setMenu(null); }}>Delete channel</button>}
+          <button onClick={() => { setRenaming(true); setMenu(null); }}>Rename</button>
+          {channel.private && <button onClick={() => { setMembersOpen(true); setMenu(null); }}>Members…</button>}
+          {channel.name !== 'general' && <button className="danger" onClick={() => { if (confirm(`Delete #${channel.name}? Its messages are removed for everyone.`)) onDelete(); setMenu(null); }}>Delete channel</button>}
         </div>, document.body)}
       {membersOpen && (
         <MembersSheet channel={channel} me={me} people={people} onClose={() => setMembersOpen(false)} onSave={(m) => { onMembers(m); setMembersOpen(false); }} />
@@ -551,19 +557,21 @@ function Composer({ channel, label, teamId, cloud, onSend, onError }: {
       <div className="chat-compose-row">
         <button className="icon-btn" title="Attach a file" onClick={() => fileRef.current?.click()}><ClipGlyph /></button>
         <input ref={fileRef} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) addFiles(e.target.files); e.target.value = ''; }} />
-        <textarea
-          ref={taRef}
-          rows={1}
-          placeholder={label}
-          value={text}
-          onChange={(e) => { setText(e.target.value); grow(); }}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
-          onPaste={(e) => {
-            const imgs = Array.from(e.clipboardData.items).filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile()).filter(Boolean) as File[];
-            if (imgs.length) { e.preventDefault(); addFiles(imgs); }
-          }}
-        />
-        <button className="pill toggle active chat-send" disabled={(!text.trim() && !atts.length) || uploading > 0} onClick={send}>Send</button>
+        <span className="chat-field">
+          <textarea
+            ref={taRef}
+            rows={1}
+            placeholder={label}
+            value={text}
+            onChange={(e) => { setText(e.target.value); grow(); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+            onPaste={(e) => {
+              const imgs = Array.from(e.clipboardData.items).filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile()).filter(Boolean) as File[];
+              if (imgs.length) { e.preventDefault(); addFiles(imgs); }
+            }}
+          />
+          <button className="chat-return" title="Send (Enter)" disabled={(!text.trim() && !atts.length) || uploading > 0} onClick={send}><ReturnGlyph /></button>
+        </span>
       </div>
     </div>
   );
@@ -575,6 +583,18 @@ function ThumbChip({ att, cloud }: { att: Attachment; cloud: boolean }) {
   return url ? <img src={url} alt="" /> : <FileGlyph />;
 }
 
+function XGlyph() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
+}
+function BackGlyph() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>;
+}
+function BellGlyph() {
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M10.3 21a2 2 0 0 0 3.4 0" /></svg>;
+}
+function ReturnGlyph() {
+  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 5v6a3 3 0 0 1-3 3H5" /><path d="m9 10-4 4 4 4" /></svg>;
+}
 function PencilGlyph() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></svg>; }
 function CrossGlyph() { return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M18 6 6 18M6 6l12 12" /></svg>; }
 function ClipGlyph() { return <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>; }

@@ -15,16 +15,11 @@ export type Selection =
   | { kind: 'project'; id: string }
   | { kind: 'task'; id: string }
   | { kind: 'deadline'; id: string }
-  | { kind: 'retro'; id: ISODate }
-  | { kind: 'inbox'; id: 'inbox' }
-  | { kind: 'chat'; id: 'chat' }
-  | { kind: 'meetings'; id: 'meetings' };
+  | { kind: 'retro'; id: ISODate };
 
 interface Props {
   selection: Selection;
   width: number;
-  full: boolean;
-  onToggleFull: () => void;
   project?: Project;
   task?: Task;
   deadline?: Deadline;
@@ -57,9 +52,8 @@ interface Props {
 export function DetailPanel(p: Props) {
   const { selection, project, task, deadline, retro, people, me, onClose, onDelete } = p;
 
-  const style = p.full ? { width: '100%' } : { width: p.width };
-  if (selection.kind === 'inbox') return <Inbox {...p} />;
-  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} prevRetro={p.prevRetro} carriedConfidence={p.carriedConfidence} liveTemplate={p.retroTemplate} legacyFields={p.retroFields} people={people} me={me} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} full={p.full} onToggleFull={p.onToggleFull} />;
+  const style = { width: p.width };
+  if (selection.kind === 'retro') return <RetroDoc week={selection.id} retro={retro} prevRetro={p.prevRetro} carriedConfidence={p.carriedConfidence} liveTemplate={p.retroTemplate} legacyFields={p.retroFields} people={people} me={me} onUpdate={p.onUpdateRetro} onClose={onClose} width={p.width} />;
 
   const item = project ?? task ?? deadline;
   if (!item) return null;
@@ -107,7 +101,6 @@ export function DetailPanel(p: Props) {
       <div className="detail-top">
         <span className="detail-kind">{kind}</span>
         <span className="panel-spacer" />
-        <button className="icon-btn" title={p.full ? 'Exit full screen' : 'Full screen'} onClick={p.onToggleFull}><ExpandIcon full={p.full} /></button>
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
       </div>
       <GBlur pos="top" />
@@ -219,9 +212,9 @@ function GBlur({ pos }: { pos: 'top' | 'bottom' }) {
 
 /* ─── Retro ─────────────────────────────────────────── */
 
-function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, legacyFields, people, me, onUpdate, onClose, width, full, onToggleFull }: {
+function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, legacyFields, people, me, onUpdate, onClose, width }: {
   week: ISODate; retro?: Retro; prevRetro?: Retro; carriedConfidence?: Record<string, number>; liveTemplate?: RetroTemplate; legacyFields: RetroField[];
-  people: Person[]; me: string; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number; full: boolean; onToggleFull: () => void;
+  people: Person[]; me: string; onUpdate: Props['onUpdateRetro']; onClose: () => void; width: number;
 }) {
   // Past weeks read from their frozen template; the current week follows Team settings
   // (and re-freezes its snapshot with every edit). Locking freezes people too and
@@ -252,11 +245,10 @@ function RetroDoc({ week, retro, prevRetro, carriedConfidence, liveTemplate, leg
   const legacy = legacyFields.filter((f) => typeof a[f.key] === 'string' && (a[f.key] as string).trim());
 
   return (
-    <aside className="detail" style={full ? { width: '100%' } : { width }}>
+    <aside className="detail" style={{ width }}>
       <div className="detail-top">
         <span className="detail-kind">Retro</span>
         <span className="panel-spacer" />
-        <button className="icon-btn" title={full ? 'Exit full screen' : 'Full screen'} onClick={onToggleFull}><ExpandIcon full={full} /></button>
         <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
       </div>
       <GBlur pos="top" />
@@ -532,10 +524,10 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly, peopl
 
 /* ─── Inbox ─────────────────────────────────────────── */
 
-export function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead, width, full, onToggleFull }: {
-  notifications: Notification[]; people: Person[]; me: string; onClose: () => void;
+/** Notification rows only — lives at the bottom of the chat panel now. */
+export function InboxList({ notifications, people, me, onOpen, onMarkRead }: {
+  notifications: Notification[]; people: Person[]; me: string;
   onOpen: (sel: Selection) => void; onMarkRead: (ids: string[]) => void;
-  width: number; full: boolean; onToggleFull: () => void;
 }) {
   const mine = notifications.filter((n) => n.to === me).sort((a, b) => b.at.localeCompare(a.at));
   const unreadKey = mine.filter((n) => !n.read).map((n) => n.id).join(',');
@@ -545,34 +537,22 @@ export function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead, 
     return () => clearTimeout(t);
   }, [unreadKey, onMarkRead]);
   return (
-    <aside className="detail" style={full ? { width: '100%' } : { width }}>
-      <div className="detail-top">
-        <span className="detail-kind">Inbox</span>
-        <span className="panel-spacer" />
-        <button className="icon-btn" title={full ? 'Exit full screen' : 'Full screen'} onClick={onToggleFull}><ExpandIcon full={full} /></button>
-        <button className="icon-btn" title="Close" onClick={onClose}><CloseIcon /></button>
-      </div>
-      <GBlur pos="top" />
-      <div className="detail-scroll">
-        <h1 className="detail-title static">Notifications</h1>
-        {mine.length === 0 && <p className="muted">Nothing yet. You’ll hear here when a task is added for you, a review is requested, or a project you’re on changes.</p>}
-        <div className="notif-list">
-          {mine.map((n) => {
-            const from = people.find((x) => x.id === n.from);
-            return (
-              <button key={n.id} className={`notif${n.read ? '' : ' unread'}`} onClick={() => onOpen({ kind: n.ref.kind, id: n.ref.id } as Selection)}>
-                {from && <Avatar person={from} size={28} />}
-                <span className="notif-body">
-                  <span className="notif-text">{n.text}</span>
-                  <span className="notif-time">{relTime(n.at)}</span>
-                </span>
-                {!n.read && <span className="notif-dot" />}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </aside>
+    <div className="notif-list">
+      {mine.length === 0 && <p className="muted">Nothing yet. You’ll hear here when a task is added for you, a review is requested, or a project you’re on changes.</p>}
+      {mine.map((n) => {
+        const from = people.find((x) => x.id === n.from);
+        return (
+          <button key={n.id} className={`notif${n.read ? '' : ' unread'}`} onClick={() => onOpen({ kind: n.ref.kind, id: n.ref.id } as Selection)}>
+            {from && <Avatar person={from} size={28} />}
+            <span className="notif-body">
+              <span className="notif-text">{n.text}</span>
+              <span className="notif-time">{relTime(n.at)}</span>
+            </span>
+            {!n.read && <span className="notif-dot" />}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -904,18 +884,6 @@ function SendToAgent({ doc }: { doc: () => string }) {
 
 function SparkIcon() {
   return <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l1.8 5.7L19.5 9.5l-5.7 1.8L12 17l-1.8-5.7L4.5 9.5l5.7-1.8zM5 16l.9 2.6L8.5 19.5l-2.6.9L5 23l-.9-2.6L1.5 19.5l2.6-.9z" /></svg>;
-}
-
-export function ExpandIcon({ full }: { full: boolean }) {
-  return full ? (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" />
-    </svg>
-  ) : (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5" />
-    </svg>
-  );
 }
 
 function CloseIcon() {

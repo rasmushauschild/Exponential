@@ -271,6 +271,30 @@ export async function toggleReaction(teamId: string, msg: ChatMessage, emoji: st
   emit({ type: 'message-changed', teamId, message: { ...msg, reactions: reactions ?? undefined } });
 }
 
+/** One line per conversation for the iMessage-style list: the latest message of each
+ *  channel (one query for all of them; local mode reads the store). */
+export async function fetchPreviews(teamId: string, cloud: boolean): Promise<Record<string, { body: string; author?: string; at: string }>> {
+  const out: Record<string, { body: string; author?: string; at: string }> = {};
+  const digest = (m: ChatMessage) => ({ body: m.body || (m.attachments?.length ? (m.attachments[0].type.startsWith('image/') ? '📷 Image' : m.attachments[0].name) : ''), author: m.author, at: m.at });
+  if (!cloud) {
+    const st = localLoad();
+    for (const [chId, msgs] of Object.entries(st.messages)) {
+      const last = msgs[msgs.length - 1];
+      if (last) out[chId] = digest(last);
+    }
+    return out;
+  }
+  const { data, error } = await supabase.from('messages')
+    .select('id, channel_id, team_id, author, body, attachments, edited_at, deleted_at, created_at')
+    .eq('team_id', teamId).is('deleted_at', null)
+    .order('created_at', { ascending: false }).limit(200);
+  if (error) return out;
+  for (const r of data as MessageRow[]) {
+    if (!out[r.channel_id]) out[r.channel_id] = digest(toMessage(r));
+  }
+  return out;
+}
+
 /* ── attachments ── */
 
 const MAX_FILE = 25 * 1024 * 1024;

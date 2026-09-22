@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BigPlan } from './BigPlan';
 import { Avatar, WeekPlan } from './WeekPlan';
-import { DetailPanel, ExpandIcon, Inbox, type Selection } from './DetailPanel';
+import { DetailPanel, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
 import logoUrl from '../build/icon.png';
 import utopiaUrl from '../build/utopia.svg';
@@ -44,21 +44,25 @@ export default function App() {
     return window.exponential?.onUpdate((s) => setUpdateState((prev) => (s.state === 'checking' ? prev : s)));
   }, []);
   const [view, setView] = useState<'plan' | 'team'>('plan');
-  const [panelFull, setPanelFull] = useState(false); // right side panel expanded over the whole main area
-  // chat / meetings / inbox live in a LEFT side panel; opening it closes the right one
-  const [leftPanel, setLeftPanelRaw] = useState<'chat' | 'meetings' | 'inbox' | null>(null);
-  const [leftFull, setLeftFull] = useState(false);
+  // chat / meetings live in a LEFT side panel; both sides can be open at once — every
+  // column (left panel, planners, right panel) keeps at least ~a fifth of the window.
+  const [leftPanel, setLeftPanel] = useState<'chat' | 'meetings' | null>(null);
   const [leftW, setLeftW] = useState(415);
   const [lResizing, setLResizing] = useState(false);
-  const setLeftPanel = (k: 'chat' | 'meetings' | 'inbox' | null) => {
-    setLeftPanelRaw(k);
-    if (k) setSelection(null);
+  const leftWRef = useRef(leftW); leftWRef.current = leftW;
+  const minPanelW = () => {
+    const W = window.innerWidth;
+    return Math.min(Math.max(280, Math.floor(W / 5)), Math.floor((W - 140) / 3));
   };
   const onLResizeDown = (e: React.PointerEvent) => {
     e.preventDefault();
     const startX = e.clientX, startW = leftW;
     setLResizing(true);
-    const move = (ev: PointerEvent) => setLeftW(Math.min(Math.max(360, window.innerWidth - 760), Math.max(320, startW + (ev.clientX - startX))));
+    const move = (ev: PointerEvent) => {
+      const mp = minPanelW();
+      const max = window.innerWidth - 100 - mp - (detailRef.current ? detailWRef.current + 14 : 0);
+      setLeftW(Math.max(mp, Math.min(max, startW + (ev.clientX - startX))));
+    };
     const up = () => { setLResizing(false); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -132,15 +136,34 @@ export default function App() {
   useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn]);
   const [vResizing, setVResizing] = useState(false);
 
+  const detailWRef = useRef(detailW); detailWRef.current = detailW;
+  const detailRef = useRef(false);
+  const leftOpenRef = useRef(false);
   const onVResizeDown = (e: React.PointerEvent) => {
     e.preventDefault();
     const startX = e.clientX, startW = detailW;
     setVResizing(true);
-    const move = (ev: PointerEvent) => setDetailW(Math.min(Math.max(360, window.innerWidth - 760), Math.max(300, startW - (ev.clientX - startX))));
+    const move = (ev: PointerEvent) => {
+      const mp = minPanelW();
+      const max = window.innerWidth - 100 - mp - (leftOpenRef.current ? leftWRef.current + 14 : 0);
+      setDetailW(Math.max(mp, Math.min(max, startW - (ev.clientX - startX))));
+    };
     const up = () => { setVResizing(false); window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
   };
+  // window resizes (and panels opening) re-fit both widths so no column gets squished
+  useEffect(() => {
+    const fit = () => {
+      const mp = minPanelW();
+      const budget = window.innerWidth - 100 - mp;
+      setDetailW((w) => Math.max(mp, Math.min(w, budget - (leftOpenRef.current ? leftWRef.current + 14 : 0))));
+      setLeftW((w) => Math.max(mp, Math.min(w, budget - (detailRef.current ? detailWRef.current + 14 : 0))));
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [leftPanel, selection?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
   const mainRef = useRef<HTMLDivElement>(null);
 
   // Launch splash: the mark slides in from the bottom, plays at least one full shader sweep,
@@ -315,6 +338,7 @@ export default function App() {
     }, 'meetings-inbox');
   }, [cloudMode, meetTeam, data?.me]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (leftPanel === 'meetings') setMeetDot(false); }, [leftPanel]);
+  useEffect(() => { leftOpenRef.current = leftPanel !== null; }, [leftPanel]);
 
   // The menu-bar widget can ask the main window to open a specific item.
   useEffect(() => window.exponential?.onOpen((t) => {
@@ -621,6 +645,7 @@ export default function App() {
   const selTask = selection?.kind === 'task' ? live.tasks.find((t) => t.id === selection.id) : undefined;
   const selDeadline = selection?.kind === 'deadline' ? data.deadlines.find((d) => d.id === selection.id) : undefined;
   const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro';
+  detailRef.current = detailOpen;
   const leftOpen = leftPanel !== null;
   const unread = (data.notifications ?? []).filter((n) => n.to === data.me && !n.read).length;
   const chatUnread = chat.reduce((n, c) => n + c.unread, 0);
@@ -651,16 +676,12 @@ export default function App() {
         </div>
         <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><PlanIcon /> <span className="nav-text">Plan</span></button>
         <button className={`nav-item${leftPanel === 'chat' ? ' active' : ''}`} onClick={() => setLeftPanel(leftPanel === 'chat' ? null : 'chat')}>
-          <span className="nav-ico"><ChatIcon />{chatUnread > 0 && <span className="nav-dot" />}</span>
+          <span className="nav-ico"><ChatIcon />{(chatUnread > 0 || unread > 0) && <span className="nav-dot" />}</span>
           <span className="nav-text">Chat</span>
         </button>
         <button className={`nav-item${leftPanel === 'meetings' ? ' active' : ''}`} onClick={() => setLeftPanel(leftPanel === 'meetings' ? null : 'meetings')}>
           <span className="nav-ico"><MeetIcon />{meetDot && <span className="nav-dot" />}</span>
           <span className="nav-text">Meetings</span>
-        </button>
-        <button className={`nav-item${leftPanel === 'inbox' ? ' active' : ''}`} onClick={() => setLeftPanel(leftPanel === 'inbox' ? null : 'inbox')}>
-          <span className="nav-ico"><InboxIcon />{unread > 0 && <span className="nav-dot" />}</span>
-          <span className="nav-text">Inbox</span>
         </button>
 
         <div className="sidebar-bottom">
@@ -708,17 +729,11 @@ export default function App() {
 
       <div className={`main${detailOpen ? ' with-detail' : ''}`}>
         <div
-          className={`detail-slot left-slot${lResizing || (leftFull && leftOpen) ? ' no-anim' : ''}${!leftOpen ? ' clip' : ''}`}
-          style={leftFull && leftOpen ? { width: 'auto', flex: '1 1 auto' } : { width: leftOpen ? leftW + 14 : 0 }}
+          className={`detail-slot left-slot${lResizing ? ' no-anim' : ''}${!leftOpen ? ' clip' : ''}`}
+          style={{ width: leftOpen ? leftW + 14 : 0 }}
         >
           {leftOpen && (
-            <aside className="detail side-embed" style={leftFull ? { width: '100%' } : { width: leftW }}>
-              <div className="detail-top">
-                <span className="detail-kind">{leftPanel === 'chat' ? 'Chat' : leftPanel === 'meetings' ? 'Meetings' : 'Inbox'}</span>
-                <span className="panel-spacer" />
-                <button className="icon-btn" title={leftFull ? 'Exit full screen' : 'Full screen'} onClick={() => setLeftFull((v) => !v)}><ExpandIcon full={leftFull} /></button>
-                <button className="icon-btn" title="Close" onClick={() => setLeftPanel(null)}><PanelX /></button>
-              </div>
+            <aside className="detail side-embed" style={{ width: leftW }}>
               {leftPanel === 'chat' && (
                 <ChatPage
                   teamId={data.id}
@@ -730,7 +745,11 @@ export default function App() {
                   activeId={chatActive}
                   onActive={setChatActive}
                   onRefreshChannels={refreshChat}
-                  full={leftFull}
+                  notifications={data.notifications ?? []}
+                  notifUnread={unread}
+                  onOpenItem={(sel) => { setView('plan'); setSelection(sel); }}
+                  onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
+                  onClose={() => setLeftPanel(null)}
                   onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
                 />
               )}
@@ -741,30 +760,15 @@ export default function App() {
                   people={data.people}
                   canModerate={data.moderators.includes(data.me)}
                   cloud={cloudMode}
-                  full={leftFull}
+                  onClose={() => setLeftPanel(null)}
                   onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
                 />
               )}
-              {leftPanel === 'inbox' && (
-                <div className="detail-scroll inbox-embed">
-                  <Inbox
-                    notifications={data.notifications ?? []}
-                    people={data.people}
-                    me={data.me}
-                    width={leftW}
-                    full={leftFull}
-                    onToggleFull={() => setLeftFull((v) => !v)}
-                    onClose={() => setLeftPanel(null)}
-                    onOpen={(sel) => { setView('plan'); setSelection(sel); }}
-                    onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
-                  />
-                </div>
-              )}
             </aside>
           )}
-          {leftOpen && !leftFull && <div className={`vresizer${lResizing ? ' dragging' : ''}`} onPointerDown={onLResizeDown} />}
+          {leftOpen && <div className={`vresizer${lResizing ? ' dragging' : ''}`} onPointerDown={onLResizeDown} />}
         </div>
-        {view === 'team' && !(panelFull && detailOpen) && !(leftFull && leftOpen) && (
+        {view === 'team' && (
           <TeamPage
             team={data}
             cloud={cloudMode}
@@ -773,7 +777,7 @@ export default function App() {
             onDelete={() => { setView('plan'); setSelection(null); setSelectedPerson(null); deleteTeam(data.id); }}
           />
         )}
-        <div className="planners" ref={mainRef} style={view !== 'plan' || (panelFull && detailOpen) || (leftFull && leftOpen) ? { display: 'none' } : undefined}>
+        <div className="planners" ref={mainRef} style={view !== 'plan' ? { display: 'none' } : undefined}>
           <section className="panel" style={{ flex: '1 1 0' }} ref={planSecRef}>
             <div className="panel-head">
               <div className="panel-title">Master plan</div>
@@ -948,16 +952,14 @@ export default function App() {
 
         {/* The slot animates its width so the planners squeeze smoothly; the panel inside keeps a fixed width. */}
         <div
-          className={`detail-slot${vResizing || (panelFull && detailOpen) ? ' no-anim' : ''}${slotAnimating || !detailOpen ? ' clip' : ''}`}
-          style={leftFull && leftOpen ? { width: 0 } : panelFull && detailOpen ? { width: 'auto', flex: '1 1 auto' } : { width: detailOpen ? detailW + 14 : 0 }}
+          className={`detail-slot${vResizing ? ' no-anim' : ''}${slotAnimating || !detailOpen ? ' clip' : ''}`}
+          style={{ width: detailOpen ? detailW + 14 : 0 }}
           onTransitionEnd={(e) => { if (e.propertyName === 'width') setSlotAnimating(false); }}
         >
-        {detailOpen && !panelFull && <div className={`vresizer${vResizing ? ' dragging' : ''}`} onPointerDown={onVResizeDown} />}
+        {detailOpen && <div className={`vresizer${vResizing ? ' dragging' : ''}`} onPointerDown={onVResizeDown} />}
         {detailOpen && selection && (
           <DetailPanel
             width={detailW}
-            full={panelFull}
-            onToggleFull={() => setPanelFull((v) => !v)}
             selection={selection}
             project={selProject}
             task={selTask}
@@ -1066,10 +1068,6 @@ export function TeamMark({ team, size = 30 }: { team: { name: string; icon?: str
 }
 
 const ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
-
-function PanelX() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
-}
 
 function MeetIcon() {
   return (
