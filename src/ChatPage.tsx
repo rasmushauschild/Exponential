@@ -47,8 +47,16 @@ const fmtSize = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` 
 export function ChatPage(p: Props) {
   const { teamId, me, people, cloud, channels, activeId, onActive } = p;
   const active = channels.find((c) => c.id === activeId) ?? null;
-  const [msgs, setMsgs] = useState<ChatMessage[]>([]);
-  const [olderDone, setOlderDone] = useState(false);
+  // Thread state resets DURING render when the channel changes (no effect lag): switching
+  // chats must never paint a frame of the previous thread's messages.
+  const [thread, setThread] = useState<{ id: string | null; msgs: ChatMessage[]; olderDone: boolean }>({ id: null, msgs: [], olderDone: false });
+  if (thread.id !== (activeId ?? null)) {
+    setThread({ id: activeId ?? null, msgs: activeId ? messageCache.get(activeId) ?? [] : [], olderDone: false });
+  }
+  const msgs = thread.msgs;
+  const setMsgs = (up: ChatMessage[] | ((m: ChatMessage[]) => ChatMessage[])) => setThread((t) => ({ ...t, msgs: typeof up === 'function' ? up(t.msgs) : up }));
+  const setOlderDone = (v: boolean) => setThread((t) => ({ ...t, olderDone: v }));
+  const olderDone = thread.olderDone;
   const listRef = useRef<HTMLDivElement>(null);
   const stickBottom = useRef(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -65,9 +73,6 @@ export function ChatPage(p: Props) {
   useEffect(() => {
     if (!active) return;
     let gone = false;
-    const cached = messageCache.get(active.id);
-    if (cached) setMsgs(cached);
-    setOlderDone(false);
     fetchMessages(teamId, active.id, cloud).then((m) => {
       if (gone) return;
       messageCache.set(active.id, m);
