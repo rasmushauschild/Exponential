@@ -643,6 +643,9 @@ img { display: block; -webkit-user-drag: none; }
 .blk-handle:hover { color: var(--text); } /* no button box: the grip is part of the block, not its own control */
 .blk-textwrap { flex: 1; min-width: 0; position: relative; display: flex; }
 .blk-text { flex: 1; min-width: 0; border: 0; outline: 0; resize: none; background: transparent; color: var(--text); font: inherit; line-height: 1.55; padding: 4px 0; overflow: hidden; user-select: text; white-space: pre-wrap; overflow-wrap: break-word; }
+.blk-text[contenteditable] { min-height: calc(1.55em + 8px); cursor: text; }
+.blk-text[contenteditable]:empty::before { content: attr(data-ph); color: var(--text-3); pointer-events: none; }
+.blk-text .blk-link { cursor: pointer; }
 .blk-text::placeholder { color: var(--text-3); }
 .blk-text.h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; padding: 12px 0 2px; }
 .blk-text.h2 { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; padding: 10px 0 2px; }

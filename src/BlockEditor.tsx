@@ -206,32 +206,15 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     window.getSelection()?.removeAllRanges();
     setSel({ a: 0, b: blocksRef.current.length - 1 });
   };
-  const onTextKey = (i: number, e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const onTextKey = (i: number, e: React.KeyboardEvent<HTMLDivElement>) => {
     const el = e.currentTarget;
     const b = blocks[i] as Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
-    // ⌘B / ⌘I / ⌘⇧X wrap (or unwrap) the selection in Markdown emphasis markers.
+    // ⌘B / ⌘I / ⌘⇧X toggle real formatting on the selection; the input event then serialises the DOM back to Markdown.
     if ((e.metaKey || e.ctrlKey) && !e.altKey) {
-      const mark = e.key.toLowerCase() === 'b' && !e.shiftKey ? '**' : e.key.toLowerCase() === 'i' && !e.shiftKey ? '*' : e.key.toLowerCase() === 'x' && e.shiftKey ? '~~' : null;
-      if (mark) {
-        e.preventDefault();
-        const s = el.selectionStart, en = el.selectionEnd;
-        const before = el.value.slice(0, s), inner = el.value.slice(s, en), after = el.value.slice(en);
-        let text: string, ns: number, ne: number;
-        if (inner.startsWith(mark) && inner.endsWith(mark) && inner.length >= mark.length * 2) {
-          text = before + inner.slice(mark.length, inner.length - mark.length) + after;
-          ns = s; ne = en - 2 * mark.length;
-        } else if (before.endsWith(mark) && after.startsWith(mark)) {
-          text = before.slice(0, -mark.length) + inner + after.slice(mark.length);
-          ns = s - mark.length; ne = en - mark.length;
-        } else {
-          text = before + mark + inner + mark + after;
-          ns = s + mark.length; ne = en + mark.length;
-        }
-        setBlock(i, { text });
-        window.setTimeout(() => el.setSelectionRange(ns, ne), 0); // after React writes the new value
-        return;
-      }
+      const k = e.key.toLowerCase();
+      const cmd = k === 'b' && !e.shiftKey ? 'bold' : k === 'i' && !e.shiftKey ? 'italic' : k === 'x' && e.shiftKey ? 'strikeThrough' : null;
+      if (cmd) { e.preventDefault(); document.execCommand(cmd); return; }
     }
     // The slash menu owns the arrows and Enter while it is open on this block.
     if (slashRef.current?.i === i) {
@@ -241,9 +224,8 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       if (e.key === 'Enter') { e.preventDefault(); const o = opts[Math.min(slashSelRef.current, opts.length - 1)]; if (o) applySlash(o.kind); else setSlash(null); return; }
       if (e.key === 'Escape') { e.preventDefault(); setSlash(null); return; }
     }
-    if (e.key === '/' && el.value === '') {
-      const r = el.getBoundingClientRect();
-      setSlash({ i, rect: r });
+    if (e.key === '/' && b.text === '') {
+      setSlash({ i, rect: el.getBoundingClientRect() });
       setSlashSel(0);
     }
     if (e.key === 'Tab') {
@@ -253,14 +235,15 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
     }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      const head = el.value.slice(0, el.selectionStart), tail = el.value.slice(el.selectionEnd);
+      const { start, end } = caretOffsets(el);
+      const head = b.text.slice(0, mdOffsetOf(b.text, start)), tail = b.text.slice(mdOffsetOf(b.text, end));
       const next = blocks.map((x, j) => (j === i ? { ...b, text: head } : x));
       // Enter on a toggle drops into it: the new line is a child, one level deeper.
       next.splice(i + 1, 0, { key: newKey(), kind: 'p', text: tail, indent: Math.min(MAX_IND, (b.indent ?? 0) + (b.kind === 'tog' ? 1 : 0)) });
       commit(next);
       if (b.kind === 'tog') setClosed((c) => { const n = new Set(c); n.delete(b.key); return n; });
       setFocus({ index: i + 1, caret: 'start' });
-    } else if (e.key === 'Backspace' && el.selectionStart === 0 && el.selectionEnd === 0) {
+    } else if (e.key === 'Backspace' && caretOffsets(el).start === 0 && caretOffsets(el).end === 0) {
       if (b.text === '' && blocks.length > 1) { e.preventDefault(); removeAt(i); }
       else if (i > 0 && blocks[i - 1].kind !== 'task' && blocks[i - 1].kind !== 'img') {
         e.preventDefault();
@@ -269,11 +252,11 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         commit(merged);
         setFocus({ index: i - 1, caret: prev.text.length });
       }
-    } else if (e.key === 'ArrowUp' && el.selectionStart === 0 && i > 0) { e.preventDefault(); setFocus({ index: i - 1, caret: 'end' }); }
-    else if (e.key === 'ArrowDown' && el.selectionStart === el.value.length && i < blocks.length - 1) { e.preventDefault(); setFocus({ index: i + 1, caret: 'end' }); }
+    } else if (e.key === 'ArrowUp' && caretOffsets(el).start === 0 && i > 0) { e.preventDefault(); setFocus({ index: i - 1, caret: 'end' }); }
+    else if (e.key === 'ArrowDown' && caretOffsets(el).end === (el.textContent ?? '').length && i < blocks.length - 1) { e.preventDefault(); setFocus({ index: i + 1, caret: 'end' }); }
   };
 
-  const onTaskKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>, task: Task | undefined) => {
+  const onTaskKey = (i: number, e: React.KeyboardEvent<HTMLInputElement>, task: Task | undefined, setLocalTitle?: (t: string) => void) => {
     const el = e.currentTarget;
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'a') { selectAll(e); return; }
     // The slash menu works here too: '/' on a still-unnamed task offers the block kinds.
@@ -301,6 +284,15 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
         commit(blocks.map((x, j) => (j === i ? { key: newKey(), kind: 'p', text: '', indent: blocks[i].indent } as Block : x)));
         onDeleteTask(b.taskId);
         setFocus({ index: i, caret: 'start' });
+      } else if ((el.selectionStart ?? el.value.length) < el.value.length) {
+        // mid-title: split the line at the caret — the tail becomes the next task
+        const b = blocks[i] as Extract<Block, { kind: 'task' }>;
+        const head = el.value.slice(0, el.selectionStart!);
+        const tail = el.value.slice(el.selectionEnd ?? el.selectionStart!);
+        setLocalTitle?.(head); // the input is controlled by TaskBlock state — keep it in step
+        onUpdateTask(b.taskId, { title: head });
+        const id = createTask(tail);
+        insertAt(i + 1, { key: newKey(), kind: 'task', taskId: id, indent: blocks[i].indent });
       } else {
         const id = createTask('');
         insertAt(i + 1, { key: newKey(), kind: 'task', taskId: id, indent: blocks[i].indent });
@@ -315,8 +307,19 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
   const activeRef = useRef(0);
   const setActive = (i: number) => { activeRef.current = i; };
   const turnInto = (kind: 'h1' | 'h2' | 'p' | 'tog' | 'task') => {
-    // With a block selection, the whole selection converts (images stay images).
+    // With a block selection, the whole selection converts (images stay images) — except
+    // Toggle, which wraps the selection: a fresh toggle with the selected blocks as children.
     const s = selRef.current;
+    if (s && kind === 'tog') {
+      const lo = Math.min(s.a, s.b), hi = Math.max(s.a, s.b);
+      const bs = blocksRef.current;
+      const base = Math.min(...bs.slice(lo, hi + 1).map((x) => x.indent ?? 0));
+      const kids = bs.slice(lo, hi + 1).map((x) => ({ ...x, indent: Math.min(MAX_IND, (x.indent ?? 0) + 1) }));
+      commit([...bs.slice(0, lo), { key: newKey(), kind: 'tog', text: '', indent: base } as Block, ...kids, ...bs.slice(hi + 1)]);
+      setSel(null);
+      setFocus({ index: lo, caret: 'start' });
+      return;
+    }
     if (s) {
       const lo = Math.min(s.a, s.b), hi = Math.max(s.a, s.b);
       const next = [...blocksRef.current];
@@ -589,7 +592,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
                 claimable={claimable}
                 focus={focus?.index === i ? focus : null}
                 onFocused={() => setFocus(null)}
-                onKey={(e, t) => onTaskKey(i, e, t)}
+                onKey={(e, t, setLocal) => onTaskKey(i, e, t, setLocal)}
                 onTitle={(title) => onUpdateTask(b.taskId, { title })}
                 onUpdate={(patch) => onUpdateTask(b.taskId, patch)}
                 onDelete={() => removeAt(i, false)}
@@ -696,8 +699,8 @@ function linkify(text: string): (string | { url: string; label: string })[] | nu
 }
 
 /** Bold / italic / strike spans in the text: `**x**`, `*x*`, `~~x~~` (no space just inside the markers). */
-type Emph = { style: 'b' | 'i' | 's'; mark: string; text: string };
-const EMPH_RE = /(\*\*(?!\s)[^*\n]*?(?<!\s)\*\*|~~(?!\s)[^~\n]*?(?<!\s)~~|\*(?!\s)[^*\n]*?(?<!\s)\*)/g;
+type Emph = { style: 'b' | 'i' | 's' | 'bi'; mark: string; text: string };
+const EMPH_RE = /(\*\*\*(?!\s)[^*\n]*?(?<!\s)\*\*\*|\*\*(?!\s)[^*\n]*?(?<!\s)\*\*|~~(?!\s)[^~\n]*?(?<!\s)~~|\*(?!\s)[^*\n]*?(?<!\s)\*)/g;
 
 /** Splits the text into plain / link / emphasis segments; null when there's nothing to decorate. */
 function decorate(text: string): (string | { url: string; label: string } | Emph)[] | null {
@@ -710,9 +713,9 @@ function decorate(text: string): (string | { url: string; label: string } | Emph
     let last = 0;
     for (const m of part.matchAll(EMPH_RE)) {
       const tok = m[0];
-      const mark = tok.startsWith('**') ? '**' : tok.startsWith('~~') ? '~~' : '*';
+      const mark = tok.startsWith('***') ? '***' : tok.startsWith('**') ? '**' : tok.startsWith('~~') ? '~~' : '*';
       out.push(part.slice(last, m.index));
-      out.push({ style: mark === '**' ? 'b' : mark === '~~' ? 's' : 'i', mark, text: tok.slice(mark.length, tok.length - mark.length) });
+      out.push({ style: mark === '***' ? 'bi' : mark === '**' ? 'b' : mark === '~~' ? 's' : 'i', mark, text: tok.slice(mark.length, tok.length - mark.length) });
       last = (m.index ?? 0) + tok.length;
       any = true;
     }
@@ -721,60 +724,188 @@ function decorate(text: string): (string | { url: string; label: string } | Emph
   return any ? out : null;
 }
 
+/* ── contenteditable plumbing: blocks store Markdown, the editor shows real styling ── */
+
+const escapeHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Markdown → the HTML shown in a block's editor (emphasis as real tags, links styled). */
+function mdToHtml(text: string): string {
+  let out = '';
+  for (const part of decorate(text) ?? [text]) {
+    if (typeof part === 'string') out += escapeHtml(part);
+    else if ('url' in part) out += `<a class="blk-link" href="${escapeHtml(part.url)}">${escapeHtml(part.label)}</a>`;
+    else if (part.style === 'bi') out += `<b><i>${escapeHtml(part.text)}</i></b>`;
+    else out += `<${part.style}>${escapeHtml(part.text)}</${part.style}>`;
+  }
+  return out;
+}
+
+/** The editor's DOM → Markdown. Marker whitespace is pushed outside so the result re-parses. */
+function htmlToMd(node: Node): string {
+  const wrap = (mark: string, t: string) => {
+    const m = t.match(/^(\s*)([\s\S]*?)(\s*)$/)!;
+    return m[2] ? `${m[1]}${mark}${m[2]}${mark}${m[3]}` : t;
+  };
+  let out = '';
+  node.childNodes.forEach((n) => {
+    if (n.nodeType === Node.TEXT_NODE) { out += n.textContent ?? ''; return; }
+    if (n.nodeType !== Node.ELEMENT_NODE) return;
+    const el = n as HTMLElement;
+    const inner = htmlToMd(el);
+    switch (el.tagName) {
+      case 'B': case 'STRONG': out += wrap('**', inner); break;
+      case 'I': case 'EM': out += wrap('*', inner); break;
+      case 'S': case 'STRIKE': case 'DEL': out += wrap('~~', inner); break;
+      case 'A': out += inner; break;
+      case 'BR': out += '\n'; break;
+      case 'DIV': case 'P': out += (out ? '\n' : '') + inner; break;
+      case 'SPAN': { // execCommand occasionally styles via spans
+        let t = inner;
+        if (el.style.textDecorationLine?.includes('line-through')) t = wrap('~~', t);
+        if (el.style.fontStyle === 'italic') t = wrap('*', t);
+        if (el.style.fontWeight === 'bold' || +el.style.fontWeight >= 600) t = wrap('**', t);
+        out += t; break;
+      }
+      default: out += inner;
+    }
+  });
+  return out;
+}
+
+/** Visible caret offset → offset into the Markdown source (markers are invisible). */
+function mdOffsetOf(md: string, vis: number): number {
+  let v = 0, m = 0;
+  for (const part of decorate(md) ?? [md]) {
+    const plain = typeof part === 'string' ? part : 'url' in part ? part.label : null;
+    if (plain !== null) {
+      if (v + plain.length >= vis) return m + (vis - v);
+      v += plain.length; m += plain.length;
+    } else {
+      const e = part as Emph;
+      if (v + e.text.length >= vis) return m + e.mark.length + (vis - v);
+      v += e.text.length; m += e.text.length + 2 * e.mark.length;
+    }
+  }
+  return md.length;
+}
+
+/** Markdown offset → visible offset (for restoring a caret stored against the source). */
+function mdToVis(md: string, mdOff: number): number {
+  let v = 0, m = 0;
+  for (const part of decorate(md) ?? [md]) {
+    const plain = typeof part === 'string' ? part : 'url' in part ? part.label : null;
+    if (plain !== null) {
+      if (m + plain.length >= mdOff) return v + Math.max(0, mdOff - m);
+      v += plain.length; m += plain.length;
+    } else {
+      const e = part as Emph;
+      const span = e.text.length + 2 * e.mark.length;
+      if (m + span >= mdOff) return v + Math.min(e.text.length, Math.max(0, mdOff - m - e.mark.length));
+      v += e.text.length; m += span;
+    }
+  }
+  return v;
+}
+
+/** Selection start/end as visible-text offsets inside the editor. */
+function caretOffsets(el: HTMLElement): { start: number; end: number } {
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0 || !el.contains(sel.anchorNode)) return { start: 0, end: 0 };
+  const r = sel.getRangeAt(0);
+  const pre = document.createRange();
+  pre.selectNodeContents(el);
+  pre.setEnd(r.startContainer, r.startOffset);
+  const start = pre.toString().length;
+  pre.setEnd(r.endContainer, r.endOffset);
+  return { start, end: pre.toString().length };
+}
+
+function setCaretAt(el: HTMLElement, offset: number) {
+  const sel = window.getSelection();
+  if (!sel) return;
+  let rem = offset;
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let node: Text | null;
+  while ((node = walker.nextNode() as Text | null)) {
+    if (rem <= node.length) { sel.removeAllRanges(); const r = document.createRange(); r.setStart(node, rem); r.collapse(true); sel.addRange(r); return; }
+    rem -= node.length;
+  }
+  const r = document.createRange();
+  r.selectNodeContents(el);
+  r.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(r);
+}
+
 function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
   block: Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>; placeholder: string; focus: Focus; onFocused: () => void;
-  onChange: (text: string) => void; onKey: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onChange: (text: string) => void; onKey: (e: React.KeyboardEvent<HTMLDivElement>) => void;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => { const el = ref.current; if (el) { el.style.height = '0'; el.style.height = `${el.scrollHeight}px`; } }, [block.text, block.kind]);
+  const ref = useRef<HTMLDivElement>(null);
+  const lastEmitted = useRef<string | null>(null);
+  const [focused, setFocused] = useState(false);
+
+  // The editor owns its DOM while the user types (so the caret survives); only OUTSIDE
+  // changes — undo, realtime, turnInto, slash — rewrite the HTML from the Markdown source.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || block.text === lastEmitted.current) return;
+    el.innerHTML = mdToHtml(block.text);
+    lastEmitted.current = block.text;
+  }, [block.text, block.kind]);
+
+  const emit = () => {
+    const el = ref.current!;
+    let md = htmlToMd(el).replace(/\u00a0/g, ' ').replace(/\n+$/, '');
+    if (md === '' && el.innerHTML !== '') el.innerHTML = ''; // drop stray <br> so :empty (and the placeholder) works
+    lastEmitted.current = md;
+    onChange(md);
+  };
+
   useEffect(() => {
     if (!focus || !ref.current) return;
     const el = ref.current;
     el.focus();
-    const pos = focus.caret === 'start' ? 0 : focus.caret === 'end' ? el.value.length : focus.caret;
-    el.setSelectionRange(pos, pos);
+    const visLen = (el.textContent ?? '').length;
+    const pos = focus.caret === 'start' ? 0 : focus.caret === 'end' ? visLen : Math.min(visLen, mdToVis(block.text, focus.caret));
+    setCaretAt(el, pos);
     onFocused();
   }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
-  // With links or emphasis present the textarea's own text goes transparent and a mirror layer
-  // renders it, styled. While THIS block is being edited the mirror must share exact metrics with
-  // the textarea so the caret lines up: markers stay visible (dimmed) and bold is a metric-neutral
-  // text-shadow. Everywhere else there is no caret to match, so the markers vanish and the styles
-  // render for real — Obsidian-style live preview.
-  const deco = decorate(block.text);
-  const [focused, setFocused] = useState(false);
+
+  // An empty block invites the slash menu while the caret is in it.
+  const ph = block.text === '' ? (focused && block.kind === 'p' ? 'Type / for options…' : placeholder) : undefined;
   return (
     <div className="blk-textwrap">
-      <textarea
+      <div
         ref={ref}
-        className={`blk-text ${block.kind}${deco ? ' has-links' : ''}`}
-        rows={1}
-        value={block.text}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKey}
+        className={`blk-text ${block.kind}`}
+        contentEditable
+        suppressContentEditableWarning
+        spellCheck
+        data-ph={ph || undefined}
+        onInput={emit}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        spellCheck
+        onKeyDown={onKey}
+        onClick={(e) => {
+          const a = (e.target as HTMLElement).closest('a');
+          if (a) { e.preventDefault(); window.open(a.getAttribute('href') ?? ''); }
+        }}
+        onPaste={(e) => {
+          const text = e.clipboardData.getData('text/plain');
+          // Block-shaped text bubbles up to the list handler, which builds real blocks from it.
+          if (!text || /(^|\n)(#{1,2} |!\[|- \[( |x)\])/i.test(text)) return;
+          e.preventDefault();
+          document.execCommand('insertText', false, text); // plain text only — no foreign HTML styling
+        }}
       />
-      {deco && (
-        <div className={`blk-linklayer ${block.kind}${focused ? '' : ' clean'}`}>
-          {deco.map((p, k) => typeof p === 'string'
-            ? <span key={k}>{p}</span>
-            : 'url' in p
-              ? <a key={k} className="blk-link" href={p.url} title={p.url} onClick={(e) => { e.preventDefault(); window.open(p.url); }}>{p.label}</a>
-              : focused
-                ? <span key={k}><span className="md-mark">{p.mark}</span><span className={`md-${p.style}`}>{p.text}</span><span className="md-mark">{p.mark}</span></span>
-                : <span key={k} className={`md-${p.style}`}>{p.text}</span>)}
-          {'\n'}
-        </div>
-      )}
     </div>
   );
 }
 
 function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTitle, onUpdate, onDelete, onClaim, onUnclaim, onOpen }: {
   task: Task | undefined; people: Person[]; me: string; claimable: boolean; focus: Focus; onFocused: () => void;
-  onKey: (e: React.KeyboardEvent<HTMLInputElement>, t: Task | undefined) => void;
+  onKey: (e: React.KeyboardEvent<HTMLInputElement>, t: Task | undefined, setLocalTitle?: (t: string) => void) => void;
   onTitle: (title: string) => void; onUpdate: (patch: Partial<Task>) => void; onDelete: () => void; onClaim: (personId: string) => void; onUnclaim: () => void; onOpen: () => void;
 }) {
   const ref = useRef<HTMLInputElement>(null);
@@ -805,7 +936,7 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
         onClick={(e) => { const r = (e.currentTarget as HTMLElement).getBoundingClientRect(); setMenu((m) => (m ? null : r)); }}>
         <StatusDot status={task.status} />
       </button>
-      <input ref={ref} className="task-blk-title" value={title} placeholder="Task" onChange={(e) => change(e.target.value)} onKeyDown={(e) => onKey(e, task)} onBlur={() => { window.clearTimeout(timer.current); if (title !== task.title) onTitle(title); }} />
+      <input ref={ref} className="task-blk-title" value={title} placeholder="Task" onChange={(e) => change(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') window.clearTimeout(timer.current); onKey(e, task, setTitle); }} onBlur={() => { window.clearTimeout(timer.current); if (title !== task.title) onTitle(title); }} />
       {owner ? (
         <span className="from-chip owner-chip">
           <button className="owner-open" title={`${owner.name} · ${STATUS_LABEL[task.status]} — open`} onClick={onOpen}>
