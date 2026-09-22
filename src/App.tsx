@@ -633,6 +633,13 @@ export default function App() {
               onOpenRetro={(monday) => setSelection({ kind: 'retro', id: monday })}
               onOpenGroup={(g) => { setEditGroup(g); setSheet('group'); }}
               onReorderGroups={(ids) => update((d) => ({ ...d, groups: (d.groups ?? []).map((g) => ({ ...g, sort: ids.indexOf(g.id) })) }))}
+              onDuplicateProject={(id) => update((d) => {
+                const p = d.projects.find((x) => x.id === id);
+                if (!p) return d;
+                // the copy lands on a fresh lane in the same group, right below the original
+                const lane = d.projects.filter((x) => !x.deletedAt && (x.groupId ?? null) === (p.groupId ?? null)).reduce((m, x) => Math.max(m, x.lane + 1), 0);
+                return { ...d, projects: [...d.projects, { ...p, id: uid(), lane }] };
+              })}
               onCollapseGroup={(ids) => setMulti((m) => (ids.some((id) => m.has(id)) ? new Set([...m].filter((id) => !ids.includes(id))) : m))}
               onMoveDeadline={(id, date) => update((d) => ({ ...d, deadlines: d.deadlines.map((x) => (x.id === id ? { ...x, date } : x)) }))}
               onCreateDeadline={(date) => {
@@ -715,6 +722,13 @@ export default function App() {
               onDelete={(id) => {
                 if (!foreignOp(id, (d) => softDelete(d, [id]))) update((d) => softDelete(d, [id]));
                 if (selection?.id === id) setSelection(null);
+              }}
+              onDuplicate={(id) => {
+                const dup = (d: Data): Data => {
+                  const t = d.tasks.find((x) => x.id === id);
+                  return t ? { ...d, tasks: [...d.tasks, { ...t, id: uid(), reviewerId: undefined, reviewDone: undefined, order: (t.order ?? 0) + 0.5 }] } : d;
+                };
+                if (!foreignOp(id, dup)) update(dup);
               }}
               onDeleteMany={deleteMany}
               onDeny={(id) => { if (!foreignOp(id, (d) => denyReview(d, id))) update((d) => denyReview(d, id)); }}

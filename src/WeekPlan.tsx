@@ -27,6 +27,7 @@ interface Props {
   onEdit?: (id: string) => void; // double-click on a title: rename it in place
   onUpdate: (id: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
+  onDuplicate?: (id: string) => void; // right-click Duplicate
   onDeleteMany?: (ids: string[]) => void; // right-click Delete with a multi-selection
   onDeny?: (id: string) => void; // decline a review request shown in my week
   onCompleteReview?: (id: string) => void; // sign off on one
@@ -42,7 +43,7 @@ interface Props {
 
 /** Everyone has full freedom in everyone's week — the owner just hears about changes others make. */
 export function WeekPlan(props: Props) {
-  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDeleteMany, onDeny, onCompleteReview, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, teamBadge, allTeams, headExtra } = props;
+  const { people, me, selected, onSelect, week, today, tasks, selectedId, selectedIds, editingId, onToggleSelect, onAdd, onAddNamed, onRename, onEdit, onUpdate, onDelete, onDuplicate, onDeleteMany, onDeny, onCompleteReview, onOpen, onReorder, onWeekChange, calendar, onToggleCalendar, teamBadge, allTeams, headExtra } = props;
   const days = Array.from({ length: 7 }, (_, i) => addDays(week, i));
   // Invited members who haven't signed in yet can't own tasks (their rows wouldn't persist).
   const readonly = selected.startsWith('pending:');
@@ -266,6 +267,7 @@ export function WeekPlan(props: Props) {
                 editing={editingId === t.id}
                 onUpdate={onUpdate}
                 onDelete={onDelete}
+                onDuplicate={onDuplicate}
                 selCount={selectedIds?.has(t.id) ? selectedIds.size : 1}
                 onDeleteSel={selectedIds?.has(t.id) && selectedIds.size > 1 && onDeleteMany ? () => onDeleteMany([...selectedIds]) : undefined}
                 onDeny={onDeny}
@@ -348,7 +350,7 @@ export function WeekPlan(props: Props) {
 
 type BlockDrag = { mode: 'move' | 'start' | 'end'; s: number; e: number };
 
-function TaskRow({ task, week, readonly, reviewRow, team, people, me, selected, editing, onUpdate, onDelete, selCount = 1, onDeleteSel, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop, onMoveToNow }: {
+function TaskRow({ task, week, readonly, reviewRow, team, people, me, selected, editing, onUpdate, onDelete, onDuplicate, selCount = 1, onDeleteSel, onDeny, onCompleteReview, onOpen, onToggleSelect, onRename, onEdit, offset, lifting, onLift, onDrop, onMoveToNow }: {
   task: Task;
   team?: { name: string; icon?: string }; // the OTHER team this task came from (all-teams view)
   week: ISODate;
@@ -360,6 +362,7 @@ function TaskRow({ task, week, readonly, reviewRow, team, people, me, selected, 
   editing: boolean;
   onUpdate: Props['onUpdate'];
   onDelete: Props['onDelete'];
+  onDuplicate?: Props['onDuplicate'];
   selCount?: number;
   onDeleteSel?: () => void;
   onDeny?: Props['onDeny'];
@@ -566,9 +569,12 @@ function TaskRow({ task, week, readonly, reviewRow, team, people, me, selected, 
             {reviewRow
               ? (onDeny && <button className="danger" onClick={() => { setCtx(null); onDeny(task.id); }}>Deny</button>)
               : (
-                <button className="danger" onClick={() => { setCtx(null); if (onDeleteSel) onDeleteSel(); else onDelete(task.id); }}>
-                  {onDeleteSel ? `Delete ${selCount} items` : 'Delete'}
-                </button>
+                <>
+                  {onDuplicate && !onDeleteSel && <button onClick={() => { setCtx(null); onDuplicate(task.id); }}>Duplicate</button>}
+                  <button className="danger" onClick={() => { setCtx(null); if (onDeleteSel) onDeleteSel(); else onDelete(task.id); }}>
+                    {onDeleteSel ? `Delete ${selCount} items` : 'Delete'}
+                  </button>
+                </>
               )}
           </div>,
           document.body,

@@ -37,6 +37,7 @@ interface Props {
   onDeleteMany?: (ids: string[]) => void; // right-click Delete with a multi-selection
   onOpenGroup: (g: Group) => void;
   onReorderGroups: (ids: string[]) => void; // drag a group label vertically
+  onDuplicateProject: (id: string) => void; // context menu Duplicate
   onCollapseGroup?: (projectIds: string[]) => void; // a collapsing group's bars leave the multi-selection
   onMoveDeadline: (id: string, date: ISODate) => void;
   onCreateProject: (start: ISODate, lane: number, groupId?: string) => void;
@@ -86,7 +87,7 @@ function groupDragPreview(sections: Section[], gid: string, dy: number) {
 }
 
 export function BigPlan(props: Props) {
-  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup, onReorderGroups, onCollapseGroup } = props;
+  const { projects, groups, deadlines, people, locked, onAddGroup, today, week, selectedId, selectedIds, editingId, onToggleSelect, onWeekChange, onOpenProject, onOpenDeadline, onMoveProject, onMoveMany, onDeleteProject, onDeleteMany, onMoveDeadline, onCreateProject, onRename, onStartRename, onOpenRetro, onCreateDeadline, onRenameDeadline, onOpenGroup, onReorderGroups, onCollapseGroup, onDuplicateProject } = props;
   const ref = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [view, setView] = useState<View>(() => ({ ppd: 22, origin: dayIndex(today) - 14 }));
@@ -254,9 +255,28 @@ export function BigPlan(props: Props) {
 
   const isEmptyTarget = (t: EventTarget | null) => !(t as HTMLElement).closest('.week-band, .tl-project, .tl-deadline, .week-label, .tl-group');
 
+  // The resize grip extends a little OUTSIDE each bar (grabbing right at the pill's edge used
+  // to miss and create a new project instead). Returns the nearest bar edge within reach.
+  const edgeHitAt = (x: number, y: number): { id: string; mode: 'start' | 'end' } | null => {
+    let best: { id: string; mode: 'start' | 'end'; dist: number } | null = null;
+    for (const el of ref.current?.querySelectorAll<HTMLElement>('.tl-project[data-pid]') ?? []) {
+      const r = el.getBoundingClientRect();
+      if (y < r.top || y > r.bottom) continue;
+      if (x >= r.left - 8 && x < r.left) { const d = r.left - x; if (!best || d < best.dist) best = { id: el.dataset.pid!, mode: 'start', dist: d }; }
+      if (x > r.right && x <= r.right + 8) { const d = x - r.right; if (!best || d < best.dist) best = { id: el.dataset.pid!, mode: 'end', dist: d }; }
+    }
+    return best && { id: best.id, mode: best.mode };
+  };
+  const [edgeHover, setEdgeHover] = useState(false);
+
   // Empty space: a still click creates a week-long project at the ghost; a drag pans.
   const onPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0 || !isEmptyTarget(e.target)) return;
+    if (!locked) {
+      const hit = edgeHitAt(e.clientX, e.clientY);
+      const p = hit && projects.find((x) => x.id === hit.id);
+      if (hit && p) { onProjectDown(e, p, hit.mode); return; }
+    }
     e.preventDefault();
     const startX = e.clientX;
     const startOrigin = origin;
@@ -281,7 +301,10 @@ export function BigPlan(props: Props) {
     if (drag || dlDrag || panning || bandDrag || gDrag) return;
     const { day, lane, groupId } = slotAt(e.clientX, e.clientY);
     setHoverWeek(dayIndex(weekStart(fromDayIndex(day))));
-    if (locked || !isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); return; }
+    if (locked || !isEmptyTarget(e.target) || inRetroStrip(e.clientY)) { setGhost(null); setEdgeHover(false); return; }
+    const hit = edgeHitAt(e.clientX, e.clientY);
+    setEdgeHover(!!hit);
+    if (hit) { setGhost(null); return; } // no create-ghost while hovering a resize grip
     if (inDeadlineRow(e.clientY)) { setGhost({ day, lane: -1 }); return; } // lane -1 = deadline row
     setGhost(lane >= 0 ? { day, lane, groupId } : null);
   };
@@ -313,17 +336,18 @@ export function BigPlan(props: Props) {
     );
   };
 
-  const onProjectDown = (e: React.PointerEvent, p: Project) => {
+  const onProjectDown = (e: React.PointerEvent, p: Project, forcedMode?: 'start' | 'end') => {
     if (e.button !== 0 || (e.target as HTMLElement).tagName === 'INPUT') return;
     if (locked) { clickOnly(e, () => onOpenProject(p), () => onToggleSelect(p.id)); return; }
     e.stopPropagation();
     e.preventDefault();
     // Dragging a bar that's part of the multi-selection moves the whole selection in time.
-    const groupSel = selectedIds?.has(p.id) ? projects.filter((x) => selectedIds.has(x.id)).map((x) => x.id) : [];
+    const groupSel = !forcedMode && selectedIds?.has(p.id) ? projects.filter((x) => selectedIds.has(x.id)).map((x) => x.id) : [];
     const asGroup = groupSel.length > 1;
-    const bar = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const local = e.clientX - bar.left;
-    const mode: Drag['mode'] = asGroup ? 'move' : local < EDGE ? 'start' : bar.width - local < EDGE ? 'end' : 'move';
+    // forcedMode = grabbed just outside the pill (the widened resize grip); no bar rect there
+    const bar = forcedMode ? null : (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const local = bar ? e.clientX - bar.left : 0;
+    const mode: Drag['mode'] = forcedMode ?? (asGroup ? 'move' : local < EDGE ? 'start' : bar!.width - local < EDGE ? 'end' : 'move');
     const s0 = dayIndex(p.start), e0 = dayIndex(p.end), lane0 = p.lane;
     const startX = e.clientX, startY = e.clientY;
     const multi = e.metaKey || e.shiftKey || e.ctrlKey;
@@ -431,7 +455,7 @@ export function BigPlan(props: Props) {
     <div
       ref={ref}
       className={`timeline${panning ? ' panning' : ''}${drag || dlDrag ? ' dragging-item' : ''}`}
-      style={{ backgroundPosition: `0 0, ${dotX}px ${14 - scrollY}px` }} /* header fade stays put; dots pan/scroll with the plan, frozen through zooms */
+      style={{ backgroundPosition: `0 0, ${dotX}px ${14 - scrollY}px`, cursor: edgeHover ? 'ew-resize' : undefined }} /* header fade stays put; dots pan/scroll with the plan, frozen through zooms */
       onPointerDown={onPointerDown}
       onPointerMove={onHover}
       onPointerLeave={() => { setGhost(null); setHoverWeek(null); }}
@@ -478,7 +502,29 @@ export function BigPlan(props: Props) {
         title="Drag to choose the week shown below"
       >
         {ppd * 7 >= 70 && (
-          <button className="week-label current" onPointerDown={(e) => e.stopPropagation()} onClick={() => onOpenRetro(week)} title="Open this week's retro">
+          <button
+            className="week-label current"
+            title="Open this week's retro — drag to move the week"
+            onPointerDown={(e) => {
+              // A still press opens the retro; pulling sideways drags the week band along.
+              e.stopPropagation();
+              e.preventDefault();
+              if (e.button !== 0) return;
+              const startX = e.clientX;
+              const startWeek = dayIndex(week);
+              let moved = false;
+              track(
+                (ev) => {
+                  if (Math.abs(ev.clientX - startX) > 3) { moved = true; setBandDrag(true); }
+                  if (!moved) return;
+                  const shift = Math.round((ev.clientX - startX) / ppd / 7) * 7;
+                  const next = fromDayIndex(startWeek + shift);
+                  if (next !== weekRef.current) onWeekChange(next);
+                },
+                () => { setBandDrag(false); if (!moved) onOpenRetro(week); },
+              );
+            }}
+          >
             Week {weekNum}
           </button>
         )}
@@ -582,6 +628,7 @@ export function BigPlan(props: Props) {
         return (
           <div
             key={p.id}
+            data-pid={p.id}
             className={`tl-project${selectedId === p.id || selectedIds?.has(p.id) ? ' selected' : ''}${live || follow ? ' live' : ''}${!p.groupId || !groups.some((g) => g.id === p.groupId) ? ' nogroup' : ''}${gDrag && sec.groupId && gDrag.id !== sec.groupId ? ' gshift' : ''}${fold && fold.gid === sec.groupId ? (fold.on ? ' fold-out' : ' fold-in') : ''}`}
             style={{
               left,
@@ -622,9 +669,12 @@ export function BigPlan(props: Props) {
           {(() => {
             const many = !!selectedIds?.has(ctx.id) && selectedIds.size > 1 && !!onDeleteMany;
             return (
-              <button className="danger" onClick={() => { if (many) onDeleteMany!([...selectedIds!]); else onDeleteProject(ctx.id); setCtx(null); }}>
-                {many ? `Delete ${selectedIds!.size} items` : 'Delete'}
-              </button>
+              <>
+                {!many && <button onClick={() => { onDuplicateProject(ctx.id); setCtx(null); }}>Duplicate</button>}
+                <button className="danger" onClick={() => { if (many) onDeleteMany!([...selectedIds!]); else onDeleteProject(ctx.id); setCtx(null); }}>
+                  {many ? `Delete ${selectedIds!.size} items` : 'Delete'}
+                </button>
+              </>
             );
           })()}
         </div>,
@@ -638,9 +688,18 @@ export function BigPlan(props: Props) {
 export function InlineName({ initial, onDone, placeholder = 'Name…' }: { initial: string; onDone: (name: string, viaEnter?: boolean) => void; placeholder?: string }) {
   const [v, setV] = useState(initial === 'New project' || initial === 'New task' ? '' : initial);
   const done = useRef(false);
+  const ref = useRef<HTMLInputElement>(null);
   const finish = (viaEnter = false) => { if (done.current) return; done.current = true; onDone(v.trim(), viaEnter); };
+  // Clicking away commits too: the drag surfaces preventDefault their pointerdowns, which
+  // suppresses the browser's own focus change — blur alone never fires there.
+  useEffect(() => {
+    const down = (e: PointerEvent) => { if (e.target !== ref.current) ref.current?.blur(); };
+    window.addEventListener('pointerdown', down, true);
+    return () => window.removeEventListener('pointerdown', down, true);
+  }, []);
   return (
     <input
+      ref={ref}
       className="inline-name"
       autoFocus
       value={v}
