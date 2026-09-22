@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { BigPlan } from './BigPlan';
 import { Avatar, WeekPlan } from './WeekPlan';
-import { DetailPanel, type Selection } from './DetailPanel';
+import { DetailPanel, ExpandIcon, type Selection } from './DetailPanel';
 import { TeamPage } from './TeamPage';
 import logoUrl from '../build/icon.png';
 import utopiaUrl from '../build/utopia.svg';
@@ -43,7 +43,8 @@ export default function App() {
     window.exponential?.version().then(setAppVersion);
     return window.exponential?.onUpdate((s) => setUpdateState((prev) => (s.state === 'checking' ? prev : s)));
   }, []);
-  const [view, setView] = useState<'plan' | 'team' | 'chat' | 'meetings'>('plan');
+  const [view, setView] = useState<'plan' | 'team'>('plan');
+  const [panelFull, setPanelFull] = useState(false); // the side panel expanded over the whole main area
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
@@ -255,8 +256,8 @@ export default function App() {
   const [chat, setChat] = useState<Channel[]>([]);
   const [chatActive, setChatActive] = useState<string | null>(null);
   const chatTeam = data?.id;
-  const chatViewRef = useRef({ view, chatActive });
-  chatViewRef.current = { view, chatActive };
+  const chatViewRef = useRef({ panel: undefined as string | undefined, chatActive });
+  chatViewRef.current = { panel: selection?.kind, chatActive };
   const refreshChat = useCallback(() => {
     const d = { id: chatTeam, me: data?.me };
     if (!d.id || !d.me) return;
@@ -268,8 +269,8 @@ export default function App() {
     if (e.teamId !== chatTeam || !data) return;
     if (e.type === 'channels') { refreshChat(); return; }
     if (e.type !== 'message' || e.message.author === data.me) return;
-    const { view: v, chatActive: act } = chatViewRef.current;
-    const reading = v === 'chat' && act === e.message.channelId && document.hasFocus();
+    const { panel, chatActive: act } = chatViewRef.current;
+    const reading = panel === 'chat' && act === e.message.channelId && document.hasFocus();
     if (!reading) {
       setChat((chs) => chs.map((c) => (c.id === e.message.channelId ? { ...c, unread: c.unread + 1, lastAt: e.message.at } : c)));
       const who = shortName(data.people.find((x) => x.id === e.message.author)?.name ?? 'Someone');
@@ -295,12 +296,12 @@ export default function App() {
       window.exponential?.notify?.({ id: `meet-${m.id}`, title: 'New meeting', body: `${who} shared “${m.title}”`, ref: { kind: 'meeting', id: m.id } });
     }, 'meetings-inbox');
   }, [cloudMode, meetTeam, data?.me]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (view === 'meetings') setMeetDot(false); }, [view]);
+  useEffect(() => { if (selection?.kind === 'meetings') setMeetDot(false); }, [selection?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // The menu-bar widget can ask the main window to open a specific item.
   useEffect(() => window.exponential?.onOpen((t) => {
-    if (t.kind === 'chat') { setView('chat'); setChatActive(t.id); return; }
-    if (t.kind === 'meeting') { setView('meetings'); return; }
+    if (t.kind === 'chat') { setSelection({ kind: 'chat', id: 'chat' }); setChatActive(t.id); return; }
+    if (t.kind === 'meeting') { setSelection({ kind: 'meetings', id: 'meetings' }); return; }
     setView('plan'); setSelection(t as Selection);
   }), []);
   useSystemNotifications(data);
@@ -601,7 +602,7 @@ export default function App() {
   const selProject = selection?.kind === 'project' ? live.projects.find((p) => p.id === selection.id) : undefined;
   const selTask = selection?.kind === 'task' ? live.tasks.find((t) => t.id === selection.id) : undefined;
   const selDeadline = selection?.kind === 'deadline' ? data.deadlines.find((d) => d.id === selection.id) : undefined;
-  const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro' || selection?.kind === 'inbox';
+  const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro' || selection?.kind === 'inbox' || selection?.kind === 'chat' || selection?.kind === 'meetings';
   const unread = (data.notifications ?? []).filter((n) => n.to === data.me && !n.read).length;
   const chatUnread = chat.reduce((n, c) => n + c.unread, 0);
 
@@ -630,11 +631,11 @@ export default function App() {
           </button>
         </div>
         <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><PlanIcon /> <span className="nav-text">Plan</span></button>
-        <button className={`nav-item${view === 'chat' ? ' active' : ''}`} onClick={() => setView('chat')}>
+        <button className={`nav-item${selection?.kind === 'chat' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'chat' ? null : { kind: 'chat', id: 'chat' })}>
           <span className="nav-ico"><ChatIcon />{chatUnread > 0 && <span className="nav-dot" />}</span>
           <span className="nav-text">Chat</span>
         </button>
-        <button className={`nav-item${view === 'meetings' ? ' active' : ''}`} onClick={() => setView('meetings')}>
+        <button className={`nav-item${selection?.kind === 'meetings' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'meetings' ? null : { kind: 'meetings', id: 'meetings' })}>
           <span className="nav-ico"><MeetIcon />{meetDot && <span className="nav-dot" />}</span>
           <span className="nav-text">Meetings</span>
         </button>
@@ -687,7 +688,7 @@ export default function App() {
       </aside>
 
       <div className={`main${detailOpen ? ' with-detail' : ''}`}>
-        {view === 'team' && (
+        {view === 'team' && !(panelFull && detailOpen) && (
           <TeamPage
             team={data}
             cloud={cloudMode}
@@ -696,31 +697,7 @@ export default function App() {
             onDelete={() => { setView('plan'); setSelection(null); setSelectedPerson(null); deleteTeam(data.id); }}
           />
         )}
-        {view === 'meetings' && (
-          <MeetingsPage
-            teamId={data.id}
-            me={data.me}
-            people={data.people}
-            canModerate={data.moderators.includes(data.me)}
-            cloud={cloudMode}
-            onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
-          />
-        )}
-        {view === 'chat' && (
-          <ChatPage
-            teamId={data.id}
-            me={data.me}
-            people={data.people}
-            canModerate={data.moderators.includes(data.me)}
-            cloud={cloudMode}
-            channels={chat}
-            activeId={chatActive}
-            onActive={setChatActive}
-            onRefreshChannels={refreshChat}
-            onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
-          />
-        )}
-        <div className="planners" ref={mainRef} style={view !== 'plan' ? { display: 'none' } : undefined}>
+        <div className="planners" ref={mainRef} style={view !== 'plan' || (panelFull && detailOpen) ? { display: 'none' } : undefined}>
           <section className="panel" style={{ flex: '1 1 0' }} ref={planSecRef}>
             <div className="panel-head">
               <div className="panel-title">Master plan</div>
@@ -895,14 +872,58 @@ export default function App() {
 
         {/* The slot animates its width so the planners squeeze smoothly; the panel inside keeps a fixed width. */}
         <div
-          className={`detail-slot${vResizing ? ' no-anim' : ''}${slotAnimating || !detailOpen ? ' clip' : ''}`}
-          style={{ width: detailOpen ? detailW + 14 : 0 }}
+          className={`detail-slot${vResizing || (panelFull && detailOpen) ? ' no-anim' : ''}${slotAnimating || !detailOpen ? ' clip' : ''}`}
+          style={panelFull && detailOpen ? { width: 'auto', flex: '1 1 auto' } : { width: detailOpen ? detailW + 14 : 0 }}
           onTransitionEnd={(e) => { if (e.propertyName === 'width') setSlotAnimating(false); }}
         >
-        {detailOpen && <div className={`vresizer${vResizing ? ' dragging' : ''}`} onPointerDown={onVResizeDown} />}
-        {detailOpen && selection && (
+        {detailOpen && !panelFull && <div className={`vresizer${vResizing ? ' dragging' : ''}`} onPointerDown={onVResizeDown} />}
+        {detailOpen && selection && selection.kind === 'chat' && (
+          <aside className="detail side-embed" style={panelFull ? { width: '100%' } : { width: detailW }}>
+            <div className="detail-top">
+              <span className="detail-kind">Chat</span>
+              <span className="panel-spacer" />
+              <button className="icon-btn" title={panelFull ? 'Exit full screen' : 'Full screen'} onClick={() => setPanelFull((v) => !v)}><ExpandIcon full={panelFull} /></button>
+              <button className="icon-btn" title="Close" onClick={() => setSelection(null)}><PanelX /></button>
+            </div>
+            <ChatPage
+              teamId={data.id}
+              me={data.me}
+              people={data.people}
+              canModerate={data.moderators.includes(data.me)}
+              cloud={cloudMode}
+              channels={chat}
+              activeId={chatActive}
+              onActive={setChatActive}
+              onRefreshChannels={refreshChat}
+              full={panelFull}
+              onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
+            />
+          </aside>
+        )}
+        {detailOpen && selection && selection.kind === 'meetings' && (
+          <aside className="detail side-embed" style={panelFull ? { width: '100%' } : { width: detailW }}>
+            <div className="detail-top">
+              <span className="detail-kind">Meetings</span>
+              <span className="panel-spacer" />
+              <button className="icon-btn" title={panelFull ? 'Exit full screen' : 'Full screen'} onClick={() => setPanelFull((v) => !v)}><ExpandIcon full={panelFull} /></button>
+              <button className="icon-btn" title="Close" onClick={() => setSelection(null)}><PanelX /></button>
+            </div>
+            <MeetingsPage
+              teamId={data.id}
+              me={data.me}
+              people={data.people}
+              canModerate={data.moderators.includes(data.me)}
+              cloud={cloudMode}
+              full={panelFull}
+              onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
+            />
+          </aside>
+        )}
+        {detailOpen && selection && !['chat', 'meetings'].includes(selection.kind) && (
           <DetailPanel
             width={detailW}
+            full={panelFull}
+            onToggleFull={() => setPanelFull((v) => !v)}
             selection={selection}
             project={selProject}
             task={selTask}
@@ -1011,6 +1032,10 @@ export function TeamMark({ team, size = 30 }: { team: { name: string; icon?: str
 }
 
 const ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+function PanelX() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
+}
 
 function MeetIcon() {
   return (

@@ -24,6 +24,7 @@ interface Props {
   people: Person[];
   canModerate: boolean;
   cloud: boolean;
+  full: boolean; // fullscreen side panel
   onError: (m: string) => void;
 }
 
@@ -140,48 +141,11 @@ export function MeetingsPage(p: Props) {
   const sel = meetings.find((m) => m.id === selected) ?? null;
 
   return (
-    <div className={`meet${drag ? ' dragging' : ''}`}
+    <div className={`meet${drag ? ' dragging' : ''}${p.full ? ' full' : ''}`}
       onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDrag(true); } }}
       onDragLeave={(e) => { if (e.target === e.currentTarget) setDrag(false); }}
       onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) importFiles(e.dataTransfer.files); }}>
-      <section className="panel meet-panel">
-        <div className="panel-head">
-          <div className="panel-title">Meetings</div>
-          <span className="panel-spacer" />
-          <button className="pill" onClick={learnVoice} disabled={voiceRec !== 'idle'}
-            title="Record ~8 seconds of your voice once — transcripts will then label your parts automatically">
-            {voiceRec === 'recording' ? 'Listening… speak normally' : voiceRec === 'saving' ? 'Saving voice…' : 'Learn my voice'}
-          </button>
-          <button className="pill" onClick={() => fileRef.current?.click()} title="Transcribe an existing recording">Import audio</button>
-          <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
-          {!rec && (
-            <button className="pill toggle active meet-rec" onClick={record} title="Record this meeting (microphone, plus system audio when available)">
-              <span className="meet-reddot idle" /> Record
-            </button>
-          )}
-        </div>
-        {rec && <RecordBar rec={rec} onStop={stop} />}
-        <div className="meet-scroll">
-          {meetings.length === 0 && !rec && (
-            <div className="meet-empty">Nothing recorded yet. Hit Record in a meeting, or drop an audio file anywhere on this page.</div>
-          )}
-          {meetings.map((m) => (
-            <button key={m.id} className={`meet-row${selected === m.id ? ' on' : ''}`} onClick={() => setSelected(m.id === selected ? null : m.id)}>
-              <MicGlyph />
-              <span className="meet-row-main">
-                <span className="meet-title">{m.title}</span>
-                <span className="meet-sub">{fmtStamp(m.startedAt)}{m.durationSecs ? ` · ${fmtDur(m.durationSecs)}` : ''}</span>
-              </span>
-              <span className="panel-spacer" />
-              {!m.isOpen && <span title="Restricted"><LockTiny /></span>}
-              <StatusChip m={m} progress={progress[m.id]} />
-              {people.find((x) => x.id === m.owner) && <Avatar person={people.find((x) => x.id === m.owner)!} size={20} />}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {sel && (
+      {sel ? (
         <MeetingDetail key={sel.id} meeting={sel} me={me} people={people} cloud={cloud}
           canEdit={sel.owner === me || p.canModerate}
           progress={progress[sel.id]}
@@ -193,8 +157,44 @@ export function MeetingsPage(p: Props) {
             await processAudio(sel.id, blob, sel.startedAt, sel.durationSecs);
           }}
           onDelete={() => { if (confirm(`Delete “${sel.title}” and its recording?`)) { deleteMeeting(teamId, sel, cloud).then(() => { setSelected(null); refetch(); }).catch((e) => p.onError(String((e as Error).message ?? e))); } }}
-          onClose={() => setSelected(null)}
+          onBack={() => setSelected(null)}
         />
+      ) : (
+      <>
+      <div className="meet-tools">
+        {!rec && (
+          <button className="pill toggle active meet-rec" onClick={record} title="Record this meeting (microphone, plus system audio when available)">
+            <span className="meet-reddot idle" /> Record
+          </button>
+        )}
+        <button className="pill" onClick={() => fileRef.current?.click()} title="Transcribe an existing recording">Import audio</button>
+        <span className="panel-spacer" />
+        <button className="pill" onClick={learnVoice} disabled={voiceRec !== 'idle'}
+          title="Record ~8 seconds of your voice once — transcripts will then label your parts automatically">
+          {voiceRec === 'recording' ? 'Listening… speak normally' : voiceRec === 'saving' ? 'Saving voice…' : 'Learn my voice'}
+        </button>
+        <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
+      </div>
+      {rec && <RecordBar rec={rec} onStop={stop} />}
+      <div className="meet-scroll">
+        {meetings.length === 0 && !rec && (
+          <div className="meet-empty">Nothing recorded yet. Hit Record in a meeting, or drop an audio file anywhere on this page.</div>
+        )}
+        {meetings.map((m) => (
+          <button key={m.id} className="meet-row" onClick={() => setSelected(m.id)}>
+            <MicGlyph />
+            <span className="meet-row-main">
+              <span className="meet-title">{m.title}</span>
+              <span className="meet-sub">{fmtStamp(m.startedAt)}{m.durationSecs ? ` · ${fmtDur(m.durationSecs)}` : ''}</span>
+            </span>
+            <span className="panel-spacer" />
+            {!m.isOpen && <span title="Restricted"><LockTiny /></span>}
+            <StatusChip m={m} progress={progress[m.id]} />
+            {people.find((x) => x.id === m.owner) && <Avatar person={people.find((x) => x.id === m.owner)!} size={20} />}
+          </button>
+        ))}
+      </div>
+      </>
       )}
       {drag && <div className="meet-drop-hint">Drop audio to transcribe</div>}
     </div>
@@ -293,9 +293,9 @@ function AccessPicker({ m, me, people, onPatch }: { m: Meeting; me: string; peop
   );
 }
 
-function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPatch, onRetranscribe, onDelete, onClose }: {
+function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPatch, onRetranscribe, onDelete, onBack }: {
   meeting: Meeting; me: string; people: Person[]; cloud: boolean; canEdit: boolean; progress?: Progress;
-  onPatch: (patch: Partial<Meeting>) => void; onRetranscribe: () => void; onDelete: () => void; onClose: () => void;
+  onPatch: (patch: Partial<Meeting>) => void; onRetranscribe: () => void; onDelete: () => void; onBack: () => void;
 }) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -330,14 +330,12 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
   }
 
   return (
-    <aside className="detail meet-detail">
-      <div className="detail-top">
-        <span className="detail-kind">Meeting</span>
-        <span className="panel-spacer" />
-        {canEdit && <button className="icon-btn" title="Delete" onClick={onDelete}><TrashGlyph /></button>}
-        <button className="icon-btn" title="Close" onClick={onClose}><CloseGlyph /></button>
-      </div>
-      <div className="detail-scroll">
+    <div className="meet-detail-embed">
+      <button className="meet-back" onClick={onBack}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+        All meetings
+      </button>
+      <div className="meet-detail-scroll">
         {canEdit ? (
           <input key={m.title} className="detail-title" defaultValue={m.title}
             onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== m.title) onPatch({ title: v }); }}
@@ -387,11 +385,15 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
             </div>
           )}
         </div>
-        {canEdit && m.status === 'ready' && (m.audioPath || !cloud) && (
-          <div className="meet-detail-foot"><button className="pill" onClick={onRetranscribe}>Re-transcribe</button></div>
+        {canEdit && (
+          <div className="meet-detail-foot">
+            {m.status === 'ready' && (m.audioPath || !cloud) && <button className="pill" onClick={onRetranscribe}>Re-transcribe</button>}
+            <span className="panel-spacer" />
+            <button className="pill danger" onClick={onDelete}>Delete</button>
+          </div>
         )}
       </div>
-    </aside>
+    </div>
   );
 }
 
@@ -403,10 +405,4 @@ function LockTiny() {
 }
 function EyeGlyph() {
   return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>;
-}
-function TrashGlyph() {
-  return <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-.8 14a2 2 0 0 1-2 1.9H7.8a2 2 0 0 1-2-1.9L5 6" /></svg>;
-}
-function CloseGlyph() {
-  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>;
 }
