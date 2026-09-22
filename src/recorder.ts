@@ -26,6 +26,13 @@ export const activeRecording = () => current;
 
 export async function startRecording(meetingId: string): Promise<RecordingSession> {
   if (current) throw new Error('Already recording');
+  // Packaged macOS: check TCC first — a denied mic doesn't reject getUserMedia, it
+  // just delivers silence forever.
+  const allowed = await window.exponential?.micEnsure?.() ?? true;
+  if (!allowed) {
+    window.exponential?.micOpenSettings?.();
+    throw new Error('Microphone access is off for Exponential — enable it in System Settings → Privacy & Security → Microphone, then try again.');
+  }
   const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
 
   let system: MediaStream | null = null;

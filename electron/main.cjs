@@ -1,4 +1,4 @@
-const { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, Notification, Tray, nativeImage, powerMonitor, screen, session, shell } = require('electron');
+const { app, BrowserWindow, clipboard, desktopCapturer, ipcMain, Menu, Notification, Tray, nativeImage, powerMonitor, screen, session, shell, systemPreferences } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const google = require('./google.cjs');
@@ -500,6 +500,20 @@ ipcMain.handle('link:preview', async (_e, url) => {
     };
   } catch { return null; }
 });
+
+/* Recording preflight: surface the real mic-permission state instead of a silent track.
+   Returns true when recording can proceed; false means the user must flip it in
+   System Settings (we already asked once). */
+ipcMain.handle('mic:ensure', async () => {
+  if (process.platform !== 'darwin') return true;
+  const status = systemPreferences.getMediaAccessStatus('microphone');
+  if (status === 'granted') return true;
+  if (status === 'not-determined') {
+    try { return await systemPreferences.askForMediaAccess('microphone'); } catch { return false; }
+  }
+  return false; // denied / restricted
+});
+ipcMain.handle('mic:openSettings', () => shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone'));
 
 ipcMain.handle('meeting:append', (_e, id, buf) => { fs.appendFileSync(meetingFile(id), Buffer.from(buf)); });
 ipcMain.handle('meeting:read', (_e, id) => fs.readFileSync(meetingFile(id)));

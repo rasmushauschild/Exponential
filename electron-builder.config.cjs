@@ -21,7 +21,14 @@ module.exports = {
     gatekeeperAssess: false,
     entitlements: 'build/entitlements.mac.plist',
     entitlementsInherit: 'build/entitlements.mac.plist',
-    extendInfo: { CFBundleIconName: 'exponential', LSUIElement: false },
+    extendInfo: {
+      CFBundleIconName: 'exponential',
+      LSUIElement: false,
+      // Without this string macOS never shows the mic prompt to the PACKAGED app and
+      // getUserMedia silently delivers a dead track (dev runs under Electron's own
+      // Info.plist, which has one — recording worked in dev and not in the shipped app).
+      NSMicrophoneUsageDescription: 'Exponential uses the microphone to record meetings when you press Record.',
+    },
     extraResources: [{ from: 'build/Assets.car', to: 'Assets.car' }],
     notarize,
   },
