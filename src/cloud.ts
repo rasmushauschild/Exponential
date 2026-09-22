@@ -67,7 +67,6 @@ const fromProject = (teamId: string, p: Project) => ({ id: p.id, team_id: teamId
 const fromGroup = (teamId: string, g: Group) => ({ id: g.id, team_id: teamId, name: g.name, color: g.color, sort: g.sort });
 const fromDeadline = (teamId: string, d: Deadline) => ({ id: d.id, team_id: teamId, name: d.name, date: d.date, notes: d.notes ?? null });
 const fromTask = (teamId: string, t: Task) => ({ id: t.id, team_id: teamId, person_id: t.personId ?? null, title: t.title, date: t.date ?? null, end_date: t.end ?? null, status: t.status, sort_order: t.order ?? 0, notes: t.notes ?? null, created_by: t.createdBy ?? null, reviewer_id: t.reviewerId ?? null, review_done: t.reviewDone ?? false, project_id: t.projectId ?? null, parent_id: t.parentId ?? null, deleted_at: t.deletedAt ?? null });
-const fromRetro = (teamId: string, r: Retro) => ({ team_id: teamId, week: r.week, answers: r.answers, notes: r.notes ?? null });
 const fromNotification = (teamId: string, n: Notification) => ({ id: n.id, team_id: teamId, to_user: n.to, from_user: n.from || null, kind: n.kind, text: n.text, ref_kind: n.ref.kind, ref_id: n.ref.id, read: n.read });
 
 /* ─── Loading ──────────────────────────────────────────────────────────── */
@@ -129,6 +128,46 @@ export async function loadTeam(teamId: string, me: string): Promise<Data> {
 
 /* ─── Writing: diff two Data snapshots into row operations ─────────────── */
 
+/** Only the columns this client actually changed: concurrent edits to DIFFERENT fields of the
+ *  same row (one person drags the dates while another types notes) stop overwriting each other.
+ *  Simultaneous edits to the SAME field remain last-writer-wins. */
+function changedCols(prevRow: Record<string, unknown>, nextRow: Record<string, unknown>): Record<string, unknown> | null {
+  const patch: Record<string, unknown> = {};
+  let any = false;
+  for (const k of Object.keys(nextRow)) {
+    if (k === 'id' || k === 'team_id') continue;
+    if (JSON.stringify(prevRow[k]) !== JSON.stringify(nextRow[k])) { patch[k] = nextRow[k]; any = true; }
+  }
+  return any ? patch : null;
+}
+
+/** A retro row is one jsonb of every section's answers — never write it whole. Reads the current
+ *  row and overwrites only the KEYS this client changed (health merges one level deeper, per
+ *  person), so people filling different sections — or their own health column — never fight. */
+async function mergeRetroWrite(teamId: string, prev: { answers?: Record<string, unknown>; notes?: string | null } | undefined, next: { week: string; answers?: Record<string, unknown>; notes?: string | null }) {
+  const { data: cur, error } = await supabase.from('retros').select('answers,notes').eq('team_id', teamId).eq('week', next.week).maybeSingle();
+  if (error) return { error };
+  const base = { ...((cur?.answers ?? {}) as Record<string, unknown>) };
+  const pa = (prev?.answers ?? {}) as Record<string, unknown>;
+  const na = (next.answers ?? {}) as Record<string, unknown>;
+  for (const k of new Set([...Object.keys(pa), ...Object.keys(na)])) {
+    if (JSON.stringify(pa[k]) === JSON.stringify(na[k])) continue; // untouched here — keep whatever the server has
+    if (k === 'health') {
+      const merged = { ...((base.health ?? {}) as Record<string, unknown>) };
+      const ph = (pa.health ?? {}) as Record<string, unknown>;
+      const nh = (na.health ?? {}) as Record<string, unknown>;
+      for (const person of new Set([...Object.keys(ph), ...Object.keys(nh)])) {
+        if (JSON.stringify(ph[person]) === JSON.stringify(nh[person])) continue;
+        if (nh[person] === undefined) delete merged[person]; else merged[person] = nh[person];
+      }
+      base.health = merged;
+    } else if (na[k] === undefined) delete base[k];
+    else base[k] = na[k];
+  }
+  const notes = (prev?.notes ?? null) !== (next.notes ?? null) ? next.notes ?? null : cur ? cur.notes : next.notes ?? null;
+  return supabase.from('retros').upsert({ team_id: teamId, week: next.week, answers: base, notes }, { onConflict: 'team_id,week' });
+}
+
 function diff<T extends { id: string }>(prev: T[], next: T[]) {
   const pm = new Map(prev.map((x) => [x.id, x]));
   const nm = new Map(next.map((x) => [x.id, x]));
@@ -159,27 +198,45 @@ export async function persistDiff(prev: Data, next: Data) {
   const teamId = next.id;
   const ops: Promise<void>[] = [];
 
+  // Existing rows: write only the changed columns; new rows: insert whole. (See changedCols.)
+  const splitWrite = <M extends { id: string }>(label: string, table: string, changed: M[], prevArr: M[], toRow: (m: M) => Record<string, unknown>) => {
+    const prevById = new Map(prevArr.map((x) => [x.id, x]));
+    const freshRows = changed.filter((x) => !prevById.has(x.id)).map((x) => toRow(x));
+    const out: Promise<void>[] = [];
+    if (freshRows.length) out.push(run(label, supabase.from(table).upsert(freshRows)));
+    for (const m of changed) {
+      const p = prevById.get(m.id);
+      if (!p) continue;
+      const patch = changedCols(toRow(p), toRow(m));
+      if (patch) out.push(run(label, supabase.from(table).update(patch).eq('id', m.id)));
+    }
+    return out;
+  };
+
   const gr = diff(prev.groups ?? [], next.groups ?? []);
-  if (gr.upsert.length) await run('groups', supabase.from('groups').upsert(gr.upsert.map((g) => fromGroup(teamId, g)))); // before projects that reference them
+  await Promise.all(splitWrite('groups', 'groups', gr.upsert, prev.groups ?? [], (g) => fromGroup(teamId, g))); // before projects that reference them
   if (gr.remove.length) ops.push(run('groups-del', supabase.from('groups').delete().in('id', gr.remove)));
 
   const pr = diff(prev.projects, next.projects);
-  if (pr.upsert.length) ops.push(run('projects', supabase.from('projects').upsert(pr.upsert.map((p) => fromProject(teamId, p)))));
+  ops.push(...splitWrite('projects', 'projects', pr.upsert, prev.projects, (p) => fromProject(teamId, p)));
   if (pr.remove.length) ops.push(run('projects-del', supabase.from('projects').delete().in('id', pr.remove)));
 
   const dl = diff(prev.deadlines, next.deadlines);
-  if (dl.upsert.length) ops.push(run('deadlines', supabase.from('deadlines').upsert(dl.upsert.map((d) => fromDeadline(teamId, d)))));
+  ops.push(...splitWrite('deadlines', 'deadlines', dl.upsert, prev.deadlines, (d) => fromDeadline(teamId, d)));
   if (dl.remove.length) ops.push(run('deadlines-del', supabase.from('deadlines').delete().in('id', dl.remove)));
 
   const tk = diff(prev.tasks, next.tasks);
   const writable = tk.upsert.filter((t) => !t.personId || !isPending(t.personId));
-  if (writable.length) ops.push(run('tasks', supabase.from('tasks').upsert(writable.map((t) => fromTask(teamId, t)))));
+  ops.push(...splitWrite('tasks', 'tasks', writable, prev.tasks, (t) => fromTask(teamId, t)));
   if (tk.remove.length) ops.push(run('tasks-del', supabase.from('tasks').delete().in('id', tk.remove)));
 
   const prevRetros = Object.values(prev.retros ?? {}).map((r) => ({ ...r, id: r.week }));
   const nextRetros = Object.values(next.retros ?? {}).map((r) => ({ ...r, id: r.week }));
   const rt = diff(prevRetros, nextRetros);
-  if (rt.upsert.length) ops.push(run('retros', supabase.from('retros').upsert(rt.upsert.map((r) => fromRetro(teamId, r)), { onConflict: 'team_id,week' })));
+  for (const r of rt.upsert) {
+    const prevR = prevRetros.find((x) => x.id === r.id);
+    ops.push(run('retro', mergeRetroWrite(teamId, prevR, r)));
+  }
 
   const nt = diff(prev.notifications ?? [], next.notifications ?? []);
   // Upserts would hit the UPDATE policy (own rows only), so: plain inserts for new notifications
@@ -191,9 +248,12 @@ export async function persistDiff(prev: Data, next: Data) {
   for (const n of changed) ops.push(run('notifications-update', supabase.from('notifications').update({ read: n.read }).eq('id', n.id)));
   if (nt.remove.length) ops.push(run('notifications-del', supabase.from('notifications').delete().in('id', nt.remove)));
 
-  if (prev.name !== next.name || prev.icon !== next.icon || JSON.stringify(prev.retroFields) !== JSON.stringify(next.retroFields) || JSON.stringify(prev.retroTemplate) !== JSON.stringify(next.retroTemplate)) {
-    ops.push(run('team', supabase.from('teams').update({ name: next.name, icon: next.icon ?? null, retro_fields: next.retroFields ?? null, retro_template: next.retroTemplate ?? null }).eq('id', teamId)));
-  }
+  const tpatch: Record<string, unknown> = {};
+  if (prev.name !== next.name) tpatch.name = next.name;
+  if (prev.icon !== next.icon) tpatch.icon = next.icon ?? null;
+  if (JSON.stringify(prev.retroFields) !== JSON.stringify(next.retroFields)) tpatch.retro_fields = next.retroFields ?? null;
+  if (JSON.stringify(prev.retroTemplate) !== JSON.stringify(next.retroTemplate)) tpatch.retro_template = next.retroTemplate ?? null;
+  if (Object.keys(tpatch).length) ops.push(run('team', supabase.from('teams').update(tpatch).eq('id', teamId)));
 
   // Roster: people added/removed by email; role changes via the moderators list.
   const pp = diff(prev.people, next.people);
