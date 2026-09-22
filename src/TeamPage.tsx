@@ -336,6 +336,29 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
         </div>
       )}
 
+      {/* ── Meeting transcription ── */}
+      {cloud && isMod && (
+        <div className="panel team-card">
+          <div className="settings-title">Meeting transcription</div>
+          <p className="hint" style={{ marginTop: 0 }}>
+            With an AssemblyAI API key, meeting recordings transcribe in the cloud — noticeably better speaker
+            separation than the built-in on-device model, a few cents per hour, and audio is sent to AssemblyAI
+            for processing. Leave empty to keep everything on-device and free.
+          </p>
+          <input
+            className="team-input"
+            type="password"
+            placeholder="AssemblyAI API key (assemblyai.com → dashboard)"
+            defaultValue={team.transcribeKey ?? ''}
+            onBlur={(e) => {
+              const v = e.target.value.trim();
+              if (v !== (team.transcribeKey ?? '')) onUpdate((d) => ({ ...d, transcribeKey: v || undefined }));
+            }}
+            onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+          />
+        </div>
+      )}
+
       {/* ── Recently deleted ── */}
       <div className="panel team-card">
         <div className="settings-title">Recently deleted</div>

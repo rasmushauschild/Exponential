@@ -25,6 +25,7 @@ interface Props {
   people: Person[];
   canModerate: boolean;
   cloud: boolean;
+  transcribeKey?: string; // set in Team settings → AssemblyAI does the transcription
   onClose: () => void;
   onError: (m: string) => void;
 }
@@ -72,11 +73,22 @@ export function MeetingsPage(p: Props) {
       await updateMeeting(teamId, id, { status: 'transcribing' }, cloud);
       refetch();
       const enrolled = (await fetchVoicePrints(cloud)).map((v) => ({ id: v.userId, embedding: v.embedding }));
-      const out = await transcribeWithSpeakers(blob, enrolled, (pr) => setProg(id,
-        pr.phase === 'model' ? { label: 'Downloading speech model (one-time)', pct: pr.pct }
-        : pr.phase === 'decode' ? { label: 'Reading audio' }
-        : pr.phase === 'speakers' ? { label: 'Finding speakers' }
-        : { label: 'Transcribing' }));
+      let out: { segments: Segment[]; text: string; durationSecs: number } | null = null;
+      if (p.transcribeKey) {
+        try {
+          const { transcribeCloud } = await import('./transcribeCloud');
+          out = await transcribeCloud(blob, p.transcribeKey, enrolled, (label) => setProg(id, { label }));
+        } catch (e) {
+          p.onError(`Cloud transcription failed (${String((e as Error).message ?? e)}) — falling back to on-device.`);
+        }
+      }
+      if (!out) {
+        out = await transcribeWithSpeakers(blob, enrolled, (pr) => setProg(id,
+          pr.phase === 'model' ? { label: 'Downloading speech model (one-time)', pct: pr.pct }
+          : pr.phase === 'decode' ? { label: 'Reading audio' }
+          : pr.phase === 'speakers' ? { label: 'Finding speakers' }
+          : { label: 'Transcribing' }));
+      }
       const title = autoTitle(out.text, defaultTitle(startedAt));
       await updateMeeting(teamId, id, {
         transcript: out.segments, summary: out.text.slice(0, 2000), title,

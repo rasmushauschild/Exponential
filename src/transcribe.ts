@@ -279,6 +279,41 @@ export async function labelSpeakers(audio: Float32Array, segments: Segment[], en
   });
 }
 
+/** Map already-grouped speaker labels (e.g. the cloud's "Speaker A/B/C") to enrolled
+ *  teammates: embed each group's longest stretches, match with the margin rule, keep
+ *  each person to one group. Unmatched groups keep their label. */
+export async function nameSpeakerGroups(blob: Blob, segments: Segment[], enrolled: Enrolled[]): Promise<Segment[]> {
+  const SR = 16000;
+  const audio = await decodeTo16k(blob);
+  const groups = new Map<string, Segment[]>();
+  for (const s of segments) { if (!s.who) continue; if (!groups.has(s.who)) groups.set(s.who, []); groups.get(s.who)!.push(s); }
+  const prints = enrolled.map((en) => ({ id: en.id, e: l2(en.embedding) }));
+  const scored: { who: string; id: string; sim: number; margin: number }[] = [];
+  for (const [who, segs] of groups) {
+    const longest = [...segs].sort((a, b) => (b.t1 - b.t0) - (a.t1 - a.t0)).slice(0, 3);
+    const embs: number[][] = [];
+    for (const g of longest) {
+      const mid = (g.t0 + g.t1) / 2, half = Math.min(3, (g.t1 - g.t0) / 2);
+      const a = audio.subarray(Math.max(0, Math.floor((mid - half) * SR)), Math.floor((mid + half) * SR));
+      if (a.length >= SR * 0.8) { const e = await embed(a).catch(() => null); if (e) embs.push(e); }
+    }
+    if (!embs.length) continue;
+    const e = l2(embs[0].map((_, i2) => embs.reduce((a2, v) => a2 + v[i2], 0) / embs.length));
+    const sims = prints.map((p2) => ({ id: p2.id, sim: cos(e, p2.e) })).sort((a, b) => b.sim - a.sim);
+    if (sims[0] && sims[0].sim >= 0.4) scored.push({ who, id: sims[0].id, sim: sims[0].sim, margin: sims[0].sim - (sims[1]?.sim ?? 0) });
+  }
+  scored.sort((a, b) => b.sim - a.sim);
+  const rename = new Map<string, string>();
+  const used = new Set<string>();
+  for (const m of scored) {
+    if (used.has(m.id) || rename.has(m.who)) continue;
+    if (m.margin < 0.05 && m.sim < 0.7) continue;
+    rename.set(m.who, m.id);
+    used.add(m.id);
+  }
+  return segments.map((s) => (s.who && rename.has(s.who) ? { ...s, who: rename.get(s.who)! } : s));
+}
+
 /** The whole pipeline MeetingsPage uses: transcript, speaker labels, auto title. */
 export async function transcribeWithSpeakers(blob: Blob, enrolled: Enrolled[], onProgress: (p: TranscribeProgress) => void):
   Promise<{ segments: Segment[]; text: string; durationSecs: number }> {

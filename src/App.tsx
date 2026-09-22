@@ -778,6 +778,7 @@ export default function App() {
                   people={data.people}
                   canModerate={data.moderators.includes(data.me)}
                   cloud={cloudMode}
+                  transcribeKey={data.transcribeKey}
                   onClose={() => setLeftPanel(null)}
                   onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
                 />
