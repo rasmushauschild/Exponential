@@ -48,6 +48,8 @@ export function ChatPage(p: Props) {
   const stickBottom = useRef(true);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [newChannel, setNewChannel] = useState(false);
+  // compact panel: a conversations screen first, then the thread with a back row
+  const [listMode, setListMode] = useState(true);
 
   // Load (or restore) the open channel's messages; mark it read.
   useEffect(() => {
@@ -136,6 +138,7 @@ export function ChatPage(p: Props) {
     <div className={`chat${full ? ' full' : ''}`}>
       {full && (
       <aside className="chat-rail">
+        <div className="side-title">Chat</div>
         <div className="chat-rail-head">
           <span className="chat-rail-title">Channels</span>
           <span className="panel-spacer" />
@@ -172,22 +175,58 @@ export function ChatPage(p: Props) {
       </aside>
       )}
 
-      {active ? (
-        <div className="chat-main">
-          {!full && (
-            <div className="chat-chanbar">
-              <ChannelDropdown channels={channels} people={people} me={me} activeId={activeId}
-                onActive={onActive} onDm={openDmWith} onNew={() => setNewChannel(true)} />
+      {!full && (listMode || !active) ? (
+        <div className="chat-main chat-list-view">
+          <div className="side-title">Chat</div>
+          <div className="chat-convos">
+            <div className="chat-rail-head">
+              <span className="chat-rail-title">Channels</span>
               <span className="panel-spacer" />
+              <button className="icon-btn small" title="New channel" onClick={() => setNewChannel(true)}>+</button>
             </div>
-          )}
-          {!full && newChannel && (
-            <div className="chat-new-wrap">
+            {regular.map((ch) => (
+              <button key={ch.id} className={`chat-ch${ch.unread ? ' unread' : ''}`} onClick={() => { onActive(ch.id); setListMode(false); }}>
+                <span className="chat-hash">{ch.private ? <LockGlyph /> : '#'}</span>
+                <span className="chat-ch-name">{ch.name}</span>
+                {ch.unread > 0 && <span className="badge">{ch.unread}</span>}
+              </button>
+            ))}
+            {newChannel && (
               <NewChannelForm people={people} me={me} onClose={() => setNewChannel(false)}
                 onCreate={async (name, priv, members) => {
                   try { await createChannel(teamId, me, name, priv, members, cloud); setNewChannel(false); p.onRefreshChannels(); }
                   catch (e) { p.onError(String((e as Error).message ?? e)); }
                 }} />
+            )}
+            <div className="chat-rail-head dm">
+              <span className="chat-rail-title">Direct messages</span>
+            </div>
+            {teammates.map((x) => {
+              const ch = dms.find((d) => d.name === dmName(me, x.id));
+              return (
+                <button key={x.id} className={`chat-ch${ch?.unread ? ' unread' : ''}`}
+                  onClick={async () => { await openDmWith(x.id); setListMode(false); }}>
+                  <Avatar person={x} size={20} />
+                  <span className="chat-ch-name">{shortName(x.name)}{x.id === me ? ' (you)' : ''}</span>
+                  {ch && ch.unread > 0 && <span className="badge">{ch.unread}</span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : active ? (
+        <div className="chat-main">
+          {!full && (
+            <div className="chat-thread-head">
+              <button className="meet-back chat-back" onClick={() => setListMode(true)}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6" /></svg>
+                Chat
+              </button>
+              <span className="chat-thread-name">
+                {isDm(active)
+                  ? (() => { const other = people.find((x) => x.id === dmOther(active, me)); return <>{other && <Avatar person={other} size={22} />}{other ? shortName(other.name) : 'Direct message'}{dmOther(active, me) === me ? ' (you)' : ''}</>; })()
+                  : <><span className="chat-hash-big">{active.private ? <LockGlyph /> : '#'}</span>{active.name}</>}
+              </span>
             </div>
           )}
           {full && (isDm(active) ? (
@@ -236,54 +275,6 @@ export function ChatPage(p: Props) {
           <img src={lightbox} alt="" />
         </div>, document.body)}
     </div>
-  );
-}
-
-function ChannelDropdown({ channels, people, me, activeId, onActive, onDm, onNew }: {
-  channels: Channel[]; people: Person[]; me: string; activeId: string | null;
-  onActive: (id: string) => void; onDm: (personId: string) => void; onNew: () => void;
-}) {
-  const [menu, setMenu] = useState<DOMRect | null>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.chat-drop-menu')) setMenu(null); };
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [menu]);
-  const active = channels.find((x) => x.id === activeId);
-  const dms = channels.filter(isDm);
-  const label = !active ? 'Pick a channel'
-    : isDm(active) ? shortName(people.find((x) => x.id === dmOther(active, me))?.name ?? '') + (dmOther(active, me) === me ? ' (you)' : '')
-    : `# ${active.name}`;
-  return (
-    <>
-      <button className="chat-drop" onClick={(e) => setMenu((e.currentTarget as HTMLElement).getBoundingClientRect())}>
-        <span className="chat-drop-label">{label}</span>
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m6 9 6 6 6-6" /></svg>
-      </button>
-      {menu && createPortal(
-        <div className="status-menu chat-drop-menu" style={{ position: 'fixed', top: menu.bottom + 6, left: menu.left }}>
-          <div className="chat-drop-sec">Channels</div>
-          {channels.filter((x) => !isDm(x)).map((x) => (
-            <button key={x.id} className={x.id === activeId ? 'on' : ''} onClick={() => { onActive(x.id); setMenu(null); }}>
-              <span className="chat-hash">{x.private ? <LockGlyph /> : '#'}</span> {x.name}
-              {x.unread > 0 && <span className="badge">{x.unread}</span>}
-            </button>
-          ))}
-          <div className="chat-drop-sec">Direct messages</div>
-          {people.filter((x) => !x.id.startsWith('pending:')).map((x) => {
-            const ch = dms.find((d) => d.name === dmName(me, x.id));
-            return (
-              <button key={x.id} className={ch && ch.id === activeId ? 'on' : ''} onClick={() => { onDm(x.id); setMenu(null); }}>
-                <Avatar person={x} size={16} /> {shortName(x.name)}{x.id === me ? ' (you)' : ''}
-                {ch && ch.unread > 0 && <span className="badge">{ch.unread}</span>}
-              </button>
-            );
-          })}
-          <div className="menu-sep" />
-          <button onClick={() => { onNew(); setMenu(null); }}>+ New channel</button>
-        </div>, document.body)}
-    </>
   );
 }
 

@@ -48,6 +48,8 @@ export function MeetingsPage(p: Props) {
   const [rec, setRec] = useState<RecordingSession | null>(() => activeRecording());
   const [drag, setDrag] = useState(false);
   const [voiceRec, setVoiceRec] = useState<'idle' | 'recording' | 'saving'>('idle');
+  const [voiceSecs, setVoiceSecs] = useState(8);
+  const voiceCancel = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const refetch = () => fetchMeetings(teamId, cloud).then(setMeetings).catch((e) => p.onError(String((e as Error).message ?? e)));
@@ -118,18 +120,25 @@ export function MeetingsPage(p: Props) {
     }
   };
 
-  /** ~8 s sample → my voice print; transcripts then name me automatically. */
+  /** ~8 s reading the on-screen script → my voice print; transcripts then name me automatically. */
   const learnVoice = async () => {
     try {
+      voiceCancel.current = false;
+      setVoiceSecs(8);
       setVoiceRec('recording');
       const mic = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recd = new MediaRecorder(mic, { mimeType: 'audio/webm;codecs=opus' });
       const chunks: Blob[] = [];
       recd.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
       recd.start();
-      await new Promise((r) => setTimeout(r, 8000));
+      for (let s = 8; s > 0; s--) {
+        setVoiceSecs(s);
+        await new Promise((r) => setTimeout(r, 1000));
+        if (voiceCancel.current) break;
+      }
       await new Promise<void>((r) => { recd.onstop = () => r(); recd.stop(); });
       mic.getTracks().forEach((t) => t.stop());
+      if (voiceCancel.current) { setVoiceRec('idle'); return; }
       setVoiceRec('saving');
       const { voiceEmbedding } = await import('./transcribe');
       const emb = await voiceEmbedding(new Blob(chunks, { type: 'audio/webm' }));
@@ -161,6 +170,7 @@ export function MeetingsPage(p: Props) {
         />
       ) : (
       <>
+      <div className="side-title">Meetings</div>
       <div className="meet-tools">
         {!rec && (
           <button className="pill toggle active meet-rec" onClick={record} title="Record this meeting (microphone, plus system audio when available)">
@@ -190,14 +200,46 @@ export function MeetingsPage(p: Props) {
             <span className="panel-spacer" />
             {!m.isOpen && <span title="Restricted"><LockTiny /></span>}
             <StatusChip m={m} progress={progress[m.id]} />
-            {people.find((x) => x.id === m.owner) && <Avatar person={people.find((x) => x.id === m.owner)!} size={20} />}
+            <Participants m={m} people={people} />
           </button>
         ))}
       </div>
       </>
       )}
+      {voiceRec !== 'idle' && createPortal(
+        <div className="sheet-veil">
+          <div className="sheet voice-sheet">
+            <div className="sheet-title">Learn my voice</div>
+            <p className="voice-hint">Read this out loud, at your normal pace:</p>
+            <p className="voice-script">
+              “Hi team, it's just me teaching Exponential my voice. Every week we plan projects,
+              set priorities and review progress together. One, two, three, four, five — that
+              should be plenty to recognise me from now on.”
+            </p>
+            <div className="voice-foot">
+              {voiceRec === 'recording' ? <><span className="meet-reddot" /> Listening… {voiceSecs}s</> : 'Saving your voice…'}
+              <span className="panel-spacer" />
+              {voiceRec === 'recording' && <button className="pill" onClick={() => { voiceCancel.current = true; }}>Cancel</button>}
+            </div>
+          </div>
+        </div>, document.body)}
       {drag && <div className="meet-drop-hint">Drop audio to transcribe</div>}
     </div>
+  );
+}
+
+/** Who spoke, at a glance: identified members as an avatar stack, plus +N for other voices. */
+function Participants({ m, people }: { m: Meeting; people: Person[] }) {
+  const whos = [...new Set((m.transcript ?? []).map((s) => s.who).filter(Boolean))] as string[];
+  const members = whos.map((w) => people.find((x) => x.id === w)).filter(Boolean) as Person[];
+  const extras = whos.length - members.length;
+  const owner = people.find((x) => x.id === m.owner);
+  if (!members.length && !extras) return owner ? <Avatar person={owner} size={20} /> : null;
+  return (
+    <span className="meet-people" title={[...members.map((x) => shortName(x.name)), ...(extras ? [`${extras} other${extras > 1 ? 's' : ''}`] : [])].join(', ')}>
+      {members.slice(0, 4).map((x) => <Avatar key={x.id} person={x} size={20} />)}
+      {extras > 0 && <span className="meet-extra">+{extras}</span>}
+    </span>
   );
 }
 
@@ -300,6 +342,14 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const [renaming, setRenaming] = useState<string | null>(null); // the speaker label being renamed
+  const [speakerMenu, setSpeakerMenu] = useState<{ who: string; rect: DOMRect } | null>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!speakerMenu) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.meet-speaker-menu')) setSpeakerMenu(null); };
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [speakerMenu]);
   useEffect(() => {
     let gone = false;
     meetingAudioUrl(m, cloud).then((u) => { if (!gone) setAudioUrl(u); });
@@ -357,14 +407,14 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
               {b.who && (
                 <div className="meet-speaker">
                   {whoPerson(b.who) ? <Avatar person={whoPerson(b.who)!} size={18} /> : <span className="meet-speaker-dot" />}
-                  {renaming === b.who && canEdit && !whoPerson(b.who) ? (
+                  {renaming === b.who && canEdit ? (
                     <input autoFocus className="meet-speaker-input" defaultValue={whoName(b.who) ?? ''}
                       onBlur={(e) => { renameSpeaker(b.who!, e.target.value); setRenaming(null); }}
                       onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setRenaming(null); }} />
                   ) : (
-                    <button className="meet-speaker-name" disabled={!canEdit || !!whoPerson(b.who)}
-                      title={canEdit && !whoPerson(b.who) ? 'Rename this speaker' : undefined}
-                      onClick={() => setRenaming(b.who!)}>
+                    <button className="meet-speaker-name" disabled={!canEdit}
+                      title={canEdit ? 'Who is this?' : undefined}
+                      onClick={(e) => setSpeakerMenu({ who: b.who!, rect: (e.currentTarget as HTMLElement).getBoundingClientRect() })}>
                       {whoName(b.who)}
                     </button>
                   )}
@@ -385,14 +435,48 @@ function MeetingDetail({ meeting: m, me, people, cloud, canEdit, progress, onPat
             </div>
           )}
         </div>
-        {canEdit && (
-          <div className="meet-detail-foot">
-            {m.status === 'ready' && (m.audioPath || !cloud) && <button className="pill" onClick={onRetranscribe}>Re-transcribe</button>}
-            <span className="panel-spacer" />
-            <button className="pill danger" onClick={onDelete}>Delete</button>
-          </div>
-        )}
+        <div className="meet-detail-foot">
+          {audioUrl && (
+            <button className="pill" onClick={async () => {
+              try {
+                const blob = await fetch(audioUrl).then((r) => r.blob());
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = `${m.title.replace(/[^\w\- ]+/g, '') || 'meeting'}.webm`;
+                a.click();
+                setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+              } catch { /* audio not reachable right now */ }
+            }}>Download audio</button>
+          )}
+          {(m.transcript?.length ?? 0) > 0 && (
+            <button className="pill" onClick={() => {
+              const lines: string[] = [`${m.title} — ${fmtStamp(m.startedAt)}${m.durationSecs ? ` · ${fmtDur(m.durationSecs)}` : ''}`, ''];
+              for (const b of blocks) {
+                if (b.who) lines.push(`${whoName(b.who)}:`);
+                for (const s of b.segs) lines.push(`[${fmtClock(s.t0)}] ${s.text}`);
+                lines.push('');
+              }
+              navigator.clipboard.writeText(lines.join('\n').trim());
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1600);
+            }}>{copied ? 'Copied ✓' : 'Copy transcript'}</button>
+          )}
+          <span className="panel-spacer" />
+          {canEdit && m.status === 'ready' && (m.audioPath || !cloud) && <button className="pill" onClick={onRetranscribe}>Re-transcribe</button>}
+          {canEdit && <button className="pill danger" onClick={onDelete}>Delete</button>}
+        </div>
       </div>
+      {speakerMenu && createPortal(
+        <div className="status-menu meet-speaker-menu" style={{ position: 'fixed', top: Math.min(speakerMenu.rect.bottom + 6, window.innerHeight - 260), left: speakerMenu.rect.left }}>
+          {people.filter((x) => !x.id.startsWith('pending:')).map((x) => (
+            <button key={x.id} className={speakerMenu.who === x.id ? 'on' : ''}
+              onClick={() => { renameSpeaker(speakerMenu.who, x.id); setSpeakerMenu(null); }}>
+              <Avatar person={x} size={18} /> {shortName(x.name)} {speakerMenu.who === x.id ? '✓' : ''}
+            </button>
+          ))}
+          <div className="menu-sep" />
+          <button onClick={() => { setRenaming(speakerMenu.who); setSpeakerMenu(null); }}>Someone else…</button>
+        </div>, document.body)}
     </div>
   );
 }

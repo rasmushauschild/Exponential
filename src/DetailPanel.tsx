@@ -532,7 +532,11 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly, peopl
 
 /* ─── Inbox ─────────────────────────────────────────── */
 
-function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead, width, full, onToggleFull }: Props) {
+export function Inbox({ notifications, people, me, onClose, onOpen, onMarkRead, width, full, onToggleFull }: {
+  notifications: Notification[]; people: Person[]; me: string; onClose: () => void;
+  onOpen: (sel: Selection) => void; onMarkRead: (ids: string[]) => void;
+  width: number; full: boolean; onToggleFull: () => void;
+}) {
   const mine = notifications.filter((n) => n.to === me).sort((a, b) => b.at.localeCompare(a.at));
   const unreadKey = mine.filter((n) => !n.read).map((n) => n.id).join(',');
   useEffect(() => {
