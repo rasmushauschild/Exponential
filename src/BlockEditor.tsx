@@ -72,7 +72,7 @@ interface Props {
   me: string;
   claimable: boolean; // projects: yes; subtasks: no
   createTask: (title: string) => string; // returns the new id
-  onUpdateTask: (id: string, patch: Partial<Task>) => void;
+  onUpdateTask: (id: string, patch: Partial<Task>, coalesce?: string) => void;
   onDeleteTask: (id: string) => void;
   onClaim: (id: string, personId?: string) => void;
   onUnclaim: (id: string) => void;
@@ -693,7 +693,7 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
                 focus={focus?.index === i ? focus : null}
                 onFocused={() => setFocus(null)}
                 onKey={(e, t, title, setLocal) => onTaskKey(i, e, t, title, setLocal)}
-                onTitle={(title) => onUpdateTask(b.taskId, { title })}
+                onTitle={(title) => onUpdateTask(b.taskId, { title }, `title:${b.taskId}`)}
                 onUpdate={(patch) => onUpdateTask(b.taskId, patch)}
                 onDelete={() => removeAt(i, false)}
                 onClaim={(pid) => onClaim(b.taskId, pid)}

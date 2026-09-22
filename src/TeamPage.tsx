@@ -11,7 +11,7 @@ interface Props {
   team: Data;
   cloud: boolean; // members are invited by Google email and join when they sign in
   canDelete: boolean;
-  onUpdate: (fn: (d: Data) => Data) => void;
+  onUpdate: (fn: (d: Data) => Data, coalesce?: string) => void;
   onDelete: () => void;
 }
 
@@ -210,7 +210,7 @@ export function TeamPage({ team, cloud, canDelete, onUpdate, onDelete }: Props) 
     onUpdate((d) => ({ ...d, moderators: d.moderators.includes(id) ? d.moderators.filter((m) => m !== id) : [...d.moderators, id] }));
 
   const tpl: RetroTemplate = { objective: '', keyResults: [], healthMetrics: DEFAULT_HEALTH_METRICS, ...team.retroTemplate };
-  const setTpl = (next: RetroTemplate) => onUpdate((d) => ({ ...d, retroTemplate: next }));
+  const setTpl = (next: RetroTemplate) => onUpdate((d) => ({ ...d, retroTemplate: next }), 'retro-template'); // typing in template rows coalesces into burst-sized undo steps
   const fileRef = useRef<HTMLInputElement>(null);
   const pickIcon = (file: File) => {
     // downscale to 256px so the data URL stays small in the saved file

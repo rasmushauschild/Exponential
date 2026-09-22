@@ -187,7 +187,7 @@ export function DetailPanel(p: Props) {
             me={me}
             claimable={!!project}
             createTask={(title) => p.onCreateLinked(project ? { projectId: project.id } : { parentId: task!.id }, title)}
-            onUpdateTask={(id, patch) => p.onUpdateTask(id, patch)}
+            onUpdateTask={(id, patch, coalesce) => p.onUpdateTask(id, patch, coalesce)}
             onDeleteTask={p.onDeleteTask}
             onClaim={p.onClaimTask}
             onUnclaim={p.onUnclaimTask}

@@ -147,13 +147,45 @@ export default function App() {
     return () => clearInterval(t);
   }, []);
 
+  // Undo/redo has ONE brain for its two routes: in Electron the Edit menu owns ⌘Z (menu
+  // accelerators consume the key before the page sees any keydown) and sends edit:command;
+  // in the browser preview the keydown below catches it. Plain inputs/textareas (inline
+  // renames, sheet fields) keep the browser's own text undo — their text is transient until
+  // blur/Enter. Contenteditables (notes blocks, task titles) commit every keystroke to data,
+  // so app history IS their text undo. The 80ms guard collapses a double delivery.
+  const lastEditCmd = useRef(0);
+  const editCommand = useCallback((kind: 'undo' | 'redo') => {
+    const t = performance.now();
+    if (t - lastEditCmd.current < 80) return;
+    lastEditCmd.current = t;
+    const el = document.activeElement as HTMLElement | null;
+    if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) { document.execCommand(kind); return; }
+    if (kind === 'undo') undo(); else redo();
+  }, [undo, redo]);
+  useEffect(() => window.exponential?.onEditCommand?.(editCommand), [editCommand]);
+  // Native history mutations inside contenteditables (any route the menu rewire missed)
+  // would rewrite the DOM behind the markdown model — block them outright.
+  useEffect(() => {
+    const block = (e: Event) => {
+      const ie = e as InputEvent;
+      if ((ie.inputType === 'historyUndo' || ie.inputType === 'historyRedo') && (e.target as HTMLElement).isContentEditable) e.preventDefault();
+    };
+    window.addEventListener('beforeinput', block, true);
+    return () => window.removeEventListener('beforeinput', block, true);
+  }, []);
+
   // ⌘Z / ⌘⇧Z (Ctrl on Windows); Backspace/Delete removes the multi-selection; Escape clears it.
-  // Text fields keep their own keys while focused.
+  // Text fields keep their other keys while focused.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) return; // native text undo
+        e.preventDefault();
+        editCommand(e.shiftKey ? 'redo' : 'undo');
+        return;
+      }
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable)) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
       if (e.key === 'Backspace' || e.key === 'Delete') {
         // A block selection in the notes editor owns Backspace (it blurs the input, so
         // the focus check above doesn't catch it) — deleting blocks must not delete the item.
@@ -176,7 +208,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [undo, redo, multi, selection, update, unlocked, data]);
+  }, [editCommand, multi, selection, update, unlocked, data]);
 
   /** Right-click Delete on a multi-selection removes everything selected, like Backspace. */
   const deleteMany = (ids: string[]) => {
@@ -595,7 +627,7 @@ export default function App() {
             team={data}
             cloud={cloudMode}
             canDelete={cloudMode || teams.length > 1}
-            onUpdate={(fn) => update(fn)}
+            onUpdate={(fn, coalesce) => update(fn, coalesce)}
             onDelete={() => { setView('plan'); setSelection(null); setSelectedPerson(null); deleteTeam(data.id); }}
           />
         )}

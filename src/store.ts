@@ -27,6 +27,7 @@ declare global {
       onCloudPing?: (cb: () => void) => () => void;
       notify?: (p: { id: string; title: string; body: string; ref?: { kind: string; id: string } }) => void;
       onNotifyBlocked?: (cb: () => void) => () => void;
+      onEditCommand?: (cb: (kind: 'undo' | 'redo') => void) => () => void;
       openNotificationSettings?: () => void;
       setSharedState?: (p: { teamId: string | null; teamName: string | null; planUnlocked: boolean }) => void;
       connectClaude?: () => Promise<{ ok: boolean; messages: string[] }>;
@@ -218,6 +219,7 @@ export function useData() {
   const past = useRef<Data[]>([]);
   const future = useRef<Data[]>([]);
   const lastKey = useRef<string | undefined>(undefined);
+  const lastKeyAt = useRef(0);
 
   const [cloud, setCloud] = useState<{ me: string; teams: TeamSummary[]; data: Data | null } | null>(null);
   const cloudRef = useRef(cloud);
@@ -372,11 +374,15 @@ export function useData() {
     if (!prev) return;
     const next = fn(prev);
     if (next === prev) return;
-    if (!coalesceKey || coalesceKey !== lastKey.current) {
+    // Same-key edits collapse only while they keep coming: a pause starts a fresh step,
+    // so undo rewinds typing burst by burst instead of zapping the whole session.
+    const now = Date.now();
+    if (!coalesceKey || coalesceKey !== lastKey.current || now - lastKeyAt.current > 1200) {
       past.current.push(prev);
       if (past.current.length > HISTORY) past.current.shift();
     }
     lastKey.current = coalesceKey;
+    lastKeyAt.current = now;
     future.current = [];
     editSeq.current++;
     commit(next);

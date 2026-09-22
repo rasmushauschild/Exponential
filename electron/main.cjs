@@ -71,7 +71,18 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
     { role: 'fileMenu' },
-    { role: 'editMenu' },
+    {
+      label: 'Edit',
+      submenu: [
+        // Undo/Redo go to the app's own per-team history: the stock roles call the
+        // webview's NATIVE text undo (which fights the markdown editors) and consume
+        // Cmd+Z at the menu level, so the page never even saw the keydown.
+        { label: 'Undo', accelerator: 'CmdOrCtrl+Z', click: (_i, win) => win?.webContents.send('edit:command', 'undo') },
+        { label: 'Redo', accelerator: 'Shift+CmdOrCtrl+Z', click: (_i, win) => win?.webContents.send('edit:command', 'redo') },
+        { type: 'separator' },
+        { role: 'cut' }, { role: 'copy' }, { role: 'paste' }, { role: 'selectAll' },
+      ],
+    },
     {
       label: 'View',
       submenu: [

@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('exponential', {
   pingCloud: () => ipcRenderer.send('cloud:ping'),
   notify: (p) => ipcRenderer.send('notify', p),
   onNotifyBlocked: (cb) => { const h = () => cb(); ipcRenderer.on('notify:blocked', h); return () => ipcRenderer.removeListener('notify:blocked', h); },
+  onEditCommand: (cb) => { const h = (_e, kind) => cb(kind); ipcRenderer.on('edit:command', h); return () => ipcRenderer.removeListener('edit:command', h); },
   openNotificationSettings: () => ipcRenderer.send('notify:openSettings'),
   setSharedState: (p) => ipcRenderer.send('state:set', p),
   connectClaude: () => ipcRenderer.invoke('mcp:connect'),
