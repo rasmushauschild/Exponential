@@ -123,60 +123,112 @@ export async function voiceEmbedding(blob: Blob): Promise<number[]> {
 
 export interface Enrolled { id: string; embedding: number[] }
 
-/** Label whisper segments with who spoke: diarize in 30s windows, embed each turn,
- *  cluster turns globally, then match clusters to enrolled voice prints.
- *  `who` = a user id when a print matches, else "Speaker N". */
+/** Label whisper segments with who spoke.
+ *  pyannote separates speakers reliably WITHIN each 30s window (it is built for real,
+ *  single-channel meeting audio); windows overlap by 5s, so window-local speaker ids
+ *  are STITCHED across the seam by time-overlap. Embeddings only break ties (a speaker
+ *  silent across a seam) and match enrolled voice prints — they are NOT the primary
+ *  clustering signal, because same-channel recordings make different people's
+ *  embeddings too similar (that once merged everyone into one speaker). */
 export async function labelSpeakers(audio: Float32Array, segments: Segment[], enrolled: Enrolled[]): Promise<Segment[]> {
   const SR = 16000;
   const { processor, model } = await loadSeg();
-  type Turn = { start: number; end: number; emb?: number[]; cluster?: number };
+  type Turn = { start: number; end: number; win: number; local: number };
   const turns: Turn[] = [];
   const WIN = 30 * SR, HOP = 25 * SR;
-  for (let off = 0; off < audio.length; off += HOP) {
+  let winIdx = 0;
+  for (let off = 0; off < audio.length; off += HOP, winIdx++) {
     const chunk = audio.subarray(off, Math.min(audio.length, off + WIN));
-    if (chunk.length < SR) break;
+    if (chunk.length < SR * 0.8) break;
     const inputs = await processor(chunk);
     const out = await model(inputs);
     const res = processor.post_process_speaker_diarization(out.logits, chunk.length) as { id: number; start: number; end: number; confidence: number }[][];
     for (const seg of res[0] ?? []) {
-      if (seg.id === 0 || seg.end - seg.start < 0.5) continue; // 0 = no speaker
-      const start = off / SR + seg.start, end = off / SR + seg.end;
-      if (turns.some((t) => t.start <= start + 0.1 && t.end >= end - 0.1)) continue; // overlap dupe
-      turns.push({ start, end });
+      if (seg.id === 0 || seg.end - seg.start < 0.4) continue; // 0 = no speaker
+      turns.push({ start: off / SR + seg.start, end: off / SR + seg.end, win: winIdx, local: seg.id });
     }
     if (off + WIN >= audio.length) break;
   }
-  // one embedding per turn (capped at 6s of its middle), then greedy clustering
-  for (const t of turns) {
+  if (!turns.length) return segments;
+
+  const key = (t: Turn) => `${t.win}:${t.local}`;
+  const byGroup = new Map<string, Turn[]>();
+  for (const t of turns) { const k = key(t); if (!byGroup.has(k)) byGroup.set(k, []); byGroup.get(k)!.push(t); }
+
+  // stitch: a group joins the cluster of any previous-window turn it overlaps in time
+  const clusterOf = new Map<string, number>();
+  let nClusters = 0;
+  const orderedKeys = [...byGroup.keys()].sort((a, b) => Number(a.split(':')[0]) - Number(b.split(':')[0]));
+  const unresolved: string[] = [];
+  for (const k of orderedKeys) {
+    const win = Number(k.split(':')[0]);
+    if (win === 0) { clusterOf.set(k, nClusters++); continue; }
+    const mine = byGroup.get(k)!;
+    let linked = -1;
+    for (const [ok, oturns] of byGroup) {
+      if (Number(ok.split(':')[0]) !== win - 1) continue;
+      const oc = clusterOf.get(ok);
+      if (oc === undefined || oc === -1) continue;
+      if (oturns.some((p) => mine.some((m) => Math.min(m.end, p.end) - Math.max(m.start, p.start) > 0.3))) { linked = oc; break; }
+    }
+    if (linked >= 0) clusterOf.set(k, linked);
+    else { clusterOf.set(k, -1); unresolved.push(k); }
+  }
+
+  // embeddings: one per group (middle of its longest turn), used for tie-breaks + enrolment
+  const groupEmb = new Map<string, number[] | null>();
+  const embFor = async (k: string) => {
+    if (groupEmb.has(k)) return groupEmb.get(k)!;
+    const t = [...byGroup.get(k)!].sort((a, b) => (b.end - b.start) - (a.end - a.start))[0];
     const mid = (t.start + t.end) / 2, half = Math.min(3, (t.end - t.start) / 2);
-    const a = audio.subarray(Math.floor((mid - half) * SR), Math.floor((mid + half) * SR));
-    if (a.length >= SR * 0.8) { try { t.emb = await embed(a); } catch { /* too short/odd — stays unclustered */ } }
+    const a = audio.subarray(Math.max(0, Math.floor((mid - half) * SR)), Math.floor((mid + half) * SR));
+    const e = a.length >= SR * 0.8 ? await embed(a).catch(() => null) : null;
+    groupEmb.set(k, e);
+    return e;
+  };
+  const clusterRep = new Map<number, string>(); // cluster → first group key
+  for (const k of orderedKeys) { const c = clusterOf.get(k)!; if (c >= 0 && !clusterRep.has(c)) clusterRep.set(c, k); }
+  for (const k of unresolved) {
+    const e = await embFor(k);
+    let best = -1, bestSim = 0.72; // strict: joining wrongly merges people, a miss just adds a speaker
+    if (e) {
+      for (const [c, rk] of clusterRep) {
+        const re = await embFor(rk);
+        if (re) { const sim = cos(e, re); if (sim > bestSim) { best = c; bestSim = sim; } }
+      }
+    }
+    const c = best >= 0 ? best : nClusters++;
+    clusterOf.set(k, c);
+    if (!clusterRep.has(c)) clusterRep.set(c, k);
   }
-  const clusters: { mean: number[]; n: number }[] = [];
-  for (const t of turns) {
-    if (!t.emb) continue;
-    let best = -1, bestSim = 0.65; // same voice ≈0.9+, different ≈0.5 on wavlm-sv
-    clusters.forEach((c, i) => { const sim = cos(t.emb!, l2(c.mean)); if (sim > bestSim) { best = i; bestSim = sim; } });
-    if (best === -1) { clusters.push({ mean: [...t.emb], n: 1 }); t.cluster = clusters.length - 1; }
-    else { const c = clusters[best]; c.mean = c.mean.map((x, i) => x + t.emb![i]); c.n++; t.cluster = best; }
-  }
-  // clusters → names: enrolled prints first, anonymous numbering for the rest
+
+  // clusters → labels: enrolled voice prints first, then Speaker N by first appearance
   const label = new Map<number, string>();
   let anon = 0;
-  clusters.forEach((c, i) => {
-    const mean = l2(c.mean.map((x) => x / c.n));
-    let who = '', sim = 0.6;
-    for (const e of enrolled) { const s2 = cos(mean, l2(e.embedding)); if (s2 > sim) { who = e.id; sim = s2; } }
-    label.set(i, who || `Speaker ${++anon}`);
-  });
-  // each whisper segment takes the speaker it overlaps most
+  for (const k of orderedKeys) {
+    const c = clusterOf.get(k)!;
+    if (label.has(c)) continue;
+    let who = '';
+    if (enrolled.length) {
+      const e = await embFor(clusterRep.get(c) ?? k);
+      if (e) {
+        let sim = 0.6;
+        for (const en of enrolled) { const s2 = cos(e, l2(en.embedding)); if (s2 > sim) { who = en.id; sim = s2; } }
+      }
+    }
+    label.set(c, who || `Speaker ${++anon}`);
+  }
+
+  // each whisper segment takes the speaker whose turns overlap it most
   return segments.map((s2) => {
-    let bestT: Turn | null = null, bestOv = 0.2;
+    const share = new Map<number, number>();
     for (const t of turns) {
       const ov = Math.min(s2.t1, t.end) - Math.max(s2.t0, t.start);
-      if (ov > bestOv) { bestOv = ov; bestT = t; }
+      if (ov > 0.15) share.set(clusterOf.get(key(t))!, (share.get(clusterOf.get(key(t))!) ?? 0) + ov);
     }
-    const who = bestT?.cluster !== undefined ? label.get(bestT.cluster!) : undefined;
+    let best = -1, bestOv = 0.2;
+    for (const [c, ov] of share) if (ov > bestOv) { best = c; bestOv = ov; }
+    const who = best >= 0 ? label.get(best) : undefined;
     return who ? { ...s2, who } : s2;
   });
 }
