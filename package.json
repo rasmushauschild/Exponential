@@ -27,6 +27,7 @@
     "wait-on": "^8.0.3"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.3.0",
     "@paper-design/shaders-react": "^0.0.80",
     "@supabase/supabase-js": "^2.112.3",
     "electron-updater": "^6.8.9",

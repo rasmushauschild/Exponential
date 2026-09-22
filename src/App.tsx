@@ -12,6 +12,8 @@ import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, purgeTrash, renameTask, reorderTask, softDelete, unclaimTask } from './taskOps';
 import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
+import { ChatPage } from './ChatPage';
+import { fetchChat, onChatEvent, subscribeChat, type Channel } from './chat';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
@@ -39,7 +41,7 @@ export default function App() {
     window.exponential?.version().then(setAppVersion);
     return window.exponential?.onUpdate((s) => setUpdateState((prev) => (s.state === 'checking' ? prev : s)));
   }, []);
-  const [view, setView] = useState<'plan' | 'team'>('plan');
+  const [view, setView] = useState<'plan' | 'team' | 'chat' | 'meetings'>('plan');
   const [today, setToday] = useState(todayISO());
   const [week, setWeek] = useState(() => weekStart(todayISO()));
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
@@ -79,7 +81,7 @@ export default function App() {
     window.addEventListener('blur', blur);
     return () => window.removeEventListener('blur', blur);
   }, [unlocked]);
-  useEffect(() => { if (view === 'team') setUnlocked(false); }, [view]);
+  useEffect(() => { if (view !== 'plan') setUnlocked(false); }, [view]);
   const teamIdForLock = data?.id;
   useEffect(() => { setUnlocked(false); }, [teamIdForLock]);
 
@@ -246,8 +248,40 @@ export default function App() {
       return next;
     }, coalesce);
 
+  /* ── chat: channel list + unread live at App level so the sidebar badges and native
+     notifications work from any view; messages themselves load inside ChatPage. ── */
+  const [chat, setChat] = useState<Channel[]>([]);
+  const [chatActive, setChatActive] = useState<string | null>(null);
+  const chatTeam = data?.id;
+  const chatViewRef = useRef({ view, chatActive });
+  chatViewRef.current = { view, chatActive };
+  const refreshChat = useCallback(() => {
+    const d = { id: chatTeam, me: data?.me };
+    if (!d.id || !d.me) return;
+    fetchChat(d.id, d.me, cloudMode).then((chs) => { setChat(chs); setChatActive((cur) => cur && chs.some((c) => c.id === cur) ? cur : chs[0]?.id ?? null); }).catch(() => {});
+  }, [chatTeam, data?.me, cloudMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setChat([]); setChatActive(null); refreshChat(); }, [chatTeam, cloudMode]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!chatTeam || !cloudMode) return; return subscribeChat(chatTeam, cloudMode); }, [chatTeam, cloudMode]);
+  useEffect(() => onChatEvent((e) => {
+    if (e.teamId !== chatTeam || !data) return;
+    if (e.type === 'channels') { refreshChat(); return; }
+    if (e.type !== 'message' || e.message.author === data.me) return;
+    const { view: v, chatActive: act } = chatViewRef.current;
+    const reading = v === 'chat' && act === e.message.channelId && document.hasFocus();
+    if (!reading) {
+      setChat((chs) => chs.map((c) => (c.id === e.message.channelId ? { ...c, unread: c.unread + 1, lastAt: e.message.at } : c)));
+      const who = shortName(data.people.find((x) => x.id === e.message.author)?.name ?? 'Someone');
+      const ch = chat.find((c) => c.id === e.message.channelId);
+      const body = e.message.body || (e.message.attachments?.length ? (e.message.attachments[0].type.startsWith('image/') ? '📷 Image' : e.message.attachments[0].name) : '');
+      window.exponential?.notify?.({ id: e.message.id, title: `#${ch?.name ?? 'chat'} · ${who}`, body, ref: { kind: 'chat', id: e.message.channelId } });
+    }
+  }), [chatTeam, data, chat, refreshChat]);
+
   // The menu-bar widget can ask the main window to open a specific item.
-  useEffect(() => window.exponential?.onOpen((t) => { setView('plan'); setSelection(t as Selection); }), []);
+  useEffect(() => window.exponential?.onOpen((t) => {
+    if (t.kind === 'chat') { setView('chat'); setChatActive(t.id); return; }
+    setView('plan'); setSelection(t as Selection);
+  }), []);
   useSystemNotifications(data);
 
   // Trash housekeeping: anything deleted more than 7 days ago is removed for real (once per team per session).
@@ -548,6 +582,7 @@ export default function App() {
   const selDeadline = selection?.kind === 'deadline' ? data.deadlines.find((d) => d.id === selection.id) : undefined;
   const detailOpen = !!(selProject || selTask || selDeadline) || selection?.kind === 'retro' || selection?.kind === 'inbox';
   const unread = (data.notifications ?? []).filter((n) => n.to === data.me && !n.read).length;
+  const chatUnread = chat.reduce((n, c) => n + c.unread, 0);
 
   const calKey = `${person === data.me ? 'primary' : data.people.find((x) => x.id === person)?.email}|${week}`;
 
@@ -574,6 +609,10 @@ export default function App() {
           </button>
         </div>
         <button className={`nav-item${view === 'plan' ? ' active' : ''}`} onClick={() => setView('plan')}><PlanIcon /> <span className="nav-text">Plan</span></button>
+        <button className={`nav-item${view === 'chat' ? ' active' : ''}`} onClick={() => setView('chat')}>
+          <ChatIcon /> <span className="nav-text">Chat</span>
+          {chatUnread > 0 && <span className="badge">{chatUnread}</span>}
+        </button>
         <button className={`nav-item${selection?.kind === 'inbox' ? ' active' : ''}`} onClick={() => setSelection(selection?.kind === 'inbox' ? null : { kind: 'inbox', id: 'inbox' })}>
           <InboxIcon /> <span className="nav-text">Inbox</span>
           {unread > 0 && <span className="badge">{unread}</span>}
@@ -632,7 +671,21 @@ export default function App() {
             onDelete={() => { setView('plan'); setSelection(null); setSelectedPerson(null); deleteTeam(data.id); }}
           />
         )}
-        <div className="planners" ref={mainRef} style={view === 'team' ? { display: 'none' } : undefined}>
+        {view === 'chat' && (
+          <ChatPage
+            teamId={data.id}
+            me={data.me}
+            people={data.people}
+            canModerate={data.moderators.includes(data.me)}
+            cloud={cloudMode}
+            channels={chat}
+            activeId={chatActive}
+            onActive={setChatActive}
+            onRefreshChannels={refreshChat}
+            onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
+          />
+        )}
+        <div className="planners" ref={mainRef} style={view !== 'plan' ? { display: 'none' } : undefined}>
           <section className="panel" style={{ flex: '1 1 0' }} ref={planSecRef}>
             <div className="panel-head">
               <div className="panel-title">Master plan</div>
@@ -923,6 +976,14 @@ export function TeamMark({ team, size = 30 }: { team: { name: string; icon?: str
 }
 
 const ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+function ChatIcon() {
+  return (
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.4 8.9 8.9 0 0 1-3.9-.9L3 20l1-4.9a8.4 8.4 0 1 1 17-3.6Z" />
+    </svg>
+  );
+}
 
 function PlanIcon() {
   return (
