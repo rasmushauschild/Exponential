@@ -3,15 +3,12 @@ import type { Enrolled } from './transcribe';
 
 /**
  * Cloud transcription via AssemblyAI — the "just works" path for speaker separation
- * (battle-tested diarization, Danish/English auto-detect). The SHIPPED DEFAULT is
- * transcribeViaBackend: the 'transcribe' edge function holds the API key server-side, so
- * every signed-in member gets cloud transcription with zero setup and no key in the
- * binary. transcribeCloud is the optional override for teams that set their own key in
- * Team settings. Either way the cloud only groups voices (Speaker A/B/C); enrolled voice
- * prints then name those groups LOCALLY, so the naming stays on-device.
+ * (battle-tested diarization, Danish/English auto-detect). The 'transcribe' edge
+ * function holds the API key server-side, so every signed-in member gets cloud
+ * transcription with zero setup and no key anywhere in the app or repo. The cloud only
+ * groups voices (Speaker A/B/C); enrolled voice prints then name those groups LOCALLY,
+ * so the naming stays on-device.
  */
-
-const API = 'https://api.assemblyai.com/v2';
 
 type Utterance = { speaker: string; start: number; end: number; text: string };
 type AaiResult = { status: string; error?: string; text?: string; audio_duration?: number; utterances?: Utterance[] };
@@ -61,41 +58,6 @@ export async function transcribeViaBackend(
     if (result.status === 'completed') break;
     if (result.status === 'error') throw new Error(result.error ?? 'cloud transcription failed');
   }
-  let segments = toSegments(result);
-  segments = await nameGroups(blob, segments, enrolled, onProgress);
-  return { segments, text: result.text ?? segments.map((s) => s.text).join(' '), durationSecs: Math.round(result.audio_duration ?? (segments.at(-1)?.t1 ?? 0)) };
-}
-
-export async function transcribeCloud(
-  blob: Blob,
-  key: string,
-  enrolled: Enrolled[],
-  onProgress: (label: string) => void,
-): Promise<{ segments: Segment[]; text: string; durationSecs: number }> {
-  onProgress('Uploading audio');
-  const up = await fetch(`${API}/upload`, { method: 'POST', headers: { authorization: key }, body: blob });
-  if (!up.ok) throw new Error(`Upload failed (${up.status}) — check the transcription key in Team settings`);
-  const { upload_url: audioUrl } = await up.json() as { upload_url: string };
-
-  const start = await fetch(`${API}/transcript`, {
-    method: 'POST',
-    headers: { authorization: key, 'content-type': 'application/json' },
-    body: JSON.stringify({ audio_url: audioUrl, speaker_labels: true, language_detection: true }),
-  });
-  if (!start.ok) throw new Error(`Transcription request failed (${start.status})`);
-  const { id } = await start.json() as { id: string };
-
-  onProgress('Transcribing in the cloud');
-  let result: AaiResult;
-  for (;;) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const res = await fetch(`${API}/transcript/${id}`, { headers: { authorization: key } });
-    if (!res.ok) throw new Error(`Transcription poll failed (${res.status})`);
-    result = await res.json();
-    if (result.status === 'completed') break;
-    if (result.status === 'error') throw new Error(result.error ?? 'Cloud transcription failed');
-  }
-
   let segments = toSegments(result);
   segments = await nameGroups(blob, segments, enrolled, onProgress);
   return { segments, text: result.text ?? segments.map((s) => s.text).join(' '), durationSecs: Math.round(result.audio_duration ?? (segments.at(-1)?.t1 ?? 0)) };

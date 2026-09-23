@@ -104,7 +104,7 @@ export async function signOutCloud() {
 /* ─── Row shapes ───────────────────────────────────────────────────────── */
 
 type ProfileRow = { id: string; email: string; name: string; photo: string | null; color: string };
-type TeamRow = { id: string; name: string; icon: string | null; retro_fields: Data['retroFields'] | null; retro_template: Data['retroTemplate'] | null; transcribe_key?: string | null };
+type TeamRow = { id: string; name: string; icon: string | null; retro_fields: Data['retroFields'] | null; retro_template: Data['retroTemplate'] | null };
 type MemberRow = { team_id: string; email: string; user_id: string | null; role: 'moderator' | 'member'; color: string; profiles: ProfileRow | null };
 type ProjectRow = { id: string; team_id: string; name: string; start_date: string; end_date: string; lane: number; color: string | null; notes: string | null; assignees: string[]; group_id: string | null; deleted_at: string | null };
 type GroupRow = { id: string; team_id: string; name: string; color: string; sort: number };
@@ -152,7 +152,7 @@ export async function deleteTeam(id: string) {
 export async function loadTeam(teamId: string, me: string): Promise<Data> {
   try { await ensureSession(); } catch { /* a dead session then fails the reads visibly instead of silently returning nothing */ }
   const [team, members, projects, deadlines, tasks, retros, notifications, groups] = await Promise.all([
-    supabase.from('teams').select('*').eq('id', teamId).single(), // '*' so a not-yet-applied additive column (transcribe_key) can't break the load
+    supabase.from('teams').select('*').eq('id', teamId).single(), // '*' so a not-yet-applied additive column can't break the load
     supabase.from('team_members').select('team_id, email, user_id, role, color, profiles(id, email, name, photo, color)').eq('team_id', teamId).order('created_at'),
     supabase.from('projects').select('*').eq('team_id', teamId),
     supabase.from('deadlines').select('*').eq('team_id', teamId),
@@ -173,7 +173,6 @@ export async function loadTeam(teamId: string, me: string): Promise<Data> {
     icon: und(t.icon),
     retroFields: t.retro_fields ?? undefined,
     retroTemplate: t.retro_template ?? undefined,
-    transcribeKey: t.transcribe_key ?? undefined,
     moderators: rows.filter((m) => m.role === 'moderator').map((m) => m.user_id ?? pendingId(m.email)),
     me,
     people,
@@ -313,7 +312,6 @@ export async function persistDiff(prev: Data, next: Data) {
   if (prev.icon !== next.icon) tpatch.icon = next.icon ?? null;
   if (JSON.stringify(prev.retroFields) !== JSON.stringify(next.retroFields)) tpatch.retro_fields = next.retroFields ?? null;
   if (JSON.stringify(prev.retroTemplate) !== JSON.stringify(next.retroTemplate)) tpatch.retro_template = next.retroTemplate ?? null;
-  if (prev.transcribeKey !== next.transcribeKey) tpatch.transcribe_key = next.transcribeKey ?? null;
   if (Object.keys(tpatch).length) ops.push(run('team', supabase.from('teams').update(tpatch).eq('id', teamId)));
 
   // Roster: people added/removed by email; role changes via the moderators list.

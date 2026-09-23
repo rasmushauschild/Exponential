@@ -123,7 +123,6 @@ export interface Data {
   icon?: string; // image data URL; falls back to the first letter of the name
   retroFields?: RetroField[]; // legacy question list (pre-redesign retros)
   retroTemplate?: RetroTemplate;
-  transcribeKey?: string; // team AssemblyAI key — set = meetings transcribe in the cloud (better speakers)
   moderators: string[]; // person ids allowed to manage members
   people: Person[];
   groups?: Group[];

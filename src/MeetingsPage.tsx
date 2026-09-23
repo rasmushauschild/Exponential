@@ -25,7 +25,6 @@ interface Props {
   people: Person[];
   canModerate: boolean;
   cloud: boolean;
-  transcribeKey?: string; // set in Team settings → AssemblyAI does the transcription
   onClose: () => void;
   onError: (m: string) => void;
 }
@@ -75,19 +74,12 @@ export function MeetingsPage(p: Props) {
       const enrolled = (await fetchVoicePrints(cloud)).map((v) => ({ id: v.userId, embedding: v.embedding }));
       let out: { segments: Segment[]; text: string; durationSecs: number } | null = null;
       if (cloud && audioPath) {
-        // shipped default: the team's backend proxy holds the key — no setup needed
+        // shipped default: the 'transcribe' edge function holds the key server-side —
+        // zero setup for users; any failure falls through silently to on-device
         try {
           const { transcribeViaBackend } = await import('./transcribeCloud');
           out = await transcribeViaBackend(id, blob, enrolled, (label) => setProg(id, { label }));
         } catch (e) { console.warn('[transcribe] backend path unavailable:', e); }
-      }
-      if (!out && p.transcribeKey) {
-        try {
-          const { transcribeCloud } = await import('./transcribeCloud');
-          out = await transcribeCloud(blob, p.transcribeKey, enrolled, (label) => setProg(id, { label }));
-        } catch (e) {
-          p.onError(`Cloud transcription failed (${String((e as Error).message ?? e)}) — falling back to on-device.`);
-        }
       }
       if (!out) {
         out = await transcribeWithSpeakers(blob, enrolled, (pr) => setProg(id,
