@@ -292,6 +292,7 @@ export default function App() {
      notifications work from any view; messages themselves load inside ChatPage. ── */
   const [chat, setChat] = useState<Channel[]>([]);
   const [chatActive, setChatActive] = useState<string | null>(null);
+  const [chatJump, setChatJump] = useState(false); // a clicked notification opens the thread itself, not the list
   const chatTeam = data?.id;
   const chatViewRef = useRef({ panel: null as string | null, chatActive });
   chatViewRef.current = { panel: leftPanel, chatActive };
@@ -359,7 +360,7 @@ export default function App() {
 
   // The menu-bar widget can ask the main window to open a specific item.
   useEffect(() => window.exponential?.onOpen((t) => {
-    if (t.kind === 'chat') { setLeftPanel('chat'); setChatActive(t.id); return; }
+    if (t.kind === 'chat') { setLeftPanel('chat'); setChatActive(t.id); setChatJump(true); return; }
     if (t.kind === 'meeting') { setLeftPanel('meetings'); return; }
     setView('plan'); setSelection(t as Selection);
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -769,6 +770,8 @@ export default function App() {
                   onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
                   onClose={() => setLeftPanel(null)}
                   onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
+                  jumpToThread={chatJump}
+                  onJumped={() => setChatJump(false)}
                 />
               )}
               {leftPanel === 'meetings' && (

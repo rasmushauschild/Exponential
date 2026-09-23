@@ -123,11 +123,17 @@ export function MeetingsPage(p: Props) {
       let out: { segments: Segment[]; text: string; durationSecs: number } | null = null;
       if (cloud && audioPath) {
         // shipped default: the 'transcribe' edge function holds the key server-side —
-        // zero setup for users; any failure falls through silently to on-device
+        // zero setup for users; failures fall through silently to on-device, EXCEPT an
+        // out-of-funds account, which the team should hear about (top up, or stay free).
         try {
           const { transcribeViaBackend } = await import('./transcribeCloud');
           out = await transcribeViaBackend(id, blob, enrolled, (label) => setProg(id, { label }));
-        } catch (e) { console.warn('[transcribe] backend path unavailable:', e); }
+        } catch (e) {
+          const msg = String((e as Error).message ?? e);
+          if (/balance|credit|fund|billing|payment/i.test(msg)) {
+            p.onError('Cloud transcription is out of funds — top up at assemblyai.com → Billing. Using the free on-device engine meanwhile.');
+          } else console.warn('[transcribe] backend path unavailable:', e);
+        }
       }
       if (!out) {
         out = await transcribeWithSpeakers(blob, enrolled, (pr) => setProg(id,
@@ -282,12 +288,13 @@ export function MeetingsPage(p: Props) {
             <div className="sheet-title">Learn my voice</div>
             <p className="voice-hint">Read this out loud, at your normal pace — it takes about twenty seconds:</p>
             <p className="voice-script">
-              “Hello Exponential, this is my voice — and this is not a drill. I am mostly
-              harmless, usually caffeinated, and I always know where my towel is. The answer
-              to life, the universe and everything may be forty-two, but the answer to who
-              is speaking right now is: me. One, two, three, four, five — red, green, blue,
-              yellow. Don't panic, and thanks for all the fish.”
+              “To be, or not to be, that is the question: whether 'tis nobler in the mind to
+              suffer the slings and arrows of outrageous fortune, or to take arms against a
+              sea of troubles, and by opposing end them. To die — to sleep, no more; and by a
+              sleep to say we end the heart-ache and the thousand natural shocks that flesh
+              is heir to.”
             </p>
+            <p className="voice-attr">— Hamlet, Prince of Denmark</p>
             <div className="voice-foot">
               {voiceRec === 'recording' ? <><span className="meet-reddot" /> Listening… {voiceSecs}s</>
                 : voiceRec === 'saved' ? <span className="voice-saved">✓ Voice saved — meetings will name you from now on</span>

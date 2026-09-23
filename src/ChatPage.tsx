@@ -30,6 +30,9 @@ interface Props {
   onMarkRead: (ids: string[]) => void;
   onClose: () => void;
   onError: (msg: string) => void;
+  /** Set when a notification was clicked: drill straight into the active thread, then consume. */
+  jumpToThread?: boolean;
+  onJumped?: () => void;
 }
 
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -62,7 +65,12 @@ export function ChatPage(p: Props) {
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [newChannel, setNewChannel] = useState(false);
   // iMessage-style: a conversations screen first; threads and notifications drill in
-  const [screen, setScreen] = useState<'list' | 'thread' | 'inbox'>('list');
+  const [screen, setScreen] = useState<'list' | 'thread' | 'inbox'>(p.jumpToThread && activeId ? 'thread' : 'list');
+  // A notification click lands in the conversation itself, not the list — also when the
+  // panel is already open (the flag is consumed so a manual reopen shows the list again).
+  useEffect(() => {
+    if (p.jumpToThread && active) { setScreen('thread'); p.onJumped?.(); }
+  }, [p.jumpToThread, active?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [previews, setPreviews] = useState<Record<string, { body: string; author?: string; at: string }>>(() => cachedPreviews(teamId) ?? {});
   useEffect(() => {
     setPreviews(cachedPreviews(teamId) ?? {}); // instant from cache, then reconcile

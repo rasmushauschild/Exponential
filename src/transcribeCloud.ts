@@ -44,8 +44,14 @@ export async function transcribeViaBackend(
 ): Promise<{ segments: Segment[]; text: string; durationSecs: number }> {
   const { supabase } = await import('./cloud');
   onProgress('Transcribing in the cloud');
+  // functions.invoke buries the response body of a non-2xx inside error.context — dig the
+  // real reason out (AAI's own message, or the function's), so callers can react to it.
+  const detail = async (err: { message?: string; context?: Response }) => {
+    try { return ((await err.context?.json()) as { error?: string })?.error || err.message || 'transcription service unavailable'; }
+    catch { return err.message ?? 'transcription service unavailable'; }
+  };
   const start = await supabase.functions.invoke('transcribe', { body: { action: 'start', meetingId } });
-  if (start.error) throw new Error(start.error.message ?? 'transcription service unavailable');
+  if (start.error) throw new Error(await detail(start.error));
   const started = start.data as { id?: string; error?: string };
   if (!started.id) throw new Error(started.error ?? 'transcription service unavailable');
 
