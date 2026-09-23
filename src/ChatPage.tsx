@@ -5,7 +5,7 @@ import { shortName } from './types';
 import { Avatar } from './WeekPlan';
 import { decorate, stripInlineMd } from './richtext';
 import {
-  attachLinkPreview, attachmentUrl, backfillLinkPreviews, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
+  attachLinkPreview, attachmentExpired, attachmentUrl, backfillLinkPreviews, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
   fetchMessages, fetchPreviews, isDm, markRead, mentionsToNames, messageCache, namesToMentions, notifyMentions, onChatEvent, openDm, sendMessage, setChannelMembers,
   toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
@@ -452,7 +452,7 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
         ) : (
           msg.body && <div className="chat-body">{renderChat(msg.body, people, me)}{msg.editedAt && !head ? <span className="chat-time"> (edited)</span> : null}</div>
         )}
-        {msg.attachments?.map((a, i) => <AttachmentView key={i} att={a} cloud={cloud} onImage={onImage} />)}
+        {msg.attachments?.map((a, i) => <AttachmentView key={i} att={a} at={msg.at} cloud={cloud} onImage={onImage} />)}
         {msg.reactions && Object.keys(msg.reactions).length > 0 && (
           <div className="chat-reacts">
             {Object.entries(msg.reactions).map(([emo, users]) => (
@@ -515,7 +515,8 @@ function renderChatMd(text: string) {
   });
 }
 
-function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boolean; onImage: (url: string) => void }) {
+function AttachmentView({ att, at, cloud, onImage }: { att: Attachment; at: string; cloud: boolean; onImage: (url: string) => void }) {
+  const expired = attachmentExpired(at, att);
   const [url, setUrl] = useState<string | null>(att.path.startsWith('data:') ? att.path : null);
   const isImage = att.type.startsWith('image/');
   const save = async () => {
@@ -538,9 +539,18 @@ function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boole
   }
   useEffect(() => {
     let gone = false;
-    if (!url) attachmentUrl(att, cloud, isImage).then((u) => { if (!gone) setUrl(u); }).catch(() => {});
+    if (!url && !expired) attachmentUrl(att, cloud, isImage).then((u) => { if (!gone) setUrl(u); }).catch(() => {});
     return () => { gone = true; };
   }, [att.path]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (expired) {
+    return (
+      <span className="chat-file expired" title="Files are kept for 30 days">
+        <FileGlyph />
+        <span className="chat-file-name">{att.name}</span>
+        <span className="chat-file-size">expired</span>
+      </span>
+    );
+  }
   if (isImage) {
     return url
       ? <img className="chat-img" src={url} style={att.w && att.h ? { aspectRatio: `${att.w} / ${att.h}` } : undefined} onClick={() => onImage(url)} alt={att.name} />
@@ -579,6 +589,7 @@ function Composer({ channel, label, teamId, cloud, people, me, onSend, onError, 
   const [text, setText] = useState('');
   const [atts, setAtts] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(0);
+  const [upNote, setUpNote] = useState<string | null>(null); // "name — 43%" for big (resumable) uploads
   const [mention, setMention] = useState<{ at: number; query: string } | null>(null);
   const [mIdx, setMIdx] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -617,11 +628,13 @@ function Composer({ channel, label, teamId, cloud, people, me, onSend, onError, 
   const addFiles = async (files: FileList | File[]) => {
     for (const f of Array.from(files)) {
       setUploading((n) => n + 1);
+      setUpNote(f.name);
       try {
-        const att = await uploadChatFile(teamId, f, cloud);
+        const att = await uploadChatFile(teamId, f, cloud, (pct) => setUpNote(`${f.name} — ${pct}%`));
         setAtts((a) => [...a, att]);
       } catch (e) { onError(String((e as Error).message ?? e)); }
       setUploading((n) => n - 1);
+      setUpNote(null);
     }
     taRef.current?.focus();
   };
@@ -651,7 +664,7 @@ function Composer({ channel, label, teamId, cloud, people, me, onSend, onError, 
               <button onClick={() => setAtts((x) => x.filter((_, j) => j !== i))}>×</button>
             </span>
           ))}
-          {uploading > 0 && <span className="chat-att-chip loading">Uploading…</span>}
+          {uploading > 0 && <span className="chat-att-chip loading">Uploading {upNote ?? '…'}</span>}
         </div>
       )}
       <div className="chat-compose-row">

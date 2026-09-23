@@ -1,4 +1,4 @@
-import { addEgress, supabase } from './cloud';
+import { addEgress, supabase, SUPABASE_KEY, SUPABASE_URL } from './cloud';
 import { uid } from './store';
 import { shortName, type Person } from './types';
 import { stripInlineMd } from './richtext';
@@ -436,7 +436,41 @@ export function backfillLinkPreviews(teamId: string, msgs: ChatMessage[], me: st
 
 /* ── attachments ── */
 
-const MAX_FILE = 25 * 1024 * 1024;
+const MAX_FILE = 1024 * 1024 * 1024; // 1 GB — the Supabase project's Storage upload limit must be raised to match
+const TUS_FROM = 6 * 1024 * 1024; // Supabase recommends resumable uploads above 6 MB
+export const CHAT_FILE_TTL_MS = 30 * 86_400_000; // non-image files expire after 30 days
+
+/** True when this attachment's stored bytes are past their 30-day lifetime (images and
+ *  link previews are tiny and part of the conversation record — they never expire). */
+export function attachmentExpired(messageAt: string, att: Attachment): boolean {
+  if (att.type === 'link/preview' || att.type.startsWith('image/') || att.path.startsWith('data:')) return false;
+  return Date.now() - +new Date(messageAt) > CHAT_FILE_TTL_MS;
+}
+
+/** Once per team per session: delete stored chat files whose messages are older than 30
+ *  days. Storage RLS allows deleting own objects (moderators: all), so everyone sweeps
+ *  their own uploads and any moderator's app sweeps the rest; clients render expired
+ *  cards from the message age alone, so a pending sweep is invisible. */
+const sweptTeams = new Set<string>();
+export async function purgeExpiredChatFiles(teamId: string, me: string, isMod: boolean, cloud: boolean) {
+  if (!cloud || sweptTeams.has(teamId)) return;
+  sweptTeams.add(teamId);
+  const cutoff = new Date(Date.now() - CHAT_FILE_TTL_MS).toISOString();
+  const { data, error } = await supabase.from('messages')
+    .select('author, created_at, attachments')
+    .eq('team_id', teamId).not('attachments', 'is', null).lt('created_at', cutoff).limit(500);
+  if (error || !data) return;
+  const paths: string[] = [];
+  for (const r of data as { author: string | null; created_at: string; attachments: Attachment[] | null }[]) {
+    if (!(isMod || r.author === me)) continue; // RLS would refuse the delete anyway
+    for (const a of r.attachments ?? []) {
+      if (attachmentExpired(r.created_at, a) && a.path.startsWith(`${teamId}/`)) paths.push(a.path);
+    }
+  }
+  for (let i = 0; i < paths.length; i += 100) {
+    await supabase.storage.from('chat').remove(paths.slice(i, i + 100)).catch(() => {});
+  }
+}
 
 /** Pasted/dropped images are downscaled like notes images (the egress lesson).
  *  GIFs pass through untouched (re-encoding kills the animation) and PNGs stay PNG
@@ -456,8 +490,8 @@ async function shrinkImage(file: File): Promise<{ blob: Blob; w: number; h: numb
   return blob.size < file.size ? { blob, w: canvas.width, h: canvas.height } : { blob: file, w: bmp.width, h: bmp.height };
 }
 
-export async function uploadChatFile(teamId: string, file: File, cloud: boolean): Promise<Attachment> {
-  if (file.size > MAX_FILE) throw new Error('Files can be up to 25 MB');
+export async function uploadChatFile(teamId: string, file: File, cloud: boolean, onProgress?: (pct: number) => void): Promise<Attachment> {
+  if (file.size > MAX_FILE) throw new Error('Files can be up to 1 GB');
   const isImage = file.type.startsWith('image/');
   let blob: Blob = file;
   let dims: { w?: number; h?: number } = {};
@@ -470,9 +504,33 @@ export async function uploadChatFile(teamId: string, file: File, cloud: boolean)
     return { path: url, name: file.name, size: blob.size, type: blob.type || file.type, ...dims };
   }
   const path = `${teamId}/${uid()}-${file.name.replace(/[^\w.\- ]+/g, '_').slice(0, 80)}`;
-  const { error } = await supabase.storage.from('chat').upload(path, blob, { contentType: blob.type || file.type, upsert: false });
-  if (error) throw error;
-  return { path, name: file.name, size: blob.size, type: blob.type || file.type, ...dims };
+  const type = blob.type || file.type || 'application/octet-stream';
+  if (blob.size > TUS_FROM) {
+    // Resumable (TUS): a 1 GB upload survives wifi hiccups and reports real progress.
+    const { Upload } = await import('tus-js-client');
+    const { data: s } = await supabase.auth.getSession();
+    if (!s.session) throw new Error('Not signed in');
+    await new Promise<void>((resolve, reject) => {
+      const up = new Upload(blob, {
+        endpoint: `${SUPABASE_URL}/storage/v1/upload/resumable`,
+        retryDelays: [0, 2000, 5000, 10000, 20000],
+        headers: { authorization: `Bearer ${s.session!.access_token}`, apikey: SUPABASE_KEY, 'x-upsert': 'false' },
+        uploadDataDuringCreation: true,
+        removeFingerprintOnSuccess: true,
+        chunkSize: 6 * 1024 * 1024, // Supabase requires exactly 6 MB chunks
+        metadata: { bucketName: 'chat', objectName: path, contentType: type, cacheControl: '3600' },
+        onProgress: (sent, total) => onProgress?.(Math.round((sent / total) * 100)),
+        onSuccess: () => resolve(),
+        onError: (e) => reject(e),
+      });
+      up.start();
+    });
+    addEgress(blob.size); // mirror what meteredFetch counts for standard uploads
+  } else {
+    const { error } = await supabase.storage.from('chat').upload(path, blob, { contentType: type, upsert: false });
+    if (error) throw error;
+  }
+  return { path, name: file.name, size: blob.size, type, ...dims };
 }
 
 const urlCache = new Map<string, { url: string; until: number }>();

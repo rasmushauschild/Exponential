@@ -13,7 +13,7 @@ import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTa
 import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase, usageMonthTotal } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 import { ChatPage } from './ChatPage';
-import { fetchChat, mentionsToNames, onChatEvent, subscribeChat, type Channel } from './chat';
+import { fetchChat, mentionsToNames, onChatEvent, purgeExpiredChatFiles, subscribeChat, type Channel } from './chat';
 import { MeetingsPage } from './MeetingsPage';
 import { subscribeMeetings } from './meetings';
 
@@ -303,6 +303,10 @@ export default function App() {
   }, [chatTeam, data?.me, cloudMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setChat([]); setChatActive(null); refreshChat(); }, [chatTeam, cloudMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!chatTeam || !cloudMode) return; return subscribeChat(chatTeam, cloudMode); }, [chatTeam, cloudMode]);
+  useEffect(() => { // 30-day chat-file lifetime: sweep my expired uploads (moderators: everyone's), once per team per session
+    if (!chatTeam || !cloudMode || !data) return;
+    purgeExpiredChatFiles(chatTeam, data.me, data.moderators.includes(data.me), true).catch(() => {});
+  }, [chatTeam, cloudMode]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => onChatEvent((e) => {
     if (e.teamId !== chatTeam || !data) return;
     if (e.type === 'channels') { refreshChat(); return; }
