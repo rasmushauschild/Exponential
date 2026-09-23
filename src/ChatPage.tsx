@@ -289,7 +289,14 @@ export function ChatPage(p: Props) {
               stickBottom.current = true;
             }}
             attachRef={attachRef} />
-          {dropping && <div className="meet-drop-hint">Drop to attach</div>}
+          {dropping && (
+            <div className="chat-drop-ov">
+              <div className="chat-drop-card">
+                <DropGlyph />
+                <span>Drop to attach</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -548,6 +555,15 @@ function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boole
       </a>
       <button className="chat-file-dl" title="Save to Downloads" onClick={save}><DownloadTiny /></button>
     </span>
+  );
+}
+
+function DropGlyph() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      <path className="drop-arrow" d="M12 3.5v10m0 0 4.5-4.5M12 13.5 7.5 9" />
+      <path d="M4 15.5v2.5a2.5 2.5 0 0 0 2.5 2.5h11a2.5 2.5 0 0 0 2.5-2.5v-2.5" />
+    </svg>
   );
 }
 
