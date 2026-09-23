@@ -13,7 +13,7 @@ import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTa
 import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase, usageMonthTotal } from './cloud';
 import { addDays, todayISO, weekStart } from './dates';
 import { ChatPage } from './ChatPage';
-import { fetchChat, onChatEvent, subscribeChat, type Channel } from './chat';
+import { fetchChat, mentionsToNames, onChatEvent, subscribeChat, type Channel } from './chat';
 import { MeetingsPage } from './MeetingsPage';
 import { subscribeMeetings } from './meetings';
 
@@ -312,7 +312,7 @@ export default function App() {
       setChat((chs) => chs.map((c) => (c.id === e.message.channelId ? { ...c, unread: c.unread + 1, lastAt: e.message.at } : c)));
       const who = shortName(data.people.find((x) => x.id === e.message.author)?.name ?? 'Someone');
       const ch = chat.find((c) => c.id === e.message.channelId);
-      const body = e.message.body || (e.message.attachments?.length ? (e.message.attachments[0].type.startsWith('image/') ? '📷 Image' : e.message.attachments[0].name) : '');
+      const body = mentionsToNames(e.message.body, data.people) || (e.message.attachments?.length ? (e.message.attachments[0].type.startsWith('image/') ? '📷 Image' : e.message.attachments[0].name) : '');
       const title = ch && ch.name.startsWith('dm:') ? who : `#${ch?.name ?? 'chat'} · ${who}`;
       window.exponential?.notify?.({ id: e.message.id, title, body, ref: { kind: 'chat', id: e.message.channelId } });
     }

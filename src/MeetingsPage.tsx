@@ -39,6 +39,24 @@ const fmtStamp = (iso: string) => new Date(iso).toLocaleDateString([], { month: 
 const defaultTitle = (iso: string) => `Meeting — ${fmtStamp(iso)}`;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/** Runaway guard: recordings auto-stop here, and longer imports aren't transcribed
+ *  (the edge function enforces the same limit server-side). */
+const MAX_MEET_SECS = 3 * 3600;
+
+/** Duration from the container header — no decode, so a huge file costs nothing to
+ *  check. MediaRecorder webms carry no duration header → undefined (recordings are
+ *  capped by the auto-stop instead). */
+const blobDuration = (blob: Blob) => new Promise<number | undefined>((res) => {
+  const a = document.createElement('audio');
+  const url = URL.createObjectURL(blob);
+  let done = false;
+  const finish = (v?: number) => { if (!done) { done = true; URL.revokeObjectURL(url); res(v); } };
+  a.onloadedmetadata = () => finish(Number.isFinite(a.duration) ? a.duration : undefined);
+  a.onerror = () => finish(undefined);
+  window.setTimeout(() => finish(undefined), 8000);
+  a.src = url;
+});
+
 type Progress = { label: string; pct?: number };
 
 export function MeetingsPage(p: Props) {
@@ -48,10 +66,17 @@ export function MeetingsPage(p: Props) {
   const [progress, setProgress] = useState<Record<string, Progress>>({});
   const [rec, setRec] = useState<RecordingSession | null>(() => activeRecording());
   const [drag, setDrag] = useState(false);
-  const [voiceRec, setVoiceRec] = useState<'idle' | 'recording' | 'saving'>('idle');
+  const [voiceRec, setVoiceRec] = useState<'idle' | 'recording' | 'saving' | 'saved'>('idle');
   const [voiceSecs, setVoiceSecs] = useState(20);
+  const [hasPrint, setHasPrint] = useState(false);
   const voiceCancel = useRef(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let gone = false;
+    fetchVoicePrints(cloud).then((v) => { if (!gone) setHasPrint(v.some((x) => x.userId === me)); }).catch(() => {});
+    return () => { gone = true; };
+  }, [cloud, me]);
 
   const refetch = () => fetchMeetings(teamId, cloud).then(setMeetings).catch((e) => p.onError(String((e as Error).message ?? e)));
   useEffect(() => { setMeetings(cachedMeetings(teamId) ?? []); setSelected(null); refetch(); return subscribeMeetings(teamId, cloud, () => refetch()); }, [teamId, cloud]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -65,11 +90,34 @@ export function MeetingsPage(p: Props) {
   /** Upload, transcribe on device (with speaker labels), name it. */
   const processAudio = async (id: string, blob: Blob, startedAt: string, durationSecs?: number) => {
     try {
+      // 3-hour guard: an over-long import is refused BEFORE anything uploads (recordings
+      // can't get here — they auto-stop at the limit; if one somehow does, its audio is
+      // kept and only transcription is skipped).
+      const dur = durationSecs ?? await blobDuration(blob);
+      if (dur !== undefined && dur > MAX_MEET_SECS + 60) {
+        const hours = (Math.round(dur / 360) / 10).toFixed(1);
+        if (durationSecs === undefined) {
+          p.onError(`That file is ${hours} hours long — meetings over 3 hours aren't transcribed.`);
+          const m = meetings.find((x) => x.id === id);
+          if (m) await deleteMeeting(teamId, m, cloud).catch(() => {});
+          setSelected((s) => (s === id ? null : s));
+          setProg(id, null);
+          refetch();
+          return;
+        }
+        p.onError(`This recording is ${hours} hours long — saved, but meetings over 3 hours aren't transcribed.`);
+      }
       setProg(id, { label: 'Saving' });
       const audioPath = await uploadMeetingAudio(id, blob, cloud);
       if (audioPath) await updateMeeting(teamId, id, { audioPath }, cloud);
+      if (dur !== undefined && dur > MAX_MEET_SECS + 60) {
+        await updateMeeting(teamId, id, { durationSecs: Math.round(dur), status: 'recorded' }, cloud);
+        setProg(id, null);
+        refetch();
+        return;
+      }
       const { transcribeWithSpeakers, autoTitle } = await import('./transcribe');
-      await updateMeeting(teamId, id, { status: 'transcribing' }, cloud);
+      await updateMeeting(teamId, id, { status: 'transcribing', ...(durationSecs === undefined && dur ? { durationSecs: Math.round(dur) } : {}) }, cloud);
       refetch();
       const enrolled = (await fetchVoicePrints(cloud)).map((v) => ({ id: v.userId, embedding: v.embedding }));
       let out: { segments: Segment[]; text: string; durationSecs: number } | null = null;
@@ -158,7 +206,9 @@ export function MeetingsPage(p: Props) {
       const { voiceEmbedding } = await import('./transcribe');
       const emb = await voiceEmbedding(new Blob(chunks, { type: 'audio/webm' }));
       await saveVoicePrint(me, emb, cloud);
-      setVoiceRec('idle');
+      setHasPrint(true);
+      setVoiceRec('saved'); // linger on the confirmation, then close
+      window.setTimeout(() => setVoiceRec((v) => (v === 'saved' ? 'idle' : v)), 2000);
     } catch (e) { setVoiceRec('idle'); p.onError(String((e as Error).message ?? e)); }
   };
 
@@ -199,13 +249,13 @@ export function MeetingsPage(p: Props) {
         )}
         <button className="pill" onClick={() => fileRef.current?.click()} title="Transcribe an existing recording">Import audio</button>
         <span className="panel-spacer" />
-        <button className="pill" onClick={learnVoice} disabled={voiceRec !== 'idle'}
-          title="Read a short script once — transcripts will then label your parts with your name">
-          Learn my voice
+        <button className={`pill${hasPrint ? ' voice-done' : ''}`} onClick={learnVoice} disabled={voiceRec !== 'idle'}
+          title={hasPrint ? 'Your voice is saved — click to read the script again and re-train' : 'Read a short script once — transcripts will then label your parts with your name'}>
+          {hasPrint ? 'Voice saved ✓' : 'Learn my voice'}
         </button>
         <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
       </div>
-      {rec && <RecordBar rec={rec} onStop={stop} />}
+      {rec && <RecordBar rec={rec} onStop={stop} onLimit={() => { p.onError('Recording hit the 3-hour limit — stopped and saved.'); stop(); }} />}
       <div className="meet-scroll">
         {meetings.length === 0 && !rec && (
           <div className="meet-empty">Nothing recorded yet. Hit Record in a meeting, or drop an audio file anywhere on this page.</div>
@@ -232,14 +282,16 @@ export function MeetingsPage(p: Props) {
             <div className="sheet-title">Learn my voice</div>
             <p className="voice-hint">Read this out loud, at your normal pace — it takes about twenty seconds:</p>
             <p className="voice-script">
-              “Hi team, it's just me teaching Exponential my voice. Every week we plan projects,
-              set priorities and review progress together around this table. Sometimes I speak
-              quickly when I'm excited, and sometimes slowly when I'm thinking something through.
-              One, two, three, four, five, six, seven — red, green, blue, yellow. That should be
-              plenty for the app to recognise me in our meetings from now on.”
+              “Hello Exponential, this is my voice — and this is not a drill. I am mostly
+              harmless, usually caffeinated, and I always know where my towel is. The answer
+              to life, the universe and everything may be forty-two, but the answer to who
+              is speaking right now is: me. One, two, three, four, five — red, green, blue,
+              yellow. Don't panic, and thanks for all the fish.”
             </p>
             <div className="voice-foot">
-              {voiceRec === 'recording' ? <><span className="meet-reddot" /> Listening… {voiceSecs}s</> : 'Saving your voice…'}
+              {voiceRec === 'recording' ? <><span className="meet-reddot" /> Listening… {voiceSecs}s</>
+                : voiceRec === 'saved' ? <span className="voice-saved">✓ Voice saved — meetings will name you from now on</span>
+                : 'Saving your voice…'}
               <span className="panel-spacer" />
               {voiceRec === 'recording' && <button className="pill" onClick={() => { voiceCancel.current = true; }}>Cancel</button>}
             </div>
@@ -266,14 +318,18 @@ function Participants({ m, people }: { m: Meeting; people: Person[] }) {
 }
 
 /** Voice-Memos-style strip: scrolling waveform, elapsed (recording) time, pause/resume, stop. */
-function RecordBar({ rec, onStop }: { rec: RecordingSession; onStop: () => void }) {
+function RecordBar({ rec, onStop, onLimit }: { rec: RecordingSession; onStop: () => void; onLimit: () => void }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const samples = useRef<number[]>([]);
   const [, tick] = useState(0);
   const [paused, setPaused] = useState(rec.state() === 'paused');
+  const limited = useRef(false);
 
   useEffect(() => {
-    const t = window.setInterval(() => tick((v) => v + 1), 500);
+    const t = window.setInterval(() => {
+      tick((v) => v + 1);
+      if (!limited.current && rec.activeSecs() >= MAX_MEET_SECS) { limited.current = true; onLimit(); }
+    }, 500);
     const s = window.setInterval(() => { if (rec.state() === 'recording') samples.current.push(rec.level()); }, 90);
     let raf = 0;
     const draw = () => {

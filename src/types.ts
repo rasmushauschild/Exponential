@@ -54,7 +54,7 @@ export interface Task {
   deletedAt?: string; // soft-deleted: sits in Team settings → Recently deleted for 7 days
 }
 
-export type NotificationKind = 'task-added' | 'task-changed' | 'review-requested' | 'review-denied' | 'review-completed' | 'owner-changed' | 'project-changed';
+export type NotificationKind = 'task-added' | 'task-changed' | 'review-requested' | 'review-denied' | 'review-completed' | 'owner-changed' | 'project-changed' | 'chat-mention';
 
 export interface Notification {
   id: string;
@@ -62,7 +62,7 @@ export interface Notification {
   from: string;
   kind: NotificationKind;
   text: string;
-  ref: { kind: 'task' | 'project'; id: string };
+  ref: { kind: 'task' | 'project' | 'chat'; id: string };
   at: string; // ISO timestamp
   read: boolean;
 }

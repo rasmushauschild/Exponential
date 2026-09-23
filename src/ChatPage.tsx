@@ -6,7 +6,7 @@ import { Avatar } from './WeekPlan';
 import { decorate, stripInlineMd } from './richtext';
 import {
   attachLinkPreview, attachmentUrl, backfillLinkPreviews, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
-  fetchMessages, fetchPreviews, isDm, markRead, messageCache, onChatEvent, openDm, sendMessage, setChannelMembers,
+  fetchMessages, fetchPreviews, isDm, markRead, mentionsToNames, messageCache, namesToMentions, notifyMentions, onChatEvent, openDm, sendMessage, setChannelMembers,
   toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
 import { InboxList } from './DetailPanel';
@@ -159,7 +159,7 @@ export function ChatPage(p: Props) {
     const pv = previews[ch.id];
     if (!pv) return 'No messages yet';
     const who = pv.author === me ? 'You: ' : isDm(ch) ? '' : `${shortName(people.find((x) => x.id === pv.author)?.name ?? '')}: `;
-    return who + pv.body;
+    return who + mentionsToNames(pv.body, people);
   };
   const lastNotif = p.notifications.filter((n) => n.to === me).sort((a, b) => b.at.localeCompare(a.at))[0];
 
@@ -229,7 +229,8 @@ export function ChatPage(p: Props) {
             <button className="icon-btn" title="Close" onClick={p.onClose}><XGlyph /></button>
           </div>
           <div className="chat-inbox-scroll">
-            <InboxList notifications={p.notifications} people={people} me={me} onOpen={p.onOpenItem} onMarkRead={p.onMarkRead} />
+            <InboxList notifications={p.notifications} people={people} me={me} onMarkRead={p.onMarkRead}
+              onOpen={(sel) => { if (sel.kind === 'chat') { onActive(sel.id); setScreen('thread'); } else p.onOpenItem(sel); }} />
           </div>
         </>
       )}
@@ -257,7 +258,7 @@ export function ChatPage(p: Props) {
             ))}
             {msgs.length === 0 && <div className="chat-empty">No messages yet — say hi 👋</div>}
           </div>
-          <Composer key={active.id} channel={active} teamId={teamId} cloud={cloud} onError={p.onError}
+          <Composer key={active.id} channel={active} teamId={teamId} cloud={cloud} people={people} me={me} onError={p.onError}
             label={isDm(active) ? `Message ${shortName(people.find((x) => x.id === dmOther(active, me))?.name ?? '')}` : `Message #${active.name}`}
             onSend={async (body, atts) => {
               const m = await sendMessage(teamId, active.id, me, body, atts, cloud);
@@ -267,6 +268,7 @@ export function ChatPage(p: Props) {
                 setPreviews((pv) => ({ ...pv, [active.id]: { body: body || 'Attachment', author: me, at: m.at } }));
               }
               attachLinkPreview(teamId, m, cloud).catch(() => {}); // fire and forget
+              notifyMentions(teamId, active, me, people, body, cloud).catch(() => {});
               stickBottom.current = true;
             }} />
         </div>
@@ -415,14 +417,14 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
           </div>
         )}
         {editing ? (
-          <textarea className="chat-edit" autoFocus defaultValue={msg.body} rows={2}
+          <textarea className="chat-edit" autoFocus defaultValue={mentionsToNames(msg.body, people)} rows={2}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const v = (e.target as HTMLTextAreaElement).value.trim(); if (v && v !== msg.body) onEdit(v); setEditing(false); }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); const v = (e.target as HTMLTextAreaElement).value.trim(); if (v && v !== mentionsToNames(msg.body, people)) onEdit(namesToMentions(v, people)); setEditing(false); }
               if (e.key === 'Escape') setEditing(false);
             }}
             onBlur={() => setEditing(false)} />
         ) : (
-          msg.body && <div className="chat-body">{renderChat(msg.body)}{msg.editedAt && !head ? <span className="chat-time"> (edited)</span> : null}</div>
+          msg.body && <div className="chat-body">{renderChat(msg.body, people, me)}{msg.editedAt && !head ? <span className="chat-time"> (edited)</span> : null}</div>
         )}
         {msg.attachments?.map((a, i) => <AttachmentView key={i} att={a} cloud={cloud} onImage={onImage} />)}
         {msg.reactions && Object.keys(msg.reactions).length > 0 && (
@@ -437,7 +439,7 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
         <span className="chat-actions">
           {msg.body && (
             <button title={copied ? 'Copied!' : 'Copy text'} onClick={() => {
-              navigator.clipboard.writeText(stripInlineMd(msg.body));
+              navigator.clipboard.writeText(stripInlineMd(mentionsToNames(msg.body, people)));
               setCopied(true);
               window.setTimeout(() => setCopied(false), 1400);
             }}>{copied ? <CheckTiny /> : <CopyTiny />}</button>
@@ -462,8 +464,19 @@ function SmileGlyph() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M8.5 14a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01" /></svg>;
 }
 
-/** Like renderInlineMd, but URLs become real links (opened externally by Electron). */
-function renderChat(text: string) {
+/** Like renderInlineMd, but URLs become real links (opened externally by Electron)
+ *  and `@[uuid]` mention tokens become highlighted name chips. */
+function renderChat(text: string, people: Person[], me: string) {
+  const bits = text.split(/(@\[[\w-]{1,40}\])/g);
+  if (bits.length === 1) return renderChatMd(text);
+  return bits.map((bit, i) => {
+    const m = /^@\[([\w-]{1,40})\]$/.exec(bit);
+    const who = m ? people.find((x) => x.id === m[1]) : undefined;
+    if (m && who) return <span key={i} className={`mention${m[1] === me ? ' me' : ''}`}>@{shortName(who.name)}</span>;
+    return bit ? <span key={i}>{renderChatMd(bit)}</span> : null;
+  });
+}
+function renderChatMd(text: string) {
   const parts = decorate(text);
   if (!parts) return text;
   return parts.map((p, k) => {
@@ -508,17 +521,41 @@ function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boole
   );
 }
 
-function Composer({ channel, label, teamId, cloud, onSend, onError }: {
-  channel: Channel; label: string; teamId: string; cloud: boolean;
+function Composer({ channel, label, teamId, cloud, people, me, onSend, onError }: {
+  channel: Channel; label: string; teamId: string; cloud: boolean; people: Person[]; me: string;
   onSend: (body: string, atts: Attachment[] | undefined) => Promise<void>; onError: (m: string) => void;
 }) {
   const [text, setText] = useState('');
   const [atts, setAtts] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(0);
   const [drag, setDrag] = useState(false);
+  const [mention, setMention] = useState<{ at: number; query: string } | null>(null);
+  const [mIdx, setMIdx] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const sending = useRef(false);
+
+  // '@' followed by a partial name (no whitespace yet) right before the caret opens the picker
+  const pool = channel.private && channel.members ? people.filter((x) => channel.members!.includes(x.id)) : people;
+  const q = mention?.query.toLowerCase() ?? '';
+  const candidates = mention
+    ? pool.filter((x) => x.id !== me && (!q || x.name.toLowerCase().includes(q) || shortName(x.name).toLowerCase().includes(q))).slice(0, 6)
+    : [];
+  const detectMention = (ta: HTMLTextAreaElement) => {
+    const upTo = ta.value.slice(0, ta.selectionStart ?? ta.value.length);
+    const m = /(^|\s)@([^\s@]*)$/.exec(upTo);
+    setMention(m ? { at: upTo.length - m[2].length - 1, query: m[2] } : null);
+    setMIdx(0);
+  };
+  const applyMention = (who: Person) => {
+    if (!mention) return;
+    const caret = mention.at + 1 + mention.query.length;
+    const next = `${text.slice(0, mention.at)}@${who.name} ${text.slice(caret)}`;
+    const pos = mention.at + who.name.length + 2;
+    setText(next);
+    setMention(null);
+    requestAnimationFrame(() => { taRef.current?.focus(); taRef.current?.setSelectionRange(pos, pos); grow(); });
+  };
 
   const grow = () => {
     const ta = taRef.current;
@@ -540,12 +577,12 @@ function Composer({ channel, label, teamId, cloud, onSend, onError }: {
   };
 
   const send = async () => {
-    const body = text.trim();
+    const body = namesToMentions(text.trim(), people);
     if ((!body && !atts.length) || sending.current || uploading) return;
     sending.current = true;
     try {
       await onSend(body, atts.length ? atts : undefined);
-      setText(''); setAtts([]);
+      setText(''); setAtts([]); setMention(null);
       requestAnimationFrame(grow);
     } catch (e) { onError(String((e as Error).message ?? e)); }
     sending.current = false;
@@ -578,8 +615,18 @@ function Composer({ channel, label, teamId, cloud, onSend, onError }: {
             rows={1}
             placeholder={label}
             value={text}
-            onChange={(e) => { setText(e.target.value); grow(); }}
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }}
+            onChange={(e) => { setText(e.target.value); grow(); detectMention(e.target); }}
+            onClick={(e) => detectMention(e.target as HTMLTextAreaElement)}
+            onBlur={() => setMention(null)}
+            onKeyDown={(e) => {
+              if (mention && candidates.length) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setMIdx((i) => (i + 1) % candidates.length); return; }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setMIdx((i) => (i - 1 + candidates.length) % candidates.length); return; }
+                if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); applyMention(candidates[mIdx]); return; }
+                if (e.key === 'Escape') { e.preventDefault(); setMention(null); return; }
+              }
+              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+            }}
             onPaste={(e) => {
               const imgs = Array.from(e.clipboardData.items).filter((i) => i.type.startsWith('image/')).map((i) => i.getAsFile()).filter(Boolean) as File[];
               if (imgs.length) { e.preventDefault(); addFiles(imgs); }
@@ -588,6 +635,19 @@ function Composer({ channel, label, teamId, cloud, onSend, onError }: {
           <button className="chat-return" title="Send (Enter)" disabled={(!text.trim() && !atts.length) || uploading > 0} onClick={send}><ReturnGlyph /></button>
         </span>
       </div>
+      {mention && candidates.length > 0 && taRef.current && createPortal(
+        <div className="status-menu mention-pop" style={{
+          position: 'fixed',
+          left: Math.min(taRef.current.getBoundingClientRect().left, window.innerWidth - 240),
+          bottom: window.innerHeight - taRef.current.getBoundingClientRect().top + 8,
+        }}>
+          {candidates.map((x, i) => (
+            <button key={x.id} className={i === mIdx ? 'current' : ''}
+              onPointerDown={(e) => e.preventDefault()} onClick={() => applyMention(x)} onMouseEnter={() => setMIdx(i)}>
+              <Avatar person={x} size={20} /> {shortName(x.name)}
+            </button>
+          ))}
+        </div>, document.body)}
     </div>
   );
 }

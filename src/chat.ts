@@ -1,5 +1,7 @@
 import { addEgress, supabase } from './cloud';
 import { uid } from './store';
+import { shortName, type Person } from './types';
+import { stripInlineMd } from './richtext';
 
 /**
  * Slack-style chat. Deliberately OUTSIDE the Data blob: messages load lazily per channel
@@ -337,6 +339,57 @@ export async function fetchPreviews(teamId: string, cloud: boolean): Promise<Rec
   }
   previewCache.set(teamId, out);
   return out;
+}
+
+/* ── @mentions: stored as `@[<user uuid>]` tokens inside the message body, so renames
+   never break them. The composer inserts display names and converts on send; renderers
+   turn tokens into highlighted chips; mentioned people get a notifications row. ── */
+
+export const MENTION_RE = /@\[([\w-]{1,40})\]/g; // uuid in cloud, short ids ('p2') in the local preview
+
+export function mentionIds(text: string): string[] {
+  return [...new Set([...text.matchAll(MENTION_RE)].map((m) => m[1]))];
+}
+
+/** Tokens → readable "@First" for previews, notifications, copy and the edit box.
+ *  A token that doesn't resolve to a person stays as typed. */
+export function mentionsToNames(text: string, people: Person[]): string {
+  return text.replace(MENTION_RE, (raw, id: string) => {
+    const who = people.find((x) => x.id === id);
+    return who ? `@${shortName(who.name)}` : raw;
+  });
+}
+
+/** Display names typed/inserted after '@' → id tokens (longest names first, so
+ *  "@Rasmus Hauschild" wins over another person named "@Rasmus"). */
+export function namesToMentions(text: string, people: Person[]): string {
+  let out = text;
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const labels = people
+    .flatMap((x) => [{ label: x.name, id: x.id }, { label: shortName(x.name), id: x.id }])
+    .filter((l) => l.label.trim())
+    .sort((a, b) => b.label.length - a.label.length);
+  for (const { label, id } of labels) {
+    out = out.replace(new RegExp(`@${esc(label)}(?=$|[^\\p{L}\\p{N}])`, 'giu'), `@[${id}]`);
+  }
+  return out;
+}
+
+/** One inbox notification per mentioned teammate (plain INSERT — upsert would trip the
+ *  own-rows UPDATE policy). Private channels only notify people who can read them. */
+export async function notifyMentions(teamId: string, channel: Channel, me: string, people: Person[], body: string, cloud: boolean) {
+  if (!cloud) return;
+  let ids = mentionIds(body).filter((id) => id !== me && people.some((x) => x.id === id));
+  if (channel.private && channel.members) ids = ids.filter((id) => channel.members!.includes(id));
+  if (!ids.length) return;
+  const meName = shortName(people.find((x) => x.id === me)?.name ?? 'Someone');
+  const where = isDm(channel) ? 'a direct message' : `#${channel.name}`;
+  const quote = stripInlineMd(mentionsToNames(body, people));
+  const text = `${meName} mentioned you in ${where}: “${quote.length > 90 ? `${quote.slice(0, 90)}…` : quote}”`;
+  const { error } = await supabase.from('notifications').insert(ids.map((to) => ({
+    id: uid(), team_id: teamId, to_user: to, from_user: me, kind: 'chat-mention', text, ref_kind: 'chat', ref_id: channel.id, read: false,
+  })));
+  if (error) throw error;
 }
 
 /* ── link previews: the SENDER unfurls once (Electron main process) and writes the

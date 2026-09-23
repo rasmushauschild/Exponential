@@ -34,9 +34,11 @@ Deno.serve(async (req) => {
     if (body.action === "start") {
       const svc = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
       const { data: m } = await svc.from("meetings")
-        .select("id, team_id, owner, is_open, access, audio_path")
+        .select("id, team_id, owner, is_open, access, audio_path, duration_secs")
         .eq("id", String(body.meetingId)).single();
       if (!m?.audio_path) return json({ error: "meeting has no stored audio" }, 404);
+      // runaway-cost guard, mirrored in the app: recordings auto-stop at 3h, longer imports are refused
+      if ((m.duration_secs ?? 0) > 3 * 3600 + 120) return json({ error: "meetings over 3 hours aren't transcribed" }, 400);
       const { data: member } = await svc.from("team_members")
         .select("user_id").eq("team_id", m.team_id).eq("user_id", user.id).maybeSingle();
       const allowed = !!member && (m.is_open || m.owner === user.id || (m.access ?? []).includes(user.id));

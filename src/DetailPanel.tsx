@@ -527,7 +527,7 @@ function RetroList({ value, onChange, withPriority, placeholder, readOnly, peopl
 /** Notification rows only — lives at the bottom of the chat panel now. */
 export function InboxList({ notifications, people, me, onOpen, onMarkRead }: {
   notifications: Notification[]; people: Person[]; me: string;
-  onOpen: (sel: Selection) => void; onMarkRead: (ids: string[]) => void;
+  onOpen: (sel: Selection | { kind: 'chat'; id: string }) => void; onMarkRead: (ids: string[]) => void;
 }) {
   const mine = notifications.filter((n) => n.to === me).sort((a, b) => b.at.localeCompare(a.at));
   const unreadKey = mine.filter((n) => !n.read).map((n) => n.id).join(',');
@@ -542,7 +542,7 @@ export function InboxList({ notifications, people, me, onOpen, onMarkRead }: {
       {mine.map((n) => {
         const from = people.find((x) => x.id === n.from);
         return (
-          <button key={n.id} className={`notif${n.read ? '' : ' unread'}`} onClick={() => onOpen({ kind: n.ref.kind, id: n.ref.id } as Selection)}>
+          <button key={n.id} className={`notif${n.read ? '' : ' unread'}`} onClick={() => onOpen({ kind: n.ref.kind, id: n.ref.id } as Selection | { kind: 'chat'; id: string })}>
             {from && <Avatar person={from} size={28} />}
             <span className="notif-body">
               <span className="notif-text">{n.text}</span>

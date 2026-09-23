@@ -111,7 +111,7 @@ type GroupRow = { id: string; team_id: string; name: string; color: string; sort
 type DeadlineRow = { id: string; team_id: string; name: string; date: string; notes: string | null };
 type TaskRow = { id: string; team_id: string; person_id: string | null; title: string; date: string | null; end_date: string | null; status: Task['status']; sort_order: number; notes: string | null; created_by: string | null; reviewer_id: string | null; review_done: boolean | null; project_id: string | null; parent_id: string | null; deleted_at: string | null };
 type RetroRow = { team_id: string; week: string; answers: Record<string, string>; notes: string | null };
-type NotificationRow = { id: string; team_id: string; to_user: string; from_user: string | null; kind: Notification['kind']; text: string; ref_kind: 'task' | 'project'; ref_id: string; read: boolean; created_at: string };
+type NotificationRow = { id: string; team_id: string; to_user: string; from_user: string | null; kind: Notification['kind']; text: string; ref_kind: 'task' | 'project' | 'chat'; ref_id: string; read: boolean; created_at: string };
 
 const und = <T>(v: T | null): T | undefined => (v === null ? undefined : v);
 
