@@ -3,10 +3,12 @@ import type { Enrolled } from './transcribe';
 
 /**
  * Cloud transcription via AssemblyAI — the "just works" path for speaker separation
- * (battle-tested diarization, Danish/English auto-detect). Opt-in: it only runs when a
- * team API key is set in Team settings, because meeting audio leaves the device for
- * processing. The cloud groups voices (Speaker A/B/C); enrolled voice prints then name
- * those groups LOCALLY, so the naming stays on-device.
+ * (battle-tested diarization, Danish/English auto-detect). The SHIPPED DEFAULT is
+ * transcribeViaBackend: the 'transcribe' edge function holds the API key server-side, so
+ * every signed-in member gets cloud transcription with zero setup and no key in the
+ * binary. transcribeCloud is the optional override for teams that set their own key in
+ * Team settings. Either way the cloud only groups voices (Speaker A/B/C); enrolled voice
+ * prints then name those groups LOCALLY, so the naming stays on-device.
  */
 
 const API = 'https://api.assemblyai.com/v2';
