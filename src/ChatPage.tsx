@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Person } from './types';
 import { shortName } from './types';
 import { Avatar } from './WeekPlan';
-import { decorate } from './richtext';
+import { decorate, stripInlineMd } from './richtext';
 import {
   attachLinkPreview, attachmentUrl, backfillLinkPreviews, cachedPreviews, createChannel, deleteChannel, deleteMessage, dmName, dmOther, editMessage,
   fetchMessages, fetchPreviews, isDm, markRead, messageCache, onChatEvent, openDm, sendMessage, setChannelMembers,
@@ -400,6 +400,7 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
 }) {
   const [editing, setEditing] = useState(false);
   const [pick, setPick] = useState<DOMRect | null>(null);
+  const [copied, setCopied] = useState(false);
   return (
     <div className={`chat-msg${head ? ' head' : ''}`}>
       <span className="chat-gutter">
@@ -434,6 +435,13 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
       </div>
       {!editing && (
         <span className="chat-actions">
+          {msg.body && (
+            <button title={copied ? 'Copied!' : 'Copy text'} onClick={() => {
+              navigator.clipboard.writeText(stripInlineMd(msg.body));
+              setCopied(true);
+              window.setTimeout(() => setCopied(false), 1400);
+            }}>{copied ? <CheckTiny /> : <CopyTiny />}</button>
+          )}
           <button title="React" onClick={(e) => setPick((e.currentTarget as HTMLElement).getBoundingClientRect())}><SmileGlyph /></button>
           {mine && <button title="Edit" onClick={() => setEditing(true)}><PencilGlyph /></button>}
           {(mine || canModerate) && <button title="Delete" onClick={onDelete}><CrossGlyph /></button>}
@@ -444,6 +452,12 @@ function MessageRow({ msg, head, author, mine, me, people, canModerate, cloud, o
   );
 }
 
+function CopyTiny() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="12" height="12" rx="2.5" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>;
+}
+function CheckTiny() {
+  return <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4"><path d="M20 6 9 17l-5-5" /></svg>;
+}
 function SmileGlyph() {
   return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M8.5 14a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01" /></svg>;
 }
