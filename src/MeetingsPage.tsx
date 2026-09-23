@@ -74,7 +74,14 @@ export function MeetingsPage(p: Props) {
       refetch();
       const enrolled = (await fetchVoicePrints(cloud)).map((v) => ({ id: v.userId, embedding: v.embedding }));
       let out: { segments: Segment[]; text: string; durationSecs: number } | null = null;
-      if (p.transcribeKey) {
+      if (cloud && audioPath) {
+        // shipped default: the team's backend proxy holds the key — no setup needed
+        try {
+          const { transcribeViaBackend } = await import('./transcribeCloud');
+          out = await transcribeViaBackend(id, blob, enrolled, (label) => setProg(id, { label }));
+        } catch (e) { console.warn('[transcribe] backend path unavailable:', e); }
+      }
+      if (!out && p.transcribeKey) {
         try {
           const { transcribeCloud } = await import('./transcribeCloud');
           out = await transcribeCloud(blob, p.transcribeKey, enrolled, (label) => setProg(id, { label }));
