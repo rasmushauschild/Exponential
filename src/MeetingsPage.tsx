@@ -176,7 +176,7 @@ export function MeetingsPage(p: Props) {
 
   const importFiles = async (files: FileList | File[]) => {
     for (const f of Array.from(files)) {
-      if (!f.type.startsWith('audio/') && !/\.(mp3|m4a|wav|webm|ogg|aac|flac)$/i.test(f.name)) continue;
+      if (!f.type.startsWith('audio/') && !/\.(mp3|m4a|wav|webm|ogg|aac|flac|qta|mov)$/i.test(f.name)) continue; // .qta/.mov = QuickTime audio (Voice Memos / QuickTime Player exports; MIME isn't audio/*)
       const id = uid();
       const startedAt = new Date(f.lastModified || Date.now()).toISOString();
       await createMeeting(teamId, me, { id, title: f.name.replace(/\.[a-z0-9]+$/i, ''), startedAt, status: 'recorded', isOpen: true, access: [] }, cloud).catch((e) => p.onError(String((e as Error).message ?? e)));
@@ -259,7 +259,7 @@ export function MeetingsPage(p: Props) {
           title={hasPrint ? 'Your voice is saved — click to read the script again and re-train' : 'Read a short script once — transcripts will then label your parts with your name'}>
           {hasPrint ? 'Voice saved ✓' : 'Learn my voice'}
         </button>
-        <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
+        <input ref={fileRef} type="file" accept="audio/*,.m4a,.mp3,.wav,.webm,.ogg,.aac,.flac,.qta,.mov" multiple hidden onChange={(e) => { if (e.target.files?.length) importFiles(e.target.files); e.target.value = ''; }} />
       </div>
       {rec && <RecordBar rec={rec} onStop={stop} onLimit={() => { p.onError('Recording hit the 3-hour limit — stopped and saved.'); stop(); }} />}
       <div className="meet-scroll">
