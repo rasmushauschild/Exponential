@@ -9,6 +9,7 @@ import {
   fetchMessages, fetchPreviews, isDm, markRead, mentionsToNames, messageCache, namesToMentions, notifyMentions, onChatEvent, openDm, sendMessage, setChannelMembers,
   toggleReaction, updateChannel, uploadChatFile, type Attachment, type Channel, type ChatMessage,
 } from './chat';
+import { addEgress } from './cloud';
 import { InboxList } from './DetailPanel';
 import type { Notification } from './types';
 import type { Selection } from './DetailPanel';
@@ -57,6 +58,10 @@ export function ChatPage(p: Props) {
     setThread({ id: activeId ?? null, msgs: activeId ? messageCache.get(activeId) ?? [] : [], olderDone: false });
   }
   const msgs = thread.msgs;
+  // Files can be dropped ANYWHERE on the thread — the composer registers its uploader here.
+  const attachRef = useRef<((files: FileList | File[]) => void) | null>(null);
+  const [dropping, setDropping] = useState(false);
+  const dragDepth = useRef(0);
   const setMsgs = (up: ChatMessage[] | ((m: ChatMessage[]) => ChatMessage[])) => setThread((t) => ({ ...t, msgs: typeof up === 'function' ? up(t.msgs) : up }));
   const setOlderDone = (v: boolean) => setThread((t) => ({ ...t, olderDone: v }));
   const olderDone = thread.olderDone;
@@ -244,7 +249,11 @@ export function ChatPage(p: Props) {
       )}
 
       {screen === 'thread' && active && (
-        <div className="chat-main">
+        <div className="chat-main"
+          onDragEnter={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); dragDepth.current++; setDropping(true); } }}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); }}
+          onDragLeave={() => { if (--dragDepth.current <= 0) { dragDepth.current = 0; setDropping(false); } }}
+          onDrop={(e) => { e.preventDefault(); dragDepth.current = 0; setDropping(false); if (e.dataTransfer.files.length) attachRef.current?.(e.dataTransfer.files); }}>
           <ThreadHead channel={active} me={me} people={people} canModerate={p.canModerate}
             onBack={() => setScreen('list')}
             onCloseAll={p.onClose}
@@ -278,7 +287,9 @@ export function ChatPage(p: Props) {
               attachLinkPreview(teamId, m, cloud).catch(() => {}); // fire and forget
               notifyMentions(teamId, active, me, people, body, cloud).catch(() => {});
               stickBottom.current = true;
-            }} />
+            }}
+            attachRef={attachRef} />
+          {dropping && <div className="meet-drop-hint">Drop to attach</div>}
         </div>
       )}
 
@@ -500,6 +511,14 @@ function renderChatMd(text: string) {
 function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boolean; onImage: (url: string) => void }) {
   const [url, setUrl] = useState<string | null>(att.path.startsWith('data:') ? att.path : null);
   const isImage = att.type.startsWith('image/');
+  const save = async () => {
+    try {
+      const u = url ?? await attachmentUrl(att, cloud, false);
+      addEgress(att.size); // the actual bytes flow now
+      if (window.exponential?.download) window.exponential.download(u, att.name);
+      else { const a = document.createElement('a'); a.href = u; a.download = att.name; a.click(); }
+    } catch { /* signed url unavailable right now */ }
+  };
   if (att.type === 'link/preview') {
     return (
       <a className="link-card" href={att.path} target="_blank" rel="noreferrer">
@@ -512,7 +531,7 @@ function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boole
   }
   useEffect(() => {
     let gone = false;
-    if (!url) attachmentUrl(att, cloud).then((u) => { if (!gone) setUrl(u); }).catch(() => {});
+    if (!url) attachmentUrl(att, cloud, isImage).then((u) => { if (!gone) setUrl(u); }).catch(() => {});
     return () => { gone = true; };
   }, [att.path]); // eslint-disable-line react-hooks/exhaustive-deps
   if (isImage) {
@@ -521,22 +540,29 @@ function AttachmentView({ att, cloud, onImage }: { att: Attachment; cloud: boole
       : <div className="chat-img chat-img-loading" style={att.w && att.h ? { aspectRatio: `${att.w} / ${att.h}` } : undefined} />;
   }
   return (
-    <a className="chat-file" href={url ?? undefined} download={att.name} target="_blank" rel="noreferrer">
-      <FileGlyph />
-      <span className="chat-file-name">{att.name}</span>
-      <span className="chat-file-size">{fmtSize(att.size)}</span>
-    </a>
+    <span className="chat-file">
+      <a className="chat-file-main" href={url ?? undefined} download={att.name} target="_blank" rel="noreferrer" onClick={() => addEgress(att.size)}>
+        <FileGlyph />
+        <span className="chat-file-name">{att.name}</span>
+        <span className="chat-file-size">{fmtSize(att.size)}</span>
+      </a>
+      <button className="chat-file-dl" title="Save to Downloads" onClick={save}><DownloadTiny /></button>
+    </span>
   );
 }
 
-function Composer({ channel, label, teamId, cloud, people, me, onSend, onError }: {
+function DownloadTiny() {
+  return <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><path d="M12 3v12m0 0 5-5m-5 5-5-5M4 21h16" /></svg>;
+}
+
+function Composer({ channel, label, teamId, cloud, people, me, onSend, onError, attachRef }: {
   channel: Channel; label: string; teamId: string; cloud: boolean; people: Person[]; me: string;
   onSend: (body: string, atts: Attachment[] | undefined) => Promise<void>; onError: (m: string) => void;
+  attachRef?: React.MutableRefObject<((files: FileList | File[]) => void) | null>;
 }) {
   const [text, setText] = useState('');
   const [atts, setAtts] = useState<Attachment[]>([]);
   const [uploading, setUploading] = useState(0);
-  const [drag, setDrag] = useState(false);
   const [mention, setMention] = useState<{ at: number; query: string } | null>(null);
   const [mIdx, setMIdx] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
@@ -583,6 +609,7 @@ function Composer({ channel, label, teamId, cloud, people, me, onSend, onError }
     }
     taRef.current?.focus();
   };
+  if (attachRef) attachRef.current = addFiles; // whole-thread drops land here
 
   const send = async () => {
     const body = namesToMentions(text.trim(), people);
@@ -598,10 +625,7 @@ function Composer({ channel, label, teamId, cloud, people, me, onSend, onError }
   };
 
   return (
-    <div className={`chat-compose${drag ? ' dragging' : ''}`}
-      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={(e) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files); }}>
+    <div className="chat-compose">
       {(atts.length > 0 || uploading > 0) && (
         <div className="chat-att-row">
           {atts.map((a, i) => (

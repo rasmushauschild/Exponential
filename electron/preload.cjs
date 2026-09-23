@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('exponential', {
   meetingRead: (id) => ipcRenderer.invoke('meeting:read', id),
   meetingDelete: (id) => ipcRenderer.invoke('meeting:delete', id),
   linkPreview: (url) => ipcRenderer.invoke('link:preview', url),
+  download: (url, name) => ipcRenderer.send('file:download', { url, name }),
   micEnsure: () => ipcRenderer.invoke('mic:ensure'),
   micOpenSettings: () => ipcRenderer.invoke('mic:openSettings'),
   openNotificationSettings: () => ipcRenderer.send('notify:openSettings'),

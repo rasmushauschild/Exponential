@@ -327,6 +327,18 @@ ipcMain.on('notify:openSettings', () => {
     : 'ms-settings:notifications');
 });
 
+// One-click "save to Downloads": the renderer names the file, we route the save silently
+// (no dialog). Only URLs queued here are intercepted — every other download keeps the
+// default behaviour. Keyed by the FIRST url in the chain (redirect-safe).
+const pendingDownloads = new Map(); // url → filename
+ipcMain.on('file:download', (e, p) => {
+  const url = String(p?.url ?? '');
+  if (!/^https:\/\//.test(url)) return;
+  const name = String(p?.name || 'file').replace(/[/\\:]+/g, '-').slice(0, 180) || 'file';
+  pendingDownloads.set(url, name);
+  e.sender.downloadURL(url);
+});
+
 ipcMain.on('notify', (_e, { id, title, body, ref }) => {
   if (!id || notifiedIds.has(id) || !Notification.isSupported()) return;
   notifiedIds.add(id);
@@ -522,6 +534,18 @@ ipcMain.handle('meeting:delete', (_e, id) => { try { fs.rmSync(meetingFile(id), 
 app.whenReady().then(() => {
   buildMenu();
   setupUpdates();
+  session.defaultSession.on('will-download', (_e, item) => {
+    const key = (item.getURLChain?.()[0]) ?? item.getURL();
+    const name = pendingDownloads.get(key) ?? pendingDownloads.get(item.getURL());
+    if (!name) return; // not ours — leave the default save flow alone
+    pendingDownloads.delete(key);
+    pendingDownloads.delete(item.getURL());
+    const dir = app.getPath('downloads');
+    const parsed = path.parse(name);
+    let dest = path.join(dir, name);
+    for (let i = 1; fs.existsSync(dest); i++) dest = path.join(dir, `${parsed.name} (${i})${parsed.ext}`);
+    item.setSavePath(dest);
+  });
   try {
     // getDisplayMedia({audio:true}) → system loopback audio where the OS allows it
     // (the recorder stops the mandatory video track immediately and mixes the audio).

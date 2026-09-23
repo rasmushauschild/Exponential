@@ -476,14 +476,16 @@ export async function uploadChatFile(teamId: string, file: File, cloud: boolean)
 }
 
 const urlCache = new Map<string, { url: string; until: number }>();
-export async function attachmentUrl(att: Attachment, cloud: boolean): Promise<string> {
+/** meter=true when the caller will actually fetch the bytes (images render immediately);
+ *  file CARDS only sign the URL — their bytes are metered when someone clicks/saves. */
+export async function attachmentUrl(att: Attachment, cloud: boolean, meter = true): Promise<string> {
   if (!cloud || att.path.startsWith('data:')) return att.path;
   const hit = urlCache.get(att.path);
   if (hit && hit.until > Date.now()) return hit.url;
   const { data, error } = await supabase.storage.from('chat').createSignedUrl(att.path, 3600);
   if (error) throw error;
   urlCache.set(att.path, { url: data.signedUrl, until: Date.now() + 3300 * 1000 });
-  addEgress(att.size); // the browser fetches the signed URL outside the metered client
+  if (meter) addEgress(att.size); // the browser fetches the signed URL outside the metered client
   return data.signedUrl;
 }
 

@@ -32,6 +32,7 @@ declare global {
       meetingRead?: (id: string) => Promise<ArrayBuffer>;
       meetingDelete?: (id: string) => Promise<void>;
       linkPreview?: (url: string) => Promise<{ url: string; title: string; desc: string | null; image: string | null; site: string } | null>;
+      download?: (url: string, name: string) => void;
       micEnsure?: () => Promise<boolean>;
       micOpenSettings?: () => Promise<void>;
       openNotificationSettings?: () => void;
