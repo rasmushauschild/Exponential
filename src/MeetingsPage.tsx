@@ -227,7 +227,7 @@ export function MeetingsPage(p: Props) {
       </>
       )}
       {voiceRec !== 'idle' && createPortal(
-        <div className="sheet-veil">
+        <div className="backdrop">
           <div className="sheet voice-sheet">
             <div className="sheet-title">Learn my voice</div>
             <p className="voice-hint">Read this out loud, at your normal pace — it takes about twenty seconds:</p>

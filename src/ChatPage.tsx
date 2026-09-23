@@ -375,7 +375,7 @@ function ThreadHead({ channel, me, people, canModerate, onBack, onCloseAll, onRe
 function MembersSheet({ channel, me, people, onClose, onSave }: { channel: Channel; me: string; people: Person[]; onClose: () => void; onSave: (m: string[]) => void }) {
   const [sel, setSel] = useState<Set<string>>(new Set(channel.members ?? [me]));
   return createPortal(
-    <div className="sheet-veil" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="backdrop" onPointerDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet chat-members-sheet">
         <div className="sheet-title">Members of #{channel.name}</div>
         <div className="chat-member-pick">
