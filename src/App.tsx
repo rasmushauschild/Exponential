@@ -10,7 +10,8 @@ import { useData, useSystemNotifications, uid, type GoogleConfig } from './store
 import type { CalendarEvent, Data, Deadline, GoogleUser, Group, ISODate, Project, Retro, Task } from './types';
 import { DEFAULT_RETRO_FIELDS, PROJECT_COLORS, shortName } from './types';
 import { addTask, claimTask, completeReview, denyReview, nameOf, notify, patchTask, purgeTrash, renameTask, reorderTask, softDelete, unclaimTask } from './taskOps';
-import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase, usageMonthTotal } from './cloud';
+import { isPending, loadTeam, onPersistError, persistDiff, signOutCloud, subscribeTeam, supabase, usageMonthTotal, webSignIn } from './cloud';
+import { enablePush, pushEnabled, pushSupport } from './push';
 import { addDays, todayISO, weekStart } from './dates';
 import { ChatPage } from './ChatPage';
 import { fetchChat, mentionsToNames, onChatEvent, purgeExpiredChatFiles, subscribeChat, type Channel } from './chat';
@@ -179,6 +180,24 @@ export default function App() {
   }, [splash, cloudMode]);
 
   const [googleUser, setGoogleUser] = useState<GoogleUser | null>(null);
+  // Hosted web app (the PWA): anything that isn't Electron and isn't the local dev preview
+  // signs in with Google; localhost can opt in with ?cloud for testing the web flow.
+  const hostedWeb = !window.exponential && (!['localhost', '127.0.0.1'].includes(location.hostname) || new URLSearchParams(location.search).has('cloud'));
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const on = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  // Web Push (iPhone): 'ok-off' shows the enable pill, 'install' explains Add-to-Home-Screen.
+  const [pushState, setPushState] = useState<'unknown' | 'ok-off' | 'on' | 'install' | 'none'>('unknown');
+  useEffect(() => {
+    if (window.exponential) return;
+    const s = pushSupport();
+    if (s === 'ok') pushEnabled().then((on) => setPushState(on ? 'on' : 'ok-off')).catch(() => setPushState('ok-off'));
+    else setPushState(s === 'needs-install' ? 'install' : 'none');
+  }, []);
   const [authChecked, setAuthChecked] = useState(!window.exponential); // browser preview has no Google
   const [googleConfig, setGoogleConfig] = useState<GoogleConfig | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -384,12 +403,23 @@ export default function App() {
     window.exponential?.setSharedState?.({ teamId: data?.id ?? null, teamName: data?.name ?? null, planUnlocked: unlocked });
   }, [data?.id, data?.name, unlocked]);
 
-  // Google: restore session on launch.
+  // Google: restore session on launch. Web (the hosted PWA): a persisted Supabase session
+  // — or the one arriving via the OAuth redirect — IS the sign-in.
   useEffect(() => {
     const g = window.exponential?.google;
-    if (!g) return;
-    g.getConfig().then(setGoogleConfig);
-    g.status().then((u) => { if (u) setGoogleUser(u); }).finally(() => setAuthChecked(true));
+    if (g) {
+      g.getConfig().then(setGoogleConfig);
+      g.status().then((u) => { if (u) setGoogleUser(u); }).finally(() => setAuthChecked(true));
+      return;
+    }
+    const fromSession = (s: { user: { id: string; email?: string; user_metadata?: Record<string, string> } } | null) => {
+      if (!s) return;
+      const m = s.user.user_metadata ?? {};
+      setGoogleUser({ id: s.user.id, email: s.user.email ?? '', name: m.full_name || m.name || s.user.email || '', picture: m.avatar_url || m.picture });
+    };
+    supabase.auth.getSession().then(({ data: d }) => { fromSession(d.session); setAuthChecked(true); });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => fromSession(s));
+    return () => sub.subscription.unsubscribe();
   }, []);
 
   // Once signed in: open the Supabase session and load the team; keep the profile's name/photo fresh.
@@ -397,7 +427,7 @@ export default function App() {
   // incidents) used to strand the splash on an error until the app was relaunched.
   const [connectTick, setConnectTick] = useState(0);
   useEffect(() => {
-    if (!googleUser || !window.exponential) return;
+    if (!googleUser) return;
     let cancelled = false;
     let timer: number | undefined;
     connectCloud()
@@ -569,9 +599,12 @@ export default function App() {
   }, [myToday]);
 
   const signIn = useCallback(async () => {
-    const g = window.exponential?.google;
-    if (!g) return;
     setAuthError(null);
+    if (!window.exponential) {
+      try { await webSignIn(); } catch (err) { setAuthError((err as Error).message); } // redirects away on success
+      return;
+    }
+    const g = window.exponential.google;
     try {
       setGoogleUser(await g.signIn());
       setSheet(null);
@@ -582,7 +615,8 @@ export default function App() {
 
   const signOut = useCallback(async () => {
     await signOutCloud();
-    await window.exponential?.google.signOut();
+    if (window.exponential) await window.exponential.google.signOut();
+    else await supabase.auth.signOut();
     setGoogleUser(null);
     setCalEvents({});
     window.location.reload();
@@ -599,6 +633,30 @@ export default function App() {
         onSaveConfig={async (c) => { await window.exponential!.google.setConfig(c); setGoogleConfig(c); }}
         onSignIn={signIn}
       />
+    );
+  }
+
+  // Hosted web: the sign-in gate, then a quiet loading card while the team fetches.
+  if (hostedWeb && !googleUser) {
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <img className="gate-logo" src={logoUrl} alt="" />
+          <h1>Welcome to Exponential</h1>
+          {authError && <p className="error">{authError}</p>}
+          <button className="gate-btn" onClick={signIn}><GoogleG /> Continue with Google</button>
+        </div>
+      </div>
+    );
+  }
+  if (!window.exponential && googleUser && !cloudMode) {
+    return (
+      <div className="gate">
+        <div className="gate-card">
+          <img className="gate-logo" src={logoUrl} alt="" />
+          <p className="muted">{cloudError ?? 'Loading your team…'}</p>
+        </div>
+      </div>
     );
   }
 
@@ -674,6 +732,43 @@ export default function App() {
   const chatUnread = chat.reduce((n, c) => n + c.unread, 0);
 
   const calKey = `${person === data.me ? 'primary' : data.people.find((x) => x.id === person)?.email}|${week}`;
+
+  // Phone-sized web app: Messages IS the app (the planners need a desk). Same state,
+  // different shell — realtime, mentions, reactions and files all behave identically.
+  if (!window.exponential && isMobile) {
+    return (
+      <div className="mobile-shell">
+        <ChatPage
+          teamId={data.id}
+          me={data.me}
+          people={data.people}
+          canModerate={data.moderators.includes(data.me)}
+          cloud={cloudMode}
+          channels={chat}
+          activeId={chatActive}
+          onActive={setChatActive}
+          onRefreshChannels={refreshChat}
+          notifications={data.notifications ?? []}
+          notifUnread={unread}
+          onOpenItem={() => {}}
+          onMarkRead={(ids) => update((d) => ({ ...d, notifications: (d.notifications ?? []).map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)) }), 'mark-read')}
+          onClose={() => {}}
+          onError={(m) => { setSaveError(m); window.setTimeout(() => setSaveError(null), 6000); }}
+          jumpToThread={chatJump}
+          onJumped={() => setChatJump(false)}
+        />
+        {pushState === 'ok-off' && (
+          <button className="pill push-banner" onClick={async () => setPushState((await enablePush()) === 'on' ? 'on' : 'ok-off')}>
+            Enable notifications
+          </button>
+        )}
+        {pushState === 'install' && (
+          <div className="push-banner note">For notifications: Share → Add to Home Screen, then open Exponential from there</div>
+        )}
+        {saveError && <div className="toast error-toast">{saveError}</div>}
+      </div>
+    );
+  }
 
   return (
     <div className="shell">

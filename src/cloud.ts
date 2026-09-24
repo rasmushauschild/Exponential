@@ -63,9 +63,20 @@ export async function usageMonthTotal(): Promise<number | null> {
 }
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
+  // Web (the hosted PWA): the Google OAuth redirect lands back here with a ?code= that
+  // supabase-js exchanges automatically. Electron keeps its own id-token flow.
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: !('exponential' in window), flowType: 'pkce' },
   global: { fetch: meteredFetch },
 });
+
+/** Browser sign-in for the hosted web app (Electron uses the system-browser id-token flow). */
+export async function webSignIn() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: location.origin + location.pathname },
+  });
+  if (error) throw error;
+}
 
 /** Pending invitees (haven't signed in yet) get a synthetic person id so they show on the roster. */
 export const pendingId = (email: string) => `pending:${email.toLowerCase()}`;

@@ -1342,6 +1342,27 @@ body.cursor-grabbing, body.cursor-grabbing * { cursor: grabbing !important; }
 .mention { padding: 0 3px; border-radius: 5px; font-weight: 600; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
 .mention.me { background: color-mix(in srgb, var(--accent) 26%, transparent); color: color-mix(in srgb, var(--accent) 78%, var(--text)); }
 .mention-pop { z-index: 320; min-width: 200px; max-height: 250px; overflow-y: auto; }
+
+/* ── phone-sized web app: Messages fills the screen ── */
+.mobile-shell {
+  position: fixed; inset: 0; display: flex; flex-direction: column;
+  background: var(--bg);
+  padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
+}
+.mobile-shell .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mobile-shell .chat-main { flex: 1; min-height: 0; }
+.mobile-shell button[title="Close"] { display: none; } /* nothing to close into */
+.push-banner {
+  position: fixed; left: 50%; transform: translateX(-50%);
+  bottom: calc(env(safe-area-inset-bottom) + 74px); z-index: 60;
+  background: var(--accent); color: #fff; font-weight: 700; border: 0;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+.push-banner.note {
+  background: var(--frost-deep); color: var(--text-2); font-weight: 600; font-size: 12px;
+  padding: 8px 14px; border-radius: 10px; max-width: 320px; text-align: center;
+  box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0, 0, 0, 0.18);
+}
 .meet-speaker-menu { display: flex; flex-direction: column; min-width: 200px; }
 .meet-speaker-menu button { display: flex; align-items: center; gap: 8px; }
 .meet-speaker-menu button.on { font-weight: 700; }
