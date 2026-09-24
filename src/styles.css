@@ -114,7 +114,7 @@ img { display: block; -webkit-user-drag: none; }
   width: 88px; flex: none; position: relative; z-index: 200; -webkit-app-region: drag;
   transition: width 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.sidebar:hover { width: 232px; } /* expands in the layout, squeezing the panels beside it */
+.sidebar.open { width: 232px; } /* toggled via the rail button; expands in the layout, squeezing the panels beside it */
 .sidebar * { -webkit-app-region: no-drag; }
 .sidebar-inner {
   position: absolute; top: 0; bottom: 0; left: 0; right: 0; display: flex; flex-direction: column;
@@ -122,7 +122,7 @@ img { display: block; -webkit-user-drag: none; }
 }
 .sidebar.mac .sidebar-inner { padding-top: 14px; }
 .nav-text, .team-name, .badge { opacity: 0; transition: opacity 0.15s; white-space: nowrap; }
-.sidebar:hover .nav-text, .sidebar:hover .team-name, .sidebar:hover .badge { opacity: 1; transition-delay: 0.08s; }
+.sidebar.open .nav-text, .sidebar.open .team-name, .sidebar.open .badge { opacity: 1; transition-delay: 0.08s; }
 
 .team-list { padding: 0; margin-bottom: 18px; display: flex; flex-direction: column; gap: 2px; }
 .sidebar.mac .team-list { padding-top: 26px; } /* room for the window's traffic lights */
@@ -131,14 +131,14 @@ img { display: block; -webkit-user-drag: none; }
 .team-row.current { background: var(--ov-6); }
 .team-main { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 7px 7px; text-align: left; border-radius: 14px; }
 .team-row.add { display: none; }
-.sidebar:hover .team-list:hover .team-row.add { display: flex; } /* hover only: focus-within lingered on the cog */
+.sidebar.open .team-list:hover .team-row.add { display: flex; } /* hover only: focus-within lingered on the cog */
 .team-row.add { padding: 7px 7px; gap: 10px; color: var(--text-3); }
 .team-row.add:hover { color: var(--text-2); }
 .team-cog {
   width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; color: var(--text-3); margin-right: 6px; flex: none;
   opacity: 0; transition: opacity 0.15s, background 0.15s, color 0.15s;
 }
-.sidebar:hover .team-row:hover .team-cog, .sidebar:hover .team-cog.on { opacity: 1; }
+.sidebar.open .team-row:hover .team-cog, .sidebar.open .team-cog.on { opacity: 1; }
 .team-cog:hover { background: var(--ov-6); color: var(--text); }
 .team-cog.on { color: var(--text); }
 .team-mark { width: 30px; height: 30px; border-radius: 10px; background: var(--text); color: var(--bg); box-shadow: 0 0 0 1px var(--line); display: grid; place-items: center; font-weight: 800; font-size: 15px; flex: none; }

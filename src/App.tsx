@@ -19,7 +19,7 @@ import { subscribeMeetings } from './meetings';
 
 /** Layout proportions, remembered per machine (not part of the shared plan data). */
 const PREFS_KEY = 'exponential-layout';
-const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true, allTeams: false };
+const DEFAULT_PREFS = { weekH: 400, detailW: 415, theme: '' as '' | 'light' | 'dark', calendar: true, allTeams: false, sideOpen: false };
 const prefs: typeof DEFAULT_PREFS = (() => {
   try { return { ...DEFAULT_PREFS, ...JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}') }; } catch { return DEFAULT_PREFS; }
 })();
@@ -47,12 +47,13 @@ export default function App() {
   // chat / meetings live in a LEFT side panel; both sides can be open at once — every
   // column (left panel, planners, right panel) keeps at least ~a fifth of the window.
   const [leftPanel, setLeftPanel] = useState<'chat' | 'meetings' | null>(null);
+  const [sideOpen, setSideOpen] = useState(() => prefs.sideOpen); // sidebar toggled wide (was hover-expand)
   const [leftW, setLeftW] = useState(415);
   const [lResizing, setLResizing] = useState(false);
   const leftWRef = useRef(leftW); leftWRef.current = leftW;
   // The centre (planners) always keeps at least a third of the window; the two side
   // panels split what's left, each at least ~a fifth (never less than 240px).
-  const sideBudget = () => window.innerWidth - 106 - Math.floor(window.innerWidth / 3); // 106 = sidebar + shell padding + slot margins, measured
+  const sideBudget = () => window.innerWidth - (sideOpen ? 250 : 106) - Math.floor(window.innerWidth / 3); // 106/250 = closed/open sidebar + shell padding + slot margins, measured
   const minPanelW = () => Math.max(240, Math.min(Math.floor(window.innerWidth / 5), Math.floor((sideBudget() - 28) / 2)));
   const onLResizeDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -130,7 +131,7 @@ export default function App() {
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   const [calendarOn, setCalendarOn] = useState(() => prefs.calendar);
   const [allTeamsOn, setAllTeamsOn] = useState(() => prefs.allTeams);
-  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn]);
+  useEffect(() => { savePrefs({ weekH, detailW, theme: themePref, calendar: calendarOn, allTeams: allTeamsOn, sideOpen }); }, [weekH, detailW, themePref, calendarOn, allTeamsOn, sideOpen]);
   const [vResizing, setVResizing] = useState(false);
 
   const detailWRef = useRef(detailW); detailWRef.current = detailW;
@@ -159,7 +160,7 @@ export default function App() {
     fit();
     window.addEventListener('resize', fit);
     return () => window.removeEventListener('resize', fit);
-  }, [leftPanel, selection?.kind]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [leftPanel, selection?.kind, sideOpen]); // eslint-disable-line react-hooks/exhaustive-deps
   const mainRef = useRef<HTMLDivElement>(null);
 
   // Launch splash: the mark slides in from the bottom, plays at least one full shader sweep,
@@ -676,7 +677,7 @@ export default function App() {
 
   return (
     <div className="shell">
-      <aside className={`sidebar${window.exponential?.platform === 'darwin' ? ' mac' : ''}`}>
+      <aside className={`sidebar${window.exponential?.platform === 'darwin' ? ' mac' : ''}${sideOpen ? ' open' : ''}`}>
        <div className="sidebar-inner">
         <div className="team-list">
           {teams.map((t) => (
@@ -707,6 +708,11 @@ export default function App() {
         </button>
 
         <div className="sidebar-bottom">
+          <button className="nav-item theme-toggle" onClick={() => setSideOpen((v) => !v)}
+            title={sideOpen ? 'Collapse the sidebar' : 'Expand the sidebar'}>
+            <PanelIcon open={sideOpen} />
+            <span className="nav-text">Collapse</span>
+          </button>
           {(!updateInfo || updateInfo.state === 'none' || updateInfo.state === 'error' || updateInfo.state === 'available') && (
             <button
               className="nav-item theme-toggle"
@@ -1100,6 +1106,16 @@ export function TeamMark({ team, size = 30 }: { team: { name: string; icon?: str
 }
 
 const ICON = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+
+function PanelIcon({ open }: { open: boolean }) {
+  return (
+    <svg {...ICON}>
+      <rect x="3" y="4.5" width="18" height="15" rx="3.5" />
+      <path d="M9.5 4.5v15" />
+      {open ? <path d="M16.5 9.5 14 12l2.5 2.5" /> : <path d="M14 9.5l2.5 2.5L14 14.5" />}
+    </svg>
+  );
+}
 
 function MeetIcon() {
   return (
