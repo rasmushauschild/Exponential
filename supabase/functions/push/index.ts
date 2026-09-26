@@ -19,9 +19,10 @@ Deno.serve(async (req) => {
     const secret = Deno.env.get("PUSH_WEBHOOK_SECRET");
     if (secret && req.headers.get("x-push-secret") !== secret) return new Response("forbidden", { status: 403 });
 
-    const pub = Deno.env.get("VAPID_PUBLIC_KEY");
+    // public half + subject are baked in (they're public by design); only the PRIVATE key is a secret
+    const pub = Deno.env.get("VAPID_PUBLIC_KEY") ?? "BNVcV_2ao3AUbu3HqHCWnGuCl0Lyl_Z12IIKsSIO_lj34I4vlFdifn2t4Wc17zAObRWziSkAOnLtHh_Hq-c8L_E";
     const priv = Deno.env.get("VAPID_PRIVATE_KEY");
-    if (!pub || !priv) return new Response("VAPID keys not configured", { status: 500 });
+    if (!priv) return new Response("VAPID_PRIVATE_KEY is not configured", { status: 500 });
     webpush.setVapidDetails(Deno.env.get("VAPID_SUBJECT") ?? "mailto:r.hauschild@airyautomotive.com", pub, priv);
 
     const body = await req.json();

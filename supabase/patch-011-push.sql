@@ -12,3 +12,20 @@ alter table public.push_subscriptions enable row level security;
 drop policy if exists push_subs_own on public.push_subscriptions;
 create policy push_subs_own on public.push_subscriptions for all to authenticated
   using (user_id = auth.uid()) with check (user_id = auth.uid());
+
+-- New messages call the 'push' edge function directly (no dashboard webhook needed).
+-- pg_net enqueues the request asynchronously, so inserts never wait or fail on it.
+create extension if not exists pg_net;
+create or replace function public.notify_push() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  perform net.http_post(
+    url := 'https://mojqfsnnawdxndqaciuv.supabase.co/functions/v1/push',
+    body := jsonb_build_object('record', jsonb_build_object('id', new.id)),
+    headers := '{"Content-Type": "application/json"}'::jsonb
+  );
+  return new;
+end $$;
+drop trigger if exists messages_push on public.messages;
+create trigger messages_push after insert on public.messages
+  for each row execute function public.notify_push();
