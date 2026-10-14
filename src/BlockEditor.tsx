@@ -20,6 +20,15 @@ type Block =
   | { key: string; kind: 'task'; taskId: string; indent?: number };
 
 const TASK_RE = /^(\s*)- \[( |x)\] ?(.*?)\s*<!--task:([0-9a-f-]{36})-->\s*$/i;
+/* Block-shaped clipboard text (ONE definition — three paste handlers consult it): headings,
+   images, checkboxes and toggles count anywhere; a plain "- " bullet only counts at the very
+   START, so prose that merely CONTAINS a dashed line ("Sounds good\n- Rasmus") still pastes
+   inline at the caret. */
+const BLOCK_PASTE_RE = /(^|\n) *(#{1,2} |!\[|- \[( |x)\]|>> )|^ *- /i;
+/* A bullet's "• " maps back to markdown "- " ONLY when real content follows and the line
+   can't be mistaken for a checkbox — "• " alone and "• [x] todo" stay literal, or the next
+   parse would corrupt them ("-", "☐ todo"). */
+const BULLET_OUT_RE = /^• (?=\S)(?!\[( |x)\] )/i;
 const MAX_IND = 4;
 const indOf = (spaces: string) => Math.min(MAX_IND, Math.floor(spaces.length / 2));
 const newKey = () => `b${crypto.randomUUID().slice(0, 8)}`;
@@ -60,7 +69,7 @@ export function serializeBlocks(blocks: Block[], tasks: Task[]): string {
     if (b.kind === 'img') return `${pre}![](${b.src})`;
     if (b.kind === 'tog') return `${pre}>> ${b.text}`;
     if (b.kind === 'task') { const t = tasks.find((x) => x.id === b.taskId); return `${pre}- [${t?.status === 'done' ? 'x' : ' '}] ${t?.title ?? ''} <!--task:${b.taskId}-->`; }
-    return b.text.split('\n').map((l) => pre + l).join('\n');
+    return b.text.split('\n').map((l) => pre + l.replace(BULLET_OUT_RE, '- ')).join('\n'); // bullets show as "• ", store as markdown "- "
   }).join('\n\n');
 }
 
@@ -284,22 +293,42 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       setBlock(i, { indent: Math.max(0, Math.min(MAX_IND, (b.indent ?? 0) + (e.shiftKey ? -1 : 1))) });
       return;
     }
+    if (e.key === ' ' && b.kind === 'p') {
+      // "- " at a line start becomes a bullet (shown as "• ", STORED as markdown "- ")
+      const { start, end } = caretOffsets(el);
+      const vis = el.textContent ?? '';
+      if (start === end && vis.slice(vis.lastIndexOf('\n', start - 1) + 1, start) === '-') {
+        e.preventDefault();
+        document.execCommand('delete');
+        document.execCommand('insertText', false, '• ');
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      // Enter on an EMPTY bullet steps out of the list (the block becomes plain text)
+      if (b.kind === 'p' && /^•\s?$/.test(b.text)) {
+        commit(blocks.map((x, j) => (j === i ? { ...b, text: '' } : x)));
+        setFocus({ index: i, caret: 'start' });
+        return;
+      }
       const { start, end } = caretOffsets(el);
       const head = b.text.slice(0, mdOffsetOf(b.text, start)), tail = b.text.slice(mdOffsetOf(b.text, end));
+      // leaving a bullet line continues the list: the new block starts with its own bullet
+      const bullet = b.kind === 'p' && /^• ./.test(head.slice(head.lastIndexOf('\n') + 1));
       const next = blocks.map((x, j) => (j === i ? { ...b, text: head } : x));
       // Enter on a toggle drops into it: the new line is a child, one level deeper.
-      next.splice(i + 1, 0, { key: newKey(), kind: 'p', text: tail, indent: Math.min(MAX_IND, (b.indent ?? 0) + (b.kind === 'tog' ? 1 : 0)) });
+      next.splice(i + 1, 0, { key: newKey(), kind: 'p', text: (bullet ? '• ' : '') + tail, indent: Math.min(MAX_IND, (b.indent ?? 0) + (b.kind === 'tog' ? 1 : 0)) });
       commit(next);
       if (b.kind === 'tog') setClosed((c) => { const n = new Set(c); n.delete(b.key); return n; });
-      setFocus({ index: i + 1, caret: 'start' });
+      setFocus({ index: i + 1, caret: bullet ? 2 : 'start' });
     } else if (e.key === 'Backspace' && caretOffsets(el).start === 0 && caretOffsets(el).end === 0) {
       if (b.text === '' && blocks.length > 1) { e.preventDefault(); removeAt(i); }
       else if (i > 0 && blocks[i - 1].kind !== 'task' && blocks[i - 1].kind !== 'img') {
         e.preventDefault();
         const prev = blocks[i - 1] as Extract<Block, { kind: 'h1' | 'h2' | 'p' | 'tog' }>;
-        const merged = withoutBlock(blocks, i).map((x, j) => (j === i - 1 ? { ...prev, text: prev.text + b.text } : x));
+        // joining a bullet into the line above drops its marker (else "• bar• foo")
+        const merged = withoutBlock(blocks, i).map((x, j) => (j === i - 1 ? { ...prev, text: prev.text + b.text.replace(/^• /, '') } : x));
         commit(merged);
         setFocus({ index: i - 1, caret: prev.text.length });
       }
@@ -617,11 +646,13 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
       } else if ((e.metaKey || e.ctrlKey) && (e.key.toLowerCase() === 'c' || e.key.toLowerCase() === 'x')) {
         e.preventDefault();
         const md = blocksRef.current.slice(lo, hi + 1).map((b) => {
-          if (b.kind === 'task') { const t = tasksRef.current.find((x) => x.id === b.taskId); return `- [${t?.status === 'done' ? 'x' : ' '}] ${t?.title ?? ''}`; }
-          if (b.kind === 'img') return `![](${b.src})`;
-          if (b.kind === 'h1') return `# ${b.text}`;
-          if (b.kind === 'h2') return `## ${b.text}`;
-          return b.text;
+          const pre = '  '.repeat(b.indent ?? 0); // indentation travels with the copy
+          if (b.kind === 'task') { const t = tasksRef.current.find((x) => x.id === b.taskId); return `${pre}- [${t?.status === 'done' ? 'x' : ' '}] ${t?.title ?? ''}`; }
+          if (b.kind === 'img') return `${pre}![](${b.src})`;
+          if (b.kind === 'h1') return `${pre}# ${b.text}`;
+          if (b.kind === 'h2') return `${pre}## ${b.text}`;
+          if (b.kind === 'tog') return `${pre}>> ${b.text}`;
+          return b.text.split('\n').map((l) => pre + l.replace(BULLET_OUT_RE, '- ')).join('\n');
         }).join('\n\n');
         navigator.clipboard.writeText(md);
         if (e.key.toLowerCase() === 'x') removeSel();
@@ -660,15 +691,15 @@ export function BlockEditor({ value, onChange, tasks, people, me, claimable, cre
           // Block-shaped text (headings, checkboxes, images) pastes as blocks; checkbox
           // lines become fresh real tasks. Plain prose still pastes natively.
           const text = e.clipboardData.getData('text/plain');
-          if (!text || !/(^|\n)(#{1,2} |!\[|- \[( |x)\])/i.test(text)) return;
+          if (!text || !BLOCK_PASTE_RE.test(text)) return;
           e.preventDefault();
           const built: Block[] = [];
           for (const line of text.replace(/\r/g, '').split('\n')) {
-            const m = line.match(/^- \[( |x)\] ?(.*?)(\s*<!--task:[0-9a-f-]{36}-->)?\s*$/i);
-            if (m && m[2].trim()) {
-              const id = createTask(m[2].trim());
-              if (m[1].toLowerCase() === 'x') onUpdateTask(id, { status: 'done' });
-              built.push({ key: newKey(), kind: 'task', taskId: id });
+            const m = line.match(/^( *)- \[( |x)\] ?(.*?)(\s*<!--task:[0-9a-f-]{36}-->)?\s*$/i);
+            if (m && m[3].trim()) {
+              const id = createTask(m[3].trim());
+              if (m[2].toLowerCase() === 'x') onUpdateTask(id, { status: 'done' });
+              built.push({ key: newKey(), kind: 'task', taskId: id, indent: indOf(m[1]) || undefined });
             } else built.push(...parseBlocks(line));
           }
           if (!built.length) return;
@@ -789,13 +820,26 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const lastEmitted = useRef<string | null>(null);
+  const composing = useRef(false); // IME / dead-key composition in flight (Danish layout!)
   const [focused, setFocused] = useState(false);
 
   // The editor owns its DOM while the user types (so the caret survives); only OUTSIDE
   // changes — undo, realtime, turnInto, slash — rewrite the HTML from the Markdown source.
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || block.text === lastEmitted.current) return;
+    if (!el) return;
+    if (composing.current) return; // never rewrite the DOM under an active IME/dead-key composition
+    if (block.text === lastEmitted.current) {
+      // typing already shows this text — but link anchors still need to match it: a URL
+      // typed by hand grows PAST its anchor (Chromium inserts at the boundary outside it),
+      // so compare href+label pairs, not just the count, or the anchor freezes at the
+      // first matched prefix and clicking opens a bogus URL
+      const want = (decorate(block.text) ?? [])
+        .filter((p): p is { url: string; label: string } => typeof p !== 'string' && 'url' in p)
+        .map((p) => `${p.url}\u0000${p.label}`).join('\u0001');
+      const have = Array.from(el.querySelectorAll('a')).map((a) => `${a.getAttribute('href') ?? ''}\u0000${a.textContent ?? ''}`).join('\u0001');
+      if (want === have) return;
+    }
     const keep = document.activeElement === el ? caretOffsets(el) : null;
     el.innerHTML = mdToHtml(block.text);
     lastEmitted.current = block.text;
@@ -832,6 +876,8 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
         spellCheck
         data-ph={ph || undefined}
         onInput={emit}
+        onCompositionStart={() => { composing.current = true; }}
+        onCompositionEnd={() => { composing.current = false; }}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
         onKeyDown={onKey}
@@ -842,7 +888,7 @@ function TextBlock({ block, placeholder, focus, onFocused, onChange, onKey }: {
         onPaste={(e) => {
           const text = e.clipboardData.getData('text/plain');
           // Block-shaped text bubbles up to the list handler, which builds real blocks from it.
-          if (!text || /(^|\n)(#{1,2} |!\[|- \[( |x)\])/i.test(text)) return;
+          if (!text || BLOCK_PASTE_RE.test(text)) return;
           e.preventDefault();
           document.execCommand('insertText', false, text); // plain text only — no foreign HTML styling
         }}
@@ -910,7 +956,7 @@ function TaskBlock({ task, people, me, claimable, focus, onFocused, onKey, onTit
         onBlur={() => { window.clearTimeout(timer.current); if (title !== task.title) onTitle(title); }}
         onPaste={(e) => {
           const text = e.clipboardData.getData('text/plain');
-          if (!text || /(^|\n)(#{1,2} |!\[|- \[( |x)\])/i.test(text)) return;
+          if (!text || BLOCK_PASTE_RE.test(text)) return;
           e.preventDefault();
           document.execCommand('insertText', false, text.replace(/\n+/g, ' '));
         }}
